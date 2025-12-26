@@ -1,0 +1,39 @@
+wordcraft.mdc.
+# WordCraft - Directives de Développement IA
+
+## 1. Vision du Projet
+WordCraft est une plateforme sociale et collaborative pour apprenants (priorité médecine). 
+Objectif : Transformer des ressources multimédias en outils de révision (fiches, quiz) via IA, avec collaboration temps réel.
+
+## 2. Architecture Technique & Stack
+- **Frontend :** React, Tailwind CSS.
+- **Backend/Base de Données :** Supabase (PostgreSQL) avec Realtime activé.
+- **Authentification :** Supabase Auth (Email/Social).
+- **IA :** OpenAI API (GPT-4o pour la génération, Whisper pour l'audio).
+- **Temps Réel/Vidéo :** WebRTC via Daily.co ou Agora.
+- **Édition Collaborative :** CRDT (Yjs) avec TipTap.
+
+## 3. Feuille de Route Prioritaire (Roadmap)
+
+### Phase 1 : Infrastructure & Auth (Immédiat)
+- Configurer les tables Supabase : `profiles`, `documents`, `folders`, `groups`.
+- Gérer les rôles : `student`, `teacher`, `admin`.
+
+### Phase 2 : Pipeline IA & Bibliothèque
+- Logique d'upload multimédia (PDF, Image, URL).
+- Génération de fiches structurées : Définitions, Signes, Diagnostics, Traitements.
+- Création de quiz adaptatifs basés sur les sources.
+
+### Phase 3 : Collaboration & Social
+- Chat temps réel (1:1 et groupes).
+- Système de partage de fiches et likes.
+- Sessions vidéo/audio synchronisées (WebRTC).
+
+### Phase 4 : Révisions & Monétisation
+- Algorithme de répétition espacée (type SM-2).
+- Intégration Stripe pour les abonnements Pro/Teacher.
+
+## 4. Règles de Code de Cursor
+- Toujours vérifier la correspondance des sources (mapping page/paragraphe).
+- Prioriser la sécurité des données (chiffrement TLS, conformité RGPD).
+- Utiliser des composants modulaires et réutilisables dans `/src/components`.

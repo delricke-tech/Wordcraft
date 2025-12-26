@@ -3,6 +3,11 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// Vérifier que les variables d'environnement sont bien configurées
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('❌ ERREUR: Les variables VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY doivent être définies dans le fichier .env');
+}
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export type Profile = {
@@ -55,28 +60,44 @@ export type Quiz = {
 };
 
 /**
- * Upload un fichier dans le bucket Supabase 'Documents'
+ * Upload un fichier dans le bucket Supabase 'documents'
  * @param file - Le fichier à uploader
- * @param userId - L'ID de l'utilisateur (pour organiser les fichiers par utilisateur)
+ * @param userId - L'ID de l'utilisateur (pour organiser les fichiers par utilisateur) - Non utilisé actuellement
  * @param fileName - Nom optionnel du fichier (utilise file.name par défaut)
  * @returns L'objet contenant le chemin du fichier et les données d'upload
  */
-export async function handleUpload(
+export async function uploadFile(
   file: File,
-  userId: string,
+  userId?: string,
   fileName?: string
 ) {
   try {
-    // Générer un nom de fichier unique avec timestamp
-    const timestamp = Date.now();
-    const finalFileName = fileName || `${timestamp}-${file.name}`;
-    
-    // Chemin dans le bucket : user_id/fichier
-    const filePath = `${userId}/${finalFileName}`;
+    // Fonction pour supprimer les accents
+    const removeAccents = (str: string) => {
+      return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    };
 
-    // Upload le fichier dans le bucket 'Documents'
+    // Nettoyer le nom du fichier
+    const originalName = fileName || file.name;
+    const fileExtension = originalName.split('.').pop()?.toLowerCase() || 'pdf';
+    const fileNameWithoutExt = originalName.substring(0, originalName.lastIndexOf('.')) || originalName;
+    
+    // Supprimer les accents, puis remplacer tous les caractères non-alphanumériques par des tirets
+    const nameWithoutAccents = removeAccents(fileNameWithoutExt);
+    const cleanName = nameWithoutAccents.replace(/[^a-zA-Z0-9]/g, '-');
+    
+    // Supprimer les tirets multiples et les tirets en début/fin
+    const safeFileName = cleanName.replace(/-+/g, '-').replace(/^-|-$/g, '');
+    
+    // Créer le chemin simple : timestamp-nom-nettoyé.extension
+    const filePath = `${Date.now()}-${safeFileName}.${fileExtension}`;
+
+    console.log('📤 Upload vers Supabase - Nom original:', originalName);
+    console.log('📤 Upload vers Supabase - Chemin nettoyé:', filePath);
+
+    // Upload le fichier dans le bucket 'documents'
     const { data, error } = await supabase.storage
-      .from('Documents')
+      .from('documents')
       .upload(filePath, file, {
         cacheControl: '3600',
         upsert: false // Ne pas écraser si le fichier existe déjà
@@ -88,7 +109,7 @@ export async function handleUpload(
 
     // Obtenir l'URL publique du fichier
     const { data: { publicUrl } } = supabase.storage
-      .from('Documents')
+      .from('documents')
       .getPublicUrl(filePath);
 
     return {
@@ -97,7 +118,7 @@ export async function handleUpload(
         path: data.path,
         fullPath: data.fullPath,
         publicUrl,
-        fileName: finalFileName,
+        fileName: safeFileName,
         fileSize: file.size,
         fileType: file.type,
       },

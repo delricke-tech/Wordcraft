@@ -25,7 +25,7 @@ import {
   Download,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase, Document, Folder as FolderType } from '../lib/supabase';
+import { supabase, Document, Folder as FolderType, uploadFile } from '../lib/supabase';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -44,6 +44,7 @@ export function Library() {
   const [selectedFilter, setSelectedFilter] = useState<string>('all');
   const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchData();
@@ -159,6 +160,99 @@ export function Library() {
     }
   };
 
+  // Fonction spécifique pour l'upload de PDF uniquement
+  const handlePdfUpload = async (files: FileList | null) => {
+    if (!files || !user) return;
+
+    // Vérifier que tous les fichiers sont des PDF
+    const nonPdfFiles = Array.from(files).filter(file => file.type !== 'application/pdf');
+    if (nonPdfFiles.length > 0) {
+      alert(`❌ Erreur : Seuls les fichiers PDF sont acceptés !\nFichiers rejetés : ${nonPdfFiles.map(f => f.name).join(', ')}`);
+      return;
+    }
+
+    const totalFiles = files.length;
+    console.log(`📤 Début de l'upload de ${totalFiles} fichier(s) PDF...`);
+    
+    setLoading(true);
+
+    let successCount = 0;
+    let errorCount = 0;
+    const errors: string[] = [];
+
+    try {
+      for (let i = 0; i < totalFiles; i++) {
+        const file = files[i];
+        console.log(`📤 [${i + 1}/${totalFiles}] Upload du PDF: ${file.name}`);
+        
+        // Utiliser la fonction uploadFile de supabase.ts qui nettoie automatiquement le nom
+        const result = await uploadFile(file, user.id);
+
+        if (!result.success) {
+          console.error(`❌ Erreur lors de l'upload de ${file.name}:`, result.error);
+          errors.push(`${file.name}: ${result.error}`);
+          errorCount++;
+          continue;
+        }
+
+        console.log(`✅ [${i + 1}/${totalFiles}] PDF uploadé avec succès:`, result.data?.path);
+
+        // Enregistrer le document en base de données avec le nom original
+        const { error: dbError } = await supabase
+          .from('documents')
+          .insert({
+            name: file.name,
+            storage_path: result.data?.path || '',
+            user_id: user.id,
+            file_type: 'pdf',
+          });
+
+        if (dbError) {
+          console.error(`❌ Erreur lors de l'enregistrement en BDD de ${file.name}:`, dbError);
+          // Nettoyer le fichier uploadé en cas d'erreur
+          if (result.data?.path) {
+            await supabase.storage.from('documents').remove([result.data.path]);
+          }
+          errors.push(`${file.name}: Erreur BDD - ${dbError.message}`);
+          errorCount++;
+          continue;
+        }
+
+        console.log(`✅ [${i + 1}/${totalFiles}] Document PDF enregistré en BDD avec succès`);
+        successCount++;
+
+        // Petit délai entre chaque upload pour éviter les problèmes de rate limiting
+        if (i < totalFiles - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+
+      await fetchData();
+      
+      // Message de résultat détaillé
+      let message = '';
+      if (successCount === totalFiles) {
+        message = `✅ Succès ! ${successCount} fichier(s) PDF uploadé(s) avec succès dans le bucket documents !`;
+      } else if (successCount > 0) {
+        message = `⚠️ Upload partiel : ${successCount} réussi(s), ${errorCount} échec(s).\n\nErreurs :\n${errors.join('\n')}`;
+      } else {
+        message = `❌ Échec : Aucun fichier n'a pu être uploadé.\n\nErreurs :\n${errors.join('\n')}`;
+      }
+      
+      alert(message);
+      
+    } catch (error) {
+      console.error('❌ Erreur générale lors de l\'upload:', error);
+      alert(`❌ Erreur générale : ${successCount} fichier(s) uploadé(s) sur ${totalFiles}.\n${error instanceof Error ? error.message : 'Erreur inconnue'}`);
+    } finally {
+      setLoading(false);
+      // Réinitialiser l'input pour permettre de re-sélectionner les mêmes fichiers
+      if (pdfInputRef.current) {
+        pdfInputRef.current.value = '';
+      }
+    }
+  };
+
   const handleDeleteDocument = async (id: string) => {
     const doc = documents.find(d => d.id === id);
     
@@ -235,6 +329,21 @@ export function Library() {
             <Upload size={20} />
             Uploader
           </button>
+          <button
+            onClick={() => pdfInputRef.current?.click()}
+            className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors flex items-center gap-2"
+          >
+            <File size={20} />
+            Upload PDF
+          </button>
+          <input
+            ref={pdfInputRef}
+            type="file"
+            accept="application/pdf"
+            multiple
+            onChange={(e) => handlePdfUpload(e.target.files)}
+            className="hidden"
+          />
           <button
             onClick={() => setShowImportModal(true)}
             className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors flex items-center gap-2"

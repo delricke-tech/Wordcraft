@@ -69,12 +69,14 @@ export type Quiz = {
  * @param file - Le fichier à uploader
  * @param userId - L'ID de l'utilisateur (optionnel, non utilisé actuellement)
  * @param fileName - Nom optionnel du fichier (utilise file.name par défaut)
+ * @param onProgress - Callback optionnel pour suivre la progression (0-100)
  * @returns L'objet contenant le chemin du fichier et les données d'upload
  */
 export async function uploadFile(
   file: File,
   userId?: string,
-  fileName?: string
+  fileName?: string,
+  onProgress?: (progress: number) => void
 ) {
   try {
     // Utiliser l'utilitaire de nettoyage pour générer un nom de fichier sûr
@@ -83,6 +85,12 @@ export async function uploadFile(
 
     console.log('📤 Upload vers Supabase - Nom original:', originalName);
     console.log('📤 Upload vers Supabase - Chemin sûr:', safePath);
+
+    // Note: Supabase Storage ne supporte pas onUploadProgress natif
+    // On simule la progression si un callback est fourni
+    if (onProgress) {
+      onProgress(10); // Début de l'upload
+    }
 
     // Upload le fichier dans le bucket 'documents' avec le nom sûr
     const { data, error } = await supabase.storage
@@ -103,10 +111,18 @@ export async function uploadFile(
       throw error;
     }
 
+    if (onProgress) {
+      onProgress(90); // Upload terminé
+    }
+
     // Obtenir l'URL publique du fichier
     const { data: { publicUrl } } = supabase.storage
       .from('documents')
       .getPublicUrl(safePath);
+
+    if (onProgress) {
+      onProgress(100); // Complet
+    }
 
     return {
       success: true,

@@ -29,7 +29,7 @@ import { supabase, Document, Folder as FolderType, uploadFile } from '../lib/sup
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { generateUniqueFileName, getFileType } from '../utils/fileUtils';
-import { Toaster, toast } from 'sonner';
+import { toast } from 'sonner';
 
 export function Library() {
   const { user } = useAuth();
@@ -201,66 +201,67 @@ export function Library() {
     }
 
     const totalFiles = files.length;
-    console.log(`📤 Début de l'upload de ${totalFiles} fichier(s) PDF...`);
+    const filesArray = Array.from(files);
     
     setIsUploading(true);
     setUploadProgress(0);
 
     let successCount = 0;
     let errorCount = 0;
-    const errors: string[] = [];
-    
-    // Toast de chargement
-    const loadingToastId = toast.loading(`Upload de ${totalFiles} PDF en cours...`);
 
     try {
       for (let i = 0; i < totalFiles; i++) {
-        const file = files[i];
+        const file = filesArray[i];
+        const originalFileName = file.name; // Conserver le nom original avec accents
         
-        // Mettre à jour la progression
-        const progress = ((i + 1) / totalFiles) * 100;
-        setUploadProgress(progress);
-        
-        console.log(`📤 [${i + 1}/${totalFiles}] Upload du PDF: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
-        
-        // Utiliser la fonction uploadFile de supabase.ts qui nettoie automatiquement le nom
-        const result = await uploadFile(file, user.id);
+        // Utiliser toast.promise pour une meilleure UX
+        await toast.promise(
+          (async () => {
+            // Mettre à jour la progression globale
+            const baseProgress = (i / totalFiles) * 100;
+            
+            // Callback de progression pour cet upload spécifique
+            const onProgress = (fileProgress: number) => {
+              const totalProgress = baseProgress + (fileProgress / totalFiles);
+              setUploadProgress(totalProgress);
+            };
+            
+            // Upload avec progression
+            const result = await uploadFile(file, user.id, undefined, onProgress);
 
-        if (!result.success) {
-          console.error(`❌ Erreur lors de l'upload de ${file.name}:`, result.error);
-          errors.push(`${file.name}: ${result.error}`);
-          errorCount++;
-          continue;
-        }
+            if (!result.success) {
+              throw new Error(result.error || 'Erreur d\'upload');
+            }
 
-        console.log(`✅ [${i + 1}/${totalFiles}] PDF uploadé avec succès:`, result.data?.path);
+            // Enregistrer en BDD avec le nom original
+            const { error: dbError } = await supabase
+              .from('documents')
+              .insert({
+                name: originalFileName, // ✅ Nom original avec accents pour l'affichage
+                storage_path: result.data?.path || '',
+                user_id: user.id,
+                file_type: 'pdf',
+              });
 
-        // Enregistrer le document en base de données avec le nom original
-        const { error: dbError } = await supabase
-          .from('documents')
-          .insert({
-            name: file.name,
-            storage_path: result.data?.path || '',
-            user_id: user.id,
-            file_type: 'pdf',
-          });
+            if (dbError) {
+              // Nettoyer le fichier uploadé en cas d'erreur
+              if (result.data?.path) {
+                await supabase.storage.from('documents').remove([result.data.path]);
+              }
+              throw new Error(dbError.message);
+            }
 
-        if (dbError) {
-          console.error(`❌ Erreur lors de l'enregistrement en BDD de ${file.name}:`, dbError);
-          
-          // Nettoyer le fichier uploadé en cas d'erreur
-          if (result.data?.path) {
-            await supabase.storage.from('documents').remove([result.data.path]);
+            successCount++;
+            return result;
+          })(),
+          {
+            loading: `Upload de "${originalFileName}"...`, // ✅ Affiche le nom original
+            success: `"${originalFileName}" ajouté !`, // ✅ Affiche le nom original
+            error: (err) => `Erreur: ${originalFileName} - ${err.message}`, // ✅ Affiche le nom original
           }
-          errors.push(`${file.name}: BDD - ${dbError.message}`);
-          errorCount++;
-          continue;
-        }
+        );
 
-        console.log(`✅ [${i + 1}/${totalFiles}] Document PDF enregistré en BDD avec succès`);
-        successCount++;
-
-        // Délai de 200ms entre chaque upload pour garantir des timestamps uniques et éviter le rate limiting
+        // Délai entre uploads
         if (i < totalFiles - 1) {
           await new Promise(resolve => setTimeout(resolve, 200));
         }
@@ -268,35 +269,24 @@ export function Library() {
 
       await fetchData();
       
-      // Message de résultat selon le succès
+      // Toast récapitulatif
       if (successCount === totalFiles) {
-        toast.success('Document ajouté !', {
-          id: loadingToastId,
+        toast.success('Tous les documents ont été ajoutés !', {
           description: `${successCount} fichier(s) PDF uploadé(s) avec succès`
         });
       } else if (successCount > 0) {
         toast.warning('Upload partiel', {
-          id: loadingToastId,
           description: `${successCount} réussi(s), ${errorCount} échec(s)`
-        });
-      } else {
-        toast.error('Échec de l\'upload', {
-          id: loadingToastId,
-          description: `Aucun fichier n'a pu être uploadé. ${errors[0] || ''}`
         });
       }
       
     } catch (error: any) {
       console.error('❌ Erreur générale lors de l\'upload:', error);
-      toast.error('Erreur lors de l\'upload', {
-        id: loadingToastId,
-        description: `${successCount} fichier(s) uploadé(s) sur ${totalFiles}. ${error.message || 'Erreur inconnue'}`
-      });
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
       
-      // Réinitialiser l'input pour permettre de re-sélectionner les mêmes fichiers
+      // Réinitialiser l'input
       if (pdfInputRef.current) {
         pdfInputRef.current.value = '';
       }
@@ -619,14 +609,6 @@ export function Library() {
           }}
         />
       )}
-      
-      {/* Toaster pour les notifications */}
-      <Toaster 
-        position="top-right" 
-        richColors 
-        expand={false}
-        closeButton
-      />
     </div>
   );
 }

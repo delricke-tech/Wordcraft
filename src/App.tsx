@@ -16,6 +16,7 @@ import { AIAssistant } from './pages/AIAssistant';
 import { Settings } from './pages/Settings';
 import { Subscription } from './pages/Subscription';
 import { TeacherDashboard } from './pages/teacher/TeacherDashboard';
+import { Toaster } from 'sonner';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -122,6 +123,13 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <AppRoutes />
+        <Toaster 
+          position="top-right" 
+          richColors 
+          expand={false}
+          closeButton
+          duration={4000}
+        />
       </AuthProvider>
     </BrowserRouter>
   );

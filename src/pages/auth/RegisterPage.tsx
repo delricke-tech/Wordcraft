@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Brain, Mail, Lock, User, Eye, EyeOff, AlertCircle, Check } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'sonner';
+import { supabase } from '../../lib/supabase';
 
 export function RegisterPage() {
   const navigate = useNavigate();
@@ -48,24 +49,54 @@ export function RegisterPage() {
 
     setLoading(true);
 
-    const { error } = await signUp(email, password, fullName);
+    try {
+      const { error } = await signUp(email, password, fullName);
 
-    console.log('📡 Résultat de l\'inscription:', { error });
+      console.log('📡 Résultat de l\'inscription:', { error });
 
-    if (error) {
-      console.error('❌ Erreur d\'inscription:', error);
-      setError(error.message);
-      toast.error('Erreur d\'inscription', {
-        description: error.message
+      if (error) {
+        console.error('❌ Erreur d\'inscription:', error);
+        setError(error.message);
+        toast.error('Erreur d\'inscription', {
+          description: error.message
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Vérifier si l'utilisateur a une session active (confirmation email désactivée)
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      console.log('🔐 Session après inscription:', session ? '✅ Active' : '❌ Aucune');
+
+      if (session) {
+        // Confirmation email désactivée - l'utilisateur est déjà connecté
+        console.log('✅ Inscription réussie avec connexion automatique!');
+        toast.success('Compte créé !', {
+          description: 'Bienvenue sur WordCraft ! Redirection en cours...'
+        });
+        
+        // Redirection immédiate vers la bibliothèque
+        setTimeout(() => {
+          navigate('/library');
+        }, 1000);
+      } else {
+        // Confirmation email requise
+        console.log('📧 Confirmation email requise - redirection vers la page de vérification');
+        toast.success('Compte créé !', {
+          description: 'Vérifiez votre email pour confirmer votre compte.'
+        });
+        
+        // Rediriger vers la page de vérification email
+        navigate(`/verify-email?email=${encodeURIComponent(email)}`);
+      }
+    } catch (err: any) {
+      console.error('❌ Erreur inattendue:', err);
+      setError('Une erreur inattendue s\'est produite');
+      toast.error('Erreur', {
+        description: 'Une erreur inattendue s\'est produite'
       });
       setLoading(false);
-    } else {
-      console.log('✅ Inscription réussie! Redirection vers la vérification email...');
-      toast.success('Compte créé !', {
-        description: 'Vérifiez votre email pour confirmer votre compte.'
-      });
-      // Rediriger vers la page de vérification email
-      navigate(`/verify-email?email=${encodeURIComponent(email)}`);
     }
   };
 

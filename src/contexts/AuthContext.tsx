@@ -61,6 +61,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, fullName: string) => {
+    console.log('🚀 Début de l\'inscription...');
+    console.log('📧 Email:', email);
+    console.log('👤 Nom complet:', fullName);
+    console.log('🌍 Environnement:', import.meta.env.MODE);
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -68,18 +73,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         data: {
           full_name: fullName,
         },
+        // En développement, ne pas envoyer d'email de confirmation
+        emailRedirectTo: `${window.location.origin}/dashboard`,
       },
     });
 
-    if (error) return { error };
+    console.log('📡 Réponse Supabase auth.signUp:');
+    console.log('  - Utilisateur créé:', data.user ? `✅ ID: ${data.user.id}` : '❌ Aucun');
+    console.log('  - Session créée:', data.session ? '✅ Oui' : '❌ Non');
+    console.log('  - Email confirmé:', data.user?.email_confirmed_at ? '✅ Oui' : '⏳ En attente');
+    
+    if (error) {
+      console.error('❌ Erreur Supabase lors de l\'inscription:');
+      console.error('  - Code:', error.status);
+      console.error('  - Message:', error.message);
+      console.error('  - Détails complets:', error);
+      return { error };
+    }
 
+    // Si l'utilisateur est créé mais pas de session (confirmation email requise)
+    if (data.user && !data.session) {
+      console.log('⏳ Confirmation email requise');
+      console.log('💡 L\'utilisateur doit vérifier son email avant de se connecter');
+      console.log('📧 Email envoyé à:', data.user.email);
+      
+      // Vérifier si l'email a été confirmé automatiquement (mode dev)
+      if (data.user.email_confirmed_at) {
+        console.log('✅ Email auto-confirmé! (Mode développement)');
+      }
+    }
+
+    // Si l'utilisateur est créé avec une session (confirmation désactivée)
     if (data.user && data.session) {
-      await supabase
+      console.log('✅ Inscription réussie avec session active!');
+      console.log('🎉 L\'utilisateur est automatiquement connecté');
+      
+      // Créer le profil dans la base de données
+      console.log('💾 Création du profil dans la base de données...');
+      const { error: profileError } = await supabase
         .from('profiles')
         .update({ full_name: fullName })
         .eq('id', data.user.id);
+
+      if (profileError) {
+        console.warn('⚠️ Erreur lors de la mise à jour du profil:', profileError);
+      } else {
+        console.log('✅ Profil mis à jour avec succès');
+      }
     }
 
+    console.log('✅ Processus d\'inscription terminé');
     return { error: null };
   };
 

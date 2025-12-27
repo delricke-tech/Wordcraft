@@ -1,0 +1,128 @@
+# Règles Cursor pour le Projet
+
+## 🔴 RÈGLE CRITIQUE : Gestion des Noms de Fichiers avec Supabase Storage
+
+**Les noms de fichiers originaux ne doivent JAMAIS servir de clé (path) pour Supabase Storage.**
+
+### Pourquoi ?
+Les accents, espaces et caractères spéciaux causent des erreurs `Invalid key` avec Supabase Storage.
+
+### Règle obligatoire
+
+Lors de TOUTE implémentation d'upload de fichiers vers Supabase Storage :
+
+1. **TOUJOURS utiliser les utilitaires de `src/utils/fileUtils.ts`**
+   ```typescript
+   import { generateUniqueFileName, getFileType } from '../utils/fileUtils';
+   ```
+
+2. **TOUJOURS générer un chemin sûr avant l'upload**
+   ```typescript
+   const safePath = generateUniqueFileName(file.name);
+   ```
+
+3. **TOUJOURS uploader avec le chemin sûr, PAS le nom original**
+   ```typescript
+   // ✅ BON
+   await supabase.storage.from('documents').upload(safePath, file);
+   
+   // ❌ MAUVAIS - NE JAMAIS FAIRE
+   await supabase.storage.from('documents').upload(file.name, file);
+   ```
+
+4. **TOUJOURS conserver le nom original en base de données SQL**
+   ```typescript
+   await supabase.from('documents').insert({
+     name: file.name,           // ✅ Nom original pour l'affichage
+     storage_path: safePath     // ✅ Chemin nettoyé pour Storage
+   });
+   ```
+
+### Exemples de transformations
+
+| Nom Original | Chemin Storage Généré |
+|-------------|----------------------|
+| `Mon Document Été 2024.pdf` | `1735245678901-abc123-mon-document-ete-2024.pdf` |
+| `Virologie_Général #1.pdf` | `1735245678902-def456-virologie-general-1.pdf` |
+| `Cours (partie 1) & notes.pdf` | `1735245678903-ghi789-cours-partie-1-notes.pdf` |
+
+### Checklist avant de créer toute fonctionnalité d'upload
+
+- [ ] Importer `generateUniqueFileName` depuis `src/utils/fileUtils`
+- [ ] Générer le chemin sûr : `const safePath = generateUniqueFileName(file.name)`
+- [ ] Uploader avec le chemin sûr, PAS le nom original
+- [ ] Enregistrer le nom original en BDD dans le champ `name`
+- [ ] Enregistrer le chemin sûr en BDD dans le champ `storage_path`
+- [ ] Ajouter un délai de 200ms entre uploads multiples
+- [ ] Tester avec des noms contenant : accents, espaces, parenthèses, #, &, _
+
+### Utilitaires disponibles dans `src/utils/fileUtils.ts`
+
+- `generateUniqueFileName(fileName)` - **Utiliser TOUJOURS pour les uploads**
+- `cleanFileName(fileName)` - Nettoie un nom sans timestamp
+- `getFileType(fileName)` - Détermine le type (pdf, docx, image, etc.)
+- `isFileNameSafe(fileName)` - Vérifie si un nom est déjà sûr
+- `getFileExtension(fileName)` - Extrait l'extension
+
+### ❌ Code à éviter absolument
+
+```typescript
+// MAUVAIS : Utiliser le nom original directement
+await supabase.storage.from('documents').upload(file.name, file);
+
+// MAUVAIS : Nettoyage manuel incomplet
+const name = file.name.replace(' ', '-');
+await supabase.storage.from('documents').upload(name, file);
+
+// MAUVAIS : Oublier de conserver le nom original en BDD
+await supabase.from('documents').insert({
+  name: safePath  // ❌ L'utilisateur verra "1735245678901-abc123-mon-document.pdf"
+});
+```
+
+### ✅ Code correct
+
+```typescript
+// BON : Utiliser les utilitaires
+import { generateUniqueFileName, getFileType } from '../utils/fileUtils';
+
+const safePath = generateUniqueFileName(file.name);
+const fileType = getFileType(file.name);
+
+// Upload avec le chemin sûr
+const { data, error } = await supabase.storage
+  .from('documents')
+  .upload(safePath, file);
+
+// Enregistrer avec le nom original
+await supabase.from('documents').insert({
+  name: file.name,           // ✅ Nom original pour l'affichage
+  storage_path: data.path,   // ✅ Chemin nettoyé
+  file_type: fileType
+});
+```
+
+---
+
+## Autres règles du projet
+
+### Architecture
+- Utiliser TypeScript strict
+- Organiser les utilitaires dans `src/utils/`
+- Centraliser la logique Supabase dans `src/lib/supabase.ts`
+
+### Code
+- Préférer les fonctions nommées aux fonctions anonymes
+- Commenter les règles métier importantes
+- Gérer les erreurs avec des messages explicites
+
+### Supabase
+- Bucket Storage : `'documents'` (minuscules)
+- Toujours nettoyer après une erreur d'insertion BDD
+- Délai de 200ms entre uploads multiples
+
+---
+
+**Date de création :** 27 décembre 2024  
+**Dernière mise à jour :** 27 décembre 2024
+

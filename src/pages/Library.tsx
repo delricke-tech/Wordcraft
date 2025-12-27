@@ -29,6 +29,7 @@ import { supabase, Document, Folder as FolderType, uploadFile } from '../lib/sup
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { generateUniqueFileName, getFileType } from '../utils/fileUtils';
+import { Toaster, toast } from 'sonner';
 
 export function Library() {
   const { user } = useAuth();
@@ -36,6 +37,8 @@ export function Library() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [folders, setFolders] = useState<FolderType[]>([]);
   const [loading, setLoading] = useState(true);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
@@ -89,10 +92,21 @@ export function Library() {
   const handleFileUpload = async (files: FileList | null) => {
     if (!files || !user) return;
 
-    setLoading(true);
+    setIsUploading(true);
+    setUploadProgress(0);
+    const totalFiles = files.length;
+    
+    // Toast de chargement
+    const loadingToastId = toast.loading(`Upload de ${totalFiles} fichier(s) en cours...`);
 
     try {
-      for (const file of Array.from(files)) {
+      for (let i = 0; i < totalFiles; i++) {
+        const file = Array.from(files)[i];
+        
+        // Mettre à jour la progression
+        const progress = ((i + 1) / totalFiles) * 100;
+        setUploadProgress(progress);
+        
         // Utiliser l'utilitaire pour déterminer le type de fichier
         const fileType = getFileType(file.name);
         
@@ -111,7 +125,10 @@ export function Library() {
 
         if (uploadError) {
           console.error('❌ Erreur lors de l\'upload:', uploadError);
-          alert(`Erreur lors de l'upload de ${file.name}: ${uploadError.message}`);
+          toast.error(`Erreur lors de l'upload de ${file.name}`, {
+            id: loadingToastId,
+            description: uploadError.message
+          });
           continue;
         }
 
@@ -139,7 +156,10 @@ export function Library() {
         if (dbError) {
           console.error('❌ Erreur lors de l\'enregistrement en BDD:', dbError);
           await supabase.storage.from('documents').remove([uploadData.path]);
-          alert(`Erreur lors de l'enregistrement de ${file.name}: ${dbError.message}`);
+          toast.error(`Erreur lors de l'enregistrement de ${file.name}`, {
+            id: loadingToastId,
+            description: dbError.message
+          });
           continue;
         }
 
@@ -148,12 +168,22 @@ export function Library() {
 
       await fetchData();
       setShowUploadModal(false);
-      alert('✅ Fichiers uploadés avec succès !');
+      
+      // Toast de succès
+      toast.success('Document ajouté !', {
+        id: loadingToastId,
+        description: `${totalFiles} fichier(s) uploadé(s) avec succès`
+      });
+      
     } catch (error) {
       console.error('❌ Erreur générale:', error);
-      alert('Une erreur est survenue lors de l\'upload des fichiers.');
+      toast.error('Erreur lors de l\'upload', {
+        id: loadingToastId,
+        description: 'Une erreur est survenue lors de l\'upload des fichiers.'
+      });
     } finally {
-      setLoading(false);
+      setIsUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -164,22 +194,33 @@ export function Library() {
     // Vérifier que tous les fichiers sont des PDF
     const nonPdfFiles = Array.from(files).filter(file => file.type !== 'application/pdf');
     if (nonPdfFiles.length > 0) {
-      alert(`❌ Erreur : Seuls les fichiers PDF sont acceptés !\nFichiers rejetés : ${nonPdfFiles.map(f => f.name).join(', ')}`);
+      toast.error('Fichiers non-PDF rejetés', {
+        description: `Seuls les fichiers PDF sont acceptés. Fichiers rejetés : ${nonPdfFiles.map(f => f.name).join(', ')}`
+      });
       return;
     }
 
     const totalFiles = files.length;
     console.log(`📤 Début de l'upload de ${totalFiles} fichier(s) PDF...`);
     
-    setLoading(true);
+    setIsUploading(true);
+    setUploadProgress(0);
 
     let successCount = 0;
     let errorCount = 0;
     const errors: string[] = [];
+    
+    // Toast de chargement
+    const loadingToastId = toast.loading(`Upload de ${totalFiles} PDF en cours...`);
 
     try {
       for (let i = 0; i < totalFiles; i++) {
         const file = files[i];
+        
+        // Mettre à jour la progression
+        const progress = ((i + 1) / totalFiles) * 100;
+        setUploadProgress(progress);
+        
         console.log(`📤 [${i + 1}/${totalFiles}] Upload du PDF: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
         
         // Utiliser la fonction uploadFile de supabase.ts qui nettoie automatiquement le nom
@@ -187,10 +228,6 @@ export function Library() {
 
         if (!result.success) {
           console.error(`❌ Erreur lors de l'upload de ${file.name}:`, result.error);
-          
-          // Afficher l'erreur détaillée immédiatement
-          alert(`❌ Erreur Supabase lors de l'upload de ${file.name}:\n\nMessage: ${result.error}\n\nType de fichier: ${file.type}\nTaille: ${(file.size / 1024 / 1024).toFixed(2)} MB`);
-          
           errors.push(`${file.name}: ${result.error}`);
           errorCount++;
           continue;
@@ -210,17 +247,6 @@ export function Library() {
 
         if (dbError) {
           console.error(`❌ Erreur lors de l'enregistrement en BDD de ${file.name}:`, dbError);
-          
-          // Afficher l'erreur détaillée de la base de données
-          const errorDetails = [
-            `Fichier: ${file.name}`,
-            `Message: ${dbError.message}`,
-            `Code: ${dbError.code || 'N/A'}`,
-            `Détails: ${dbError.details || 'N/A'}`,
-            `Hint: ${dbError.hint || 'N/A'}`
-          ].join('\n');
-          
-          alert(`❌ Erreur Supabase (Base de données):\n\n${errorDetails}`);
           
           // Nettoyer le fichier uploadé en cas d'erreur
           if (result.data?.path) {
@@ -242,33 +268,34 @@ export function Library() {
 
       await fetchData();
       
-      // Message de résultat détaillé
-      let message = '';
+      // Message de résultat selon le succès
       if (successCount === totalFiles) {
-        message = `✅ Succès ! ${successCount} fichier(s) PDF uploadé(s) avec succès dans le bucket documents !`;
+        toast.success('Document ajouté !', {
+          id: loadingToastId,
+          description: `${successCount} fichier(s) PDF uploadé(s) avec succès`
+        });
       } else if (successCount > 0) {
-        message = `⚠️ Upload partiel : ${successCount} réussi(s), ${errorCount} échec(s).\n\nErreurs :\n${errors.join('\n')}`;
+        toast.warning('Upload partiel', {
+          id: loadingToastId,
+          description: `${successCount} réussi(s), ${errorCount} échec(s)`
+        });
       } else {
-        message = `❌ Échec : Aucun fichier n'a pu être uploadé.\n\nErreurs :\n${errors.join('\n')}`;
+        toast.error('Échec de l\'upload', {
+          id: loadingToastId,
+          description: `Aucun fichier n'a pu être uploadé. ${errors[0] || ''}`
+        });
       }
-      
-      alert(message);
       
     } catch (error: any) {
       console.error('❌ Erreur générale lors de l\'upload:', error);
-      
-      // Afficher l'erreur générale avec tous les détails possibles
-      const generalErrorDetails = [
-        `Erreur générale: ${successCount} fichier(s) uploadé(s) sur ${totalFiles}`,
-        `Message: ${error.message || 'Erreur inconnue'}`,
-        `Code: ${error.code || 'N/A'}`,
-        `Type: ${error.name || 'N/A'}`,
-        `Détails: ${error.details || error.error || 'N/A'}`
-      ].join('\n');
-      
-      alert(`❌ Erreur Supabase (Générale):\n\n${generalErrorDetails}`);
+      toast.error('Erreur lors de l\'upload', {
+        id: loadingToastId,
+        description: `${successCount} fichier(s) uploadé(s) sur ${totalFiles}. ${error.message || 'Erreur inconnue'}`
+      });
     } finally {
-      setLoading(false);
+      setIsUploading(false);
+      setUploadProgress(0);
+      
       // Réinitialiser l'input pour permettre de re-sélectionner les mêmes fichiers
       if (pdfInputRef.current) {
         pdfInputRef.current.value = '';
@@ -376,6 +403,22 @@ export function Library() {
           </button>
         </div>
       </div>
+
+      {/* Barre de progression de l'upload */}
+      {isUploading && (
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-gray-600">Upload en cours...</span>
+            <span className="text-sm font-medium text-teal-600">{Math.round(uploadProgress)}%</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+            <div 
+              className="bg-teal-600 h-full transition-all duration-300 ease-out"
+              style={{ width: `${uploadProgress}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Search and filters */}
       <div className="flex items-center gap-4 mb-6">
@@ -576,6 +619,14 @@ export function Library() {
           }}
         />
       )}
+      
+      {/* Toaster pour les notifications */}
+      <Toaster 
+        position="top-right" 
+        richColors 
+        expand={false}
+        closeButton
+      />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Brain, Mail, Lock, User, Eye, EyeOff, AlertCircle, Check } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { toast } from 'sonner';
 
 export function RegisterPage() {
   const navigate = useNavigate();
@@ -41,15 +42,30 @@ export function RegisterPage() {
       return;
     }
 
+    console.log('📝 Tentative d\'inscription...');
+    console.log('📧 Email:', email);
+    console.log('👤 Nom:', fullName);
+
     setLoading(true);
 
     const { error } = await signUp(email, password, fullName);
 
+    console.log('📡 Résultat de l\'inscription:', { error });
+
     if (error) {
+      console.error('❌ Erreur d\'inscription:', error);
       setError(error.message);
+      toast.error('Erreur d\'inscription', {
+        description: error.message
+      });
       setLoading(false);
     } else {
-      navigate('/dashboard');
+      console.log('✅ Inscription réussie! Redirection vers la vérification email...');
+      toast.success('Compte créé !', {
+        description: 'Vérifiez votre email pour confirmer votre compte.'
+      });
+      // Rediriger vers la page de vérification email
+      navigate(`/verify-email?email=${encodeURIComponent(email)}`);
     }
   };
 

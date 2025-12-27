@@ -43,16 +43,14 @@ export function RegisterPage() {
       return;
     }
 
-    console.log('📝 Tentative d\'inscription...');
-    console.log('📧 Email:', email);
-    console.log('👤 Nom:', fullName);
-
     setLoading(true);
 
     try {
-      const { error } = await signUp(email, password, fullName);
+      console.log('📝 Tentative d\'inscription...');
+      console.log('📧 Email:', email);
+      console.log('👤 Nom:', fullName);
 
-      console.log('📡 Résultat de l\'inscription:', { error });
+      const { error } = await signUp(email, password, fullName);
 
       if (error) {
         console.error('❌ Erreur d\'inscription:', error);
@@ -64,32 +62,17 @@ export function RegisterPage() {
         return;
       }
 
-      // Vérifier si l'utilisateur a une session active (confirmation email désactivée)
-      const { data: { session } } = await supabase.auth.getSession();
+      // Confirmation email désactivée - l'utilisateur est automatiquement connecté
+      console.log('✅ Inscription réussie ! Redirection vers la bibliothèque...');
+      toast.success('Compte créé !', {
+        description: 'Bienvenue sur WordCraft ! Redirection en cours...'
+      });
       
-      console.log('🔐 Session après inscription:', session ? '✅ Active' : '❌ Aucune');
+      // Redirection vers la bibliothèque
+      setTimeout(() => {
+        navigate('/library');
+      }, 1000);
 
-      if (session) {
-        // Confirmation email désactivée - l'utilisateur est déjà connecté
-        console.log('✅ Inscription réussie avec connexion automatique!');
-        toast.success('Compte créé !', {
-          description: 'Bienvenue sur WordCraft ! Redirection en cours...'
-        });
-        
-        // Redirection immédiate vers la bibliothèque
-        setTimeout(() => {
-          navigate('/library');
-        }, 1000);
-      } else {
-        // Confirmation email requise
-        console.log('📧 Confirmation email requise - redirection vers la page de vérification');
-        toast.success('Compte créé !', {
-          description: 'Vérifiez votre email pour confirmer votre compte.'
-        });
-        
-        // Rediriger vers la page de vérification email
-        navigate(`/verify-email?email=${encodeURIComponent(email)}`);
-      }
     } catch (err: any) {
       console.error('❌ Erreur inattendue:', err);
       setError('Une erreur inattendue s\'est produite');

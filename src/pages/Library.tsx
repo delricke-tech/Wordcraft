@@ -28,6 +28,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase, Document, Folder as FolderType, uploadFile } from '../lib/supabase';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { generateUniqueFileName, getFileType } from '../utils/fileUtils';
 
 export function Library() {
   const { user } = useAuth();
@@ -92,22 +93,18 @@ export function Library() {
 
     try {
       for (const file of Array.from(files)) {
-        const fileExt = file.name.split('.').pop()?.toLowerCase();
-        let fileType: Document['file_type'] = 'txt';
-
-        if (fileExt === 'pdf') fileType = 'pdf';
-        else if (fileExt === 'docx' || fileExt === 'doc') fileType = 'docx';
-        else if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExt || '')) fileType = 'image';
-
-        const timestamp = Date.now();
-        const randomString = Math.random().toString(36).substring(2, 8);
-        const uniqueFileName = `${user.id}/${timestamp}-${randomString}-${file.name}`;
+        // Utiliser l'utilitaire pour déterminer le type de fichier
+        const fileType = getFileType(file.name);
+        
+        // Générer un nom de fichier sûr avec l'utilitaire
+        const safePath = generateUniqueFileName(file.name);
 
         console.log('📤 Upload du fichier vers Supabase Storage:', file.name);
+        console.log('📤 Chemin sûr généré:', safePath);
         
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('documents')
-          .upload(uniqueFileName, file, {
+          .upload(safePath, file, {
             cacheControl: '3600',
             upsert: false,
           });
@@ -120,7 +117,7 @@ export function Library() {
 
         console.log('✅ Fichier uploadé avec succès:', uploadData.path);
 
-        // S'assurer que le nom n'est jamais vide
+        // RÈGLE PROJET : Conserver le nom original en BDD pour l'affichage
         const documentName = file.name || `document-${Date.now()}`;
         
         console.log('💾 Insertion en BDD:', {
@@ -183,13 +180,17 @@ export function Library() {
     try {
       for (let i = 0; i < totalFiles; i++) {
         const file = files[i];
-        console.log(`📤 [${i + 1}/${totalFiles}] Upload du PDF: ${file.name}`);
+        console.log(`📤 [${i + 1}/${totalFiles}] Upload du PDF: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
         
         // Utiliser la fonction uploadFile de supabase.ts qui nettoie automatiquement le nom
         const result = await uploadFile(file, user.id);
 
         if (!result.success) {
           console.error(`❌ Erreur lors de l'upload de ${file.name}:`, result.error);
+          
+          // Afficher l'erreur détaillée immédiatement
+          alert(`❌ Erreur Supabase lors de l'upload de ${file.name}:\n\nMessage: ${result.error}\n\nType de fichier: ${file.type}\nTaille: ${(file.size / 1024 / 1024).toFixed(2)} MB`);
+          
           errors.push(`${file.name}: ${result.error}`);
           errorCount++;
           continue;
@@ -209,11 +210,23 @@ export function Library() {
 
         if (dbError) {
           console.error(`❌ Erreur lors de l'enregistrement en BDD de ${file.name}:`, dbError);
+          
+          // Afficher l'erreur détaillée de la base de données
+          const errorDetails = [
+            `Fichier: ${file.name}`,
+            `Message: ${dbError.message}`,
+            `Code: ${dbError.code || 'N/A'}`,
+            `Détails: ${dbError.details || 'N/A'}`,
+            `Hint: ${dbError.hint || 'N/A'}`
+          ].join('\n');
+          
+          alert(`❌ Erreur Supabase (Base de données):\n\n${errorDetails}`);
+          
           // Nettoyer le fichier uploadé en cas d'erreur
           if (result.data?.path) {
             await supabase.storage.from('documents').remove([result.data.path]);
           }
-          errors.push(`${file.name}: Erreur BDD - ${dbError.message}`);
+          errors.push(`${file.name}: BDD - ${dbError.message}`);
           errorCount++;
           continue;
         }
@@ -221,9 +234,9 @@ export function Library() {
         console.log(`✅ [${i + 1}/${totalFiles}] Document PDF enregistré en BDD avec succès`);
         successCount++;
 
-        // Petit délai entre chaque upload pour éviter les problèmes de rate limiting
+        // Délai de 200ms entre chaque upload pour garantir des timestamps uniques et éviter le rate limiting
         if (i < totalFiles - 1) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise(resolve => setTimeout(resolve, 200));
         }
       }
 
@@ -241,9 +254,19 @@ export function Library() {
       
       alert(message);
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Erreur générale lors de l\'upload:', error);
-      alert(`❌ Erreur générale : ${successCount} fichier(s) uploadé(s) sur ${totalFiles}.\n${error instanceof Error ? error.message : 'Erreur inconnue'}`);
+      
+      // Afficher l'erreur générale avec tous les détails possibles
+      const generalErrorDetails = [
+        `Erreur générale: ${successCount} fichier(s) uploadé(s) sur ${totalFiles}`,
+        `Message: ${error.message || 'Erreur inconnue'}`,
+        `Code: ${error.code || 'N/A'}`,
+        `Type: ${error.name || 'N/A'}`,
+        `Détails: ${error.details || error.error || 'N/A'}`
+      ].join('\n');
+      
+      alert(`❌ Erreur Supabase (Générale):\n\n${generalErrorDetails}`);
     } finally {
       setLoading(false);
       // Réinitialiser l'input pour permettre de re-sélectionner les mêmes fichiers

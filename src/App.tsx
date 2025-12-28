@@ -3,7 +3,6 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { MainLayout } from './components/layout/MainLayout';
 import { LoginPage } from './pages/auth/LoginPage';
 import { RegisterPage } from './pages/auth/RegisterPage';
-import { VerifyEmailPage } from './pages/auth/VerifyEmailPage';
 import { Dashboard } from './pages/Dashboard';
 import { Library } from './pages/Library';
 import { DocumentView } from './pages/DocumentView';
@@ -73,10 +72,6 @@ function AppRoutes() {
             <RegisterPage />
           </PublicRoute>
         }
-      />
-      <Route
-        path="/verify-email"
-        element={<VerifyEmailPage />}
       />
       <Route
         path="/"

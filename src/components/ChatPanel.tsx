@@ -41,8 +41,19 @@ export function ChatPanel({ documentContext, isOpen, onToggle }: ChatPanelProps)
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Suggestions de questions basées sur le contexte
+  const suggestions = [
+    { icon: '📝', text: 'Fais-moi un résumé', emoji: '📋' },
+    { icon: '🎯', text: 'Quels sont les points clés ?', emoji: '⭐' },
+    { icon: '❓', text: 'Explique-moi les concepts principaux', emoji: '💡' },
+    { icon: '📚', text: 'Quelles sont les définitions importantes ?', emoji: '📖' },
+    { icon: '🧪', text: 'Donne-moi des exemples pratiques', emoji: '✨' },
+    { icon: '📊', text: 'Quelles formules dois-je retenir ?', emoji: '🔢' },
+  ];
 
   // Auto-scroll vers le bas quand de nouveaux messages arrivent
   useEffect(() => {
@@ -68,12 +79,16 @@ N'hésitez pas à me poser des questions !`,
     }
   }, [documentContext.documentName]);
 
-  const handleSendMessage = async () => {
-    if (!inputMessage.trim() || isLoading) return;
+  const handleSendMessage = async (message?: string) => {
+    const messageToSend = message || inputMessage;
+    if (!messageToSend.trim() || isLoading) return;
+
+    // Masquer les suggestions après le premier message
+    setShowSuggestions(false);
 
     const userMessage: ChatMessage = {
       role: 'user',
-      content: inputMessage,
+      content: messageToSend,
       timestamp: new Date()
     };
 
@@ -83,7 +98,7 @@ N'hésitez pas à me poser des questions !`,
 
     try {
       const response = await sendChatMessage(
-        inputMessage,
+        messageToSend,
         documentContext,
         messages
       );
@@ -269,6 +284,36 @@ N'hésitez pas à me poser des questions !`,
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {/* Suggestions interactives */}
+              {showSuggestions && messages.length <= 1 && documentContext.extractedText && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="space-y-3"
+                >
+                  <p className="text-sm text-white/70 font-medium mb-3">💡 Suggestions de questions :</p>
+                  <div className="grid grid-cols-1 gap-2">
+                    {suggestions.map((suggestion, index) => (
+                      <motion.button
+                        key={index}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.1 }}
+                        onClick={() => handleSendMessage(suggestion.text)}
+                        disabled={isLoading}
+                        className="flex items-center gap-3 px-4 py-3 bg-white/10 hover:bg-white/20 rounded-xl text-left text-white transition-all border border-white/10 hover:border-white/30 disabled:opacity-50 disabled:cursor-not-allowed group"
+                        style={{ backdropFilter: 'blur(10px)' }}
+                      >
+                        <span className="text-2xl group-hover:scale-110 transition-transform">{suggestion.icon}</span>
+                        <span className="text-sm flex-1">{suggestion.text}</span>
+                        <span className="text-xs opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+                      </motion.button>
+                    ))}
+                  </div>
+                  <div className="h-px bg-white/10 my-4" />
+                </motion.div>
+              )}
+
               {messages.map((msg, index) => (
                 <motion.div
                   key={index}
@@ -338,14 +383,14 @@ N'hésitez pas à me poser des questions !`,
                   type="text"
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                  placeholder="Posez une question sur le document..."
+                  onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
+                  placeholder={showSuggestions && messages.length <= 1 ? "Ou tapez votre propre question..." : "Posez une question sur le document..."}
                   disabled={isLoading}
                   className="flex-1 px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-500/50 disabled:opacity-50"
                   style={{ backdropFilter: 'blur(10px)' }}
                 />
                 <button
-                  onClick={handleSendMessage}
+                  onClick={() => handleSendMessage()}
                   disabled={!inputMessage.trim() || isLoading}
                   className="px-4 py-3 bg-gradient-to-br from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ border: '1px solid rgba(255, 255, 255, 0.2)' }}

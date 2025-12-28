@@ -23,6 +23,7 @@ import {
   Video,
   Globe,
   Download,
+  Loader2,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Document, Folder as FolderType, uploadFile } from '../lib/supabase';
@@ -30,6 +31,8 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { generateUniqueFileName, getFileType } from '../utils/fileUtils';
 import { toast } from 'sonner';
+import { NewFolderModal } from '../components/modals/NewFolderModal';
+import { FolderSelector } from '../components/modals/FolderSelector';
 
 export function Library() {
   const { user } = useAuth();
@@ -49,6 +52,8 @@ export function Library() {
   const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
+  const [selectedFolderForUpload, setSelectedFolderForUpload] = useState<string | null>(null);
+  const [showPdfUploadModal, setShowPdfUploadModal] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -87,6 +92,45 @@ export function Library() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Fonction pour créer un nouveau dossier
+  const handleCreateFolder = async (folderName: string) => {
+    if (!user) {
+      toast.error('Erreur', {
+        description: 'Vous devez être connecté pour créer un dossier'
+      });
+      return;
+    }
+
+    console.log('📁 Création du dossier:', folderName);
+
+    const { data, error } = await supabase
+      .from('folders')
+      .insert({
+        user_id: user.id,
+        name: folderName,
+        color: '#6B7280',
+        icon: 'folder',
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('❌ Erreur lors de la création du dossier:', error);
+      toast.error('Erreur', {
+        description: 'Impossible de créer le dossier'
+      });
+      throw error;
+    }
+
+    console.log('✅ Dossier créé:', data);
+    toast.success('Dossier créé !', {
+      description: `Le dossier "${folderName}" a été créé avec succès`
+    });
+
+    // Rafraîchir la liste des dossiers
+    await fetchData();
   };
 
   const handleFileUpload = async (files: FileList | null) => {
@@ -233,15 +277,16 @@ export function Library() {
               throw new Error(result.error || 'Erreur d\'upload');
             }
 
-            // Enregistrer en BDD avec le nom original
-            const { error: dbError } = await supabase
-              .from('documents')
-              .insert({
-                name: originalFileName, // ✅ Nom original avec accents pour l'affichage
-                storage_path: result.data?.path || '',
-                user_id: user.id,
-                file_type: 'pdf',
-              });
+              // Enregistrer en BDD avec le nom original
+              const { error: dbError } = await supabase
+                .from('documents')
+                .insert({
+                  name: originalFileName, // ✅ Nom original avec accents pour l'affichage
+                  storage_path: result.data?.path || '',
+                  user_id: user.id,
+                  file_type: 'pdf',
+                  folder_id: selectedFolderForUpload, // ✅ Ajouter le dossier sélectionné
+                });
 
             if (dbError) {
               // Nettoyer le fichier uploadé en cas d'erreur
@@ -323,7 +368,21 @@ export function Library() {
       ? doc.name.toLowerCase().includes(searchQuery.toLowerCase())
       : true;
     const matchesFilter = selectedFilter === 'all' || doc.file_type === selectedFilter;
-    return matchesSearch && matchesFilter;
+    
+    // ✅ Filtrage par dossier
+    const matchesFolder = selectedFolder === null 
+      ? doc.folder_id === null || doc.folder_id === undefined  // Afficher les documents sans dossier
+      : doc.folder_id === selectedFolder;  // Afficher les documents du dossier sélectionné
+    
+    return matchesSearch && matchesFilter && matchesFolder;
+  });
+
+  // ✅ Filtrer les dossiers également pour la recherche
+  const filteredFolders = folders.filter((folder) => {
+    const matchesSearch = folder.name
+      ? folder.name.toLowerCase().includes(searchQuery.toLowerCase())
+      : true;
+    return matchesSearch;
   });
 
   const getFileIcon = (type: string) => {
@@ -356,12 +415,37 @@ export function Library() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
+          {/* ✅ Fil d'ariane si un dossier est sélectionné */}
+          {selectedFolder ? (
+            <div className="flex items-center gap-2 mb-2">
+              <button
+                onClick={() => setSelectedFolder(null)}
+                className="text-sm text-teal-600 hover:text-teal-700 flex items-center gap-1"
+              >
+                <Folder size={16} />
+                Tous les dossiers
+              </button>
+              <ChevronRight size={16} className="text-gray-400" />
+              <span className="text-sm font-medium text-gray-900">
+                {folders.find(f => f.id === selectedFolder)?.name || 'Dossier'}
+              </span>
+            </div>
+          ) : null}
+          
           <h1 className="text-2xl font-bold text-gray-900">Ma bibliothèque</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {filteredDocuments.length} document{filteredDocuments.length > 1 ? 's' : ''}
+            {filteredFolders.length} dossier{filteredFolders.length > 1 ? 's' : ''}, {filteredDocuments.length} document{filteredDocuments.length > 1 ? 's' : ''}
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {/* ✅ Bouton Nouveau dossier */}
+          <button
+            onClick={() => setShowNewFolderModal(true)}
+            className="px-4 py-2 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors flex items-center gap-2"
+          >
+            <FolderPlus size={20} />
+            Nouveau dossier
+          </button>
           <button
             onClick={() => setShowUploadModal(true)}
             className="px-4 py-2 bg-teal-600 text-white rounded-xl hover:bg-teal-700 transition-colors flex items-center gap-2"
@@ -370,7 +454,7 @@ export function Library() {
             Uploader
           </button>
           <button
-            onClick={() => pdfInputRef.current?.click()}
+            onClick={() => setShowPdfUploadModal(true)}
             className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors flex items-center gap-2"
           >
             <File size={20} />
@@ -455,14 +539,36 @@ export function Library() {
 
       {/* Documents Grid/List */}
       <div className="flex-1 overflow-auto">
-        {filteredDocuments.length === 0 ? (
+        {filteredDocuments.length === 0 && filteredFolders.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-gray-500">
             <FileText size={48} className="mb-4 opacity-50" />
-            <p className="text-lg font-medium">Aucun document</p>
-            <p className="text-sm">Commencez par uploader un fichier</p>
+            <p className="text-lg font-medium">Aucun document ou dossier</p>
+            <p className="text-sm">Commencez par créer un dossier ou uploader un fichier</p>
           </div>
         ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {/* ✅ Afficher les dossiers en premier */}
+            {selectedFolder === null && filteredFolders.map((folder) => (
+              <div
+                key={folder.id}
+                onClick={() => setSelectedFolder(folder.id)}
+                className="bg-gradient-to-br from-teal-50 to-teal-100 border-2 border-teal-200 rounded-xl overflow-hidden hover:shadow-lg transition-all group cursor-pointer"
+              >
+                <div className="aspect-video flex items-center justify-center relative">
+                  <Folder size={64} className="text-teal-600" />
+                </div>
+                <div className="p-4">
+                  <h3 className="font-medium text-teal-900 truncate">
+                    {folder.name}
+                  </h3>
+                  <p className="text-sm text-teal-700 mt-1">
+                    {documents.filter(d => d.folder_id === folder.id).length} document(s)
+                  </p>
+                </div>
+              </div>
+            ))}
+            
+            {/* ✅ Afficher les documents ensuite */}
             {filteredDocuments.map((doc) => (
               <div
                 key={doc.id}
@@ -608,6 +714,50 @@ export function Library() {
             setContextMenu(null);
           }}
         />
+      )}
+
+      {/* ✅ Modale Nouveau Dossier */}
+      <NewFolderModal
+        isOpen={showNewFolderModal}
+        onClose={() => setShowNewFolderModal(false)}
+        onCreateFolder={handleCreateFolder}
+      />
+
+      {/* ✅ Modale Upload PDF avec sélecteur de dossier */}
+      {showPdfUploadModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-gray-900">Upload PDF</h2>
+              <button
+                onClick={() => {
+                  setShowPdfUploadModal(false);
+                  setSelectedFolderForUpload(null);
+                }}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <FolderSelector
+              folders={folders}
+              selectedFolderId={selectedFolderForUpload}
+              onSelectFolder={setSelectedFolderForUpload}
+            />
+
+            <button
+              onClick={() => {
+                pdfInputRef.current?.click();
+                setShowPdfUploadModal(false);
+              }}
+              className="w-full px-4 py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors flex items-center justify-center gap-2"
+            >
+              <Upload size={20} />
+              Sélectionner des fichiers PDF
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

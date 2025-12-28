@@ -36,6 +36,7 @@ export type Document = {
   name: string;
   storage_path: string;
   user_id: string;
+  folder_id?: string | null;
   file_type: 'pdf' | 'docx' | 'txt' | 'image' | 'url' | 'video' | 'audio';
   created_at?: string;
 };

@@ -6,6 +6,7 @@ import { RegisterPage } from './pages/auth/RegisterPage';
 import { Dashboard } from './pages/Dashboard';
 import { Library } from './pages/Library';
 import { DocumentView } from './pages/DocumentView';
+import { PDFViewerPage } from './pages/PDFViewerPage';
 import { StudyCards } from './pages/StudyCards';
 import { Quizzes } from './pages/Quizzes';
 import { Revision } from './pages/Revision';
@@ -85,6 +86,7 @@ function AppRoutes() {
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="library" element={<Library />} />
         <Route path="library/:id" element={<DocumentView />} />
+        <Route path="library/:id/view" element={<PDFViewerPage />} />
         <Route path="cards" element={<StudyCards />} />
         <Route path="cards/new" element={<StudyCards />} />
         <Route path="cards/:id" element={<StudyCards />} />

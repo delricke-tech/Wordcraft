@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   FileText,
   Upload,
@@ -10,11 +10,7 @@ import {
   FolderPlus,
   MoreVertical,
   Eye,
-  Pencil,
   Trash2,
-  Share2,
-  BookOpen,
-  ClipboardList,
   X,
   Folder,
   ChevronRight,
@@ -23,7 +19,6 @@ import {
   Video,
   Globe,
   Download,
-  Loader2,
   Edit3,
   FolderInput,
 } from 'lucide-react';
@@ -42,6 +37,7 @@ import { updateFileFolder } from '../utils/moveFileFolder';
 
 export function Library() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [folders, setFolders] = useState<FolderType[]>([]);
@@ -659,6 +655,33 @@ export function Library() {
     }
   };
 
+  // ✅ Fonction pour ouvrir le lecteur PDF intégré
+  const handleViewDocument = (doc: Document) => {
+    console.log('👁️ Ouverture du viewer PDF pour:', doc.name);
+    console.log('  - Document ID:', doc.id);
+    console.log('  - Storage path:', doc.storage_path);
+    console.log('  - File type:', doc.file_type);
+
+    // Vérifier que c'est bien un PDF
+    if (doc.file_type !== 'pdf') {
+      toast.error('Format non supporté', {
+        description: 'Seuls les fichiers PDF peuvent être visualisés dans le lecteur intégré'
+      });
+      return;
+    }
+
+    // Vérifier que storage_path existe
+    if (!doc.storage_path) {
+      toast.error('Erreur', {
+        description: 'Le chemin du fichier est manquant'
+      });
+      return;
+    }
+
+    // Naviguer vers le viewer PDF
+    navigate(`/library/${doc.id}/view`);
+  };
+
   // ✅ Fonction SIMPLE wrapper pour déplacer un fichier
   const handleQuickMove = async (fileId: string, newFolderId: string | null) => {
     if (!user) {
@@ -979,18 +1002,39 @@ export function Library() {
               >
                 <div className="aspect-video bg-gray-100 flex items-center justify-center relative">
                   <div className="w-16 h-16">{getFileIcon(doc.file_type)}</div>
-                  {doc.storage_path && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDownloadDocument(doc);
-                      }}
-                      className="absolute top-2 left-2 p-1.5 bg-white rounded-lg shadow hover:bg-gray-50 opacity-0 group-hover:opacity-100 transition-opacity"
-                      title="Télécharger"
-                    >
-                      <Download size={16} className="text-teal-600" />
-                    </button>
-                  )}
+                  
+                  {/* Boutons d'action sur l'image */}
+                  <div className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                    {/* Bouton Voir (pour les PDF) */}
+                    {doc.file_type === 'pdf' && doc.storage_path && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleViewDocument(doc);
+                        }}
+                        className="p-1.5 bg-white rounded-lg shadow hover:bg-blue-50 transition-colors"
+                        title="Ouvrir dans le lecteur PDF"
+                      >
+                        <Eye size={16} className="text-blue-600" />
+                      </button>
+                    )}
+                    
+                    {/* Bouton Télécharger */}
+                    {doc.storage_path && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDownloadDocument(doc);
+                        }}
+                        className="p-1.5 bg-white rounded-lg shadow hover:bg-teal-50 transition-colors"
+                        title="Télécharger"
+                      >
+                        <Download size={16} className="text-teal-600" />
+                      </button>
+                    )}
+                  </div>
+                  
+                  {/* Menu contextuel */}
                   <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={(e) => {
@@ -1102,6 +1146,18 @@ export function Library() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
+                        {/* Bouton Voir (pour les PDF) */}
+                        {doc.file_type === 'pdf' && doc.storage_path && (
+                          <button 
+                            onClick={() => handleViewDocument(doc)}
+                            className="p-1.5 hover:bg-blue-50 rounded" 
+                            title="Ouvrir dans le lecteur PDF"
+                          >
+                            <Eye size={16} className="text-blue-600" />
+                          </button>
+                        )}
+                        
+                        {/* Bouton Télécharger */}
                         {doc.storage_path && (
                           <button 
                             onClick={() => handleDownloadDocument(doc)}
@@ -1111,9 +1167,8 @@ export function Library() {
                             <Download size={16} className="text-teal-600" />
                           </button>
                         )}
-                        <button className="p-1.5 hover:bg-gray-100 rounded" title="Voir">
-                          <Eye size={16} className="text-gray-500" />
-                        </button>
+                        
+                        {/* Bouton Supprimer */}
                         <button
                           onClick={() => handleDeleteDocument(doc.id)}
                           className="p-1.5 hover:bg-red-50 rounded"
@@ -1173,6 +1228,18 @@ export function Library() {
           y={contextMenu.y}
           type={contextMenu.type}
           onClose={() => setContextMenu(null)}
+          onView={contextMenu.type === 'document' ? () => {
+            const doc = documents.find(d => d.id === contextMenu.id);
+            if (doc && doc.file_type === 'pdf') {
+              handleViewDocument(doc);
+            }
+            setContextMenu(null);
+          } : undefined}
+          onDownload={contextMenu.type === 'document' ? () => {
+            const doc = documents.find(d => d.id === contextMenu.id);
+            if (doc) handleDownloadDocument(doc);
+            setContextMenu(null);
+          } : undefined}
           onDelete={() => {
             if (contextMenu.type === 'document') {
               const doc = documents.find(d => d.id === contextMenu.id);
@@ -1197,11 +1264,6 @@ export function Library() {
             }
             setContextMenu(null);
           }}
-          onDownload={contextMenu.type === 'document' ? () => {
-            const doc = documents.find(d => d.id === contextMenu.id);
-            if (doc) handleDownloadDocument(doc);
-            setContextMenu(null);
-          } : undefined}
           onRename={() => {
             if (contextMenu.type === 'document') {
               const doc = documents.find(d => d.id === contextMenu.id);
@@ -1337,6 +1399,7 @@ function ContextMenu({
   y,
   onClose,
   onDelete,
+  onView,
   onDownload,
   onRename,
   onMove,
@@ -1346,6 +1409,7 @@ function ContextMenu({
   y: number;
   onClose: () => void;
   onDelete: () => void;
+  onView?: () => void;
   onDownload?: () => void;
   onRename: () => void;
   onMove?: () => void;
@@ -1363,20 +1427,34 @@ function ContextMenu({
       style={{ left: x, top: y }}
       onClick={(e) => e.stopPropagation()}
     >
+      {/* View (documents PDF uniquement) */}
+      {type === 'document' && onView && (
+        <button 
+          onClick={(e) => {
+            e.stopPropagation();
+            onView();
+          }}
+          className="w-full flex items-center gap-3 px-4 py-2 text-sm hover:bg-blue-50 text-blue-600 font-medium"
+        >
+          <Eye size={16} /> Ouvrir dans le lecteur
+        </button>
+      )}
+
       {/* Download (documents uniquement) */}
       {type === 'document' && onDownload && (
-        <>
-          <button 
-            onClick={(e) => {
-              e.stopPropagation();
-              onDownload();
-            }}
-            className="w-full flex items-center gap-3 px-4 py-2 text-sm hover:bg-gray-50 text-gray-700"
-          >
-            <Download size={16} /> Télécharger
-          </button>
-          <div className="h-px bg-gray-100 my-1" />
-        </>
+        <button 
+          onClick={(e) => {
+            e.stopPropagation();
+            onDownload();
+          }}
+          className="w-full flex items-center gap-3 px-4 py-2 text-sm hover:bg-gray-50 text-gray-700"
+        >
+          <Download size={16} /> Télécharger
+        </button>
+      )}
+
+      {(type === 'document' && (onView || onDownload)) && (
+        <div className="h-px bg-gray-100 my-1" />
       )}
 
       {/* Rename */}

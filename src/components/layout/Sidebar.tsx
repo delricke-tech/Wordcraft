@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, Link } from 'react-router-dom';
 import {
   BookOpen,
   FileText,
@@ -51,12 +51,16 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     >
       <div className="h-16 flex items-center justify-between px-4 border-b border-gray-200">
         {!collapsed && (
-          <div className="flex items-center gap-2">
+          <Link to="/library" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
             <Brain className="w-8 h-8 text-teal-600" />
             <span className="font-bold text-xl text-gray-900">WordCraft</span>
-          </div>
+          </Link>
         )}
-        {collapsed && <Brain className="w-8 h-8 text-teal-600 mx-auto" />}
+        {collapsed && (
+          <Link to="/library" className="hover:opacity-80 transition-opacity" title="Aller à la bibliothèque">
+            <Brain className="w-8 h-8 text-teal-600 mx-auto" />
+          </Link>
+        )}
         <button
           onClick={onToggle}
           className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"

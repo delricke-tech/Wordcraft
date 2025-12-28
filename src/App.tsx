@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { MainLayout } from './components/layout/MainLayout';
 import { LoginPage } from './pages/auth/LoginPage';
 import { RegisterPage } from './pages/auth/RegisterPage';
+import { LandingPage } from './pages/LandingPage';
 import { Dashboard } from './pages/Dashboard';
 import { Library } from './pages/Library';
 import { DocumentView } from './pages/DocumentView';
@@ -58,6 +59,10 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 function AppRoutes() {
   return (
     <Routes>
+      {/* Page d'accueil publique */}
+      <Route path="/" element={<LandingPage />} />
+      
+      {/* Pages d'authentification */}
       <Route
         path="/login"
         element={
@@ -82,7 +87,6 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="library" element={<Library />} />
         <Route path="library/:id" element={<DocumentView />} />

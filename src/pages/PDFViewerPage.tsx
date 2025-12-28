@@ -2,8 +2,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { supabase, Document } from '../lib/supabase';
 import { PDFViewer } from '../components/PDFViewer';
+import { ChatPanel } from '../components/ChatPanel';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { extractPDFText, DocumentContext } from '../services/openaiService';
 
 /**
  * Page PDFViewerPage pour afficher un PDF en plein écran
@@ -19,6 +21,9 @@ export function PDFViewerPage() {
   const navigate = useNavigate();
   const [document, setDocument] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [documentContext, setDocumentContext] = useState<DocumentContext | null>(null);
+  const [extractingText, setExtractingText] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -83,6 +88,16 @@ export function PDFViewerPage() {
 
       setDocument(data as Document);
 
+      // Préparer le contexte du document pour l'IA
+      setDocumentContext({
+        documentId: data.id,
+        documentName: data.name,  // Pour l'affichage
+        storagePath: data.storage_path  // Pour accéder au fichier
+      });
+
+      // Extraire le texte du PDF en arrière-plan pour l'IA
+      extractTextInBackground(data.storage_path);
+
     } catch (err: any) {
       console.error('💥 Erreur inattendue:', err);
       toast.error('Erreur', {
@@ -91,6 +106,33 @@ export function PDFViewerPage() {
       navigate('/library');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Extraire le texte du PDF pour l'IA (en arrière-plan)
+  const extractTextInBackground = async (storagePath: string) => {
+    try {
+      setExtractingText(true);
+      console.log('🤖 Extraction du texte pour l\'IA...');
+
+      const extractedText = await extractPDFText(storagePath);
+
+      setDocumentContext(prev => prev ? {
+        ...prev,
+        extractedText
+      } : null);
+
+      console.log('✅ Texte extrait pour l\'IA:', extractedText.length, 'caractères');
+      toast.success('IA prête', {
+        description: 'Le document a été analysé et l\'assistant IA est disponible !'
+      });
+    } catch (error: any) {
+      console.error('⚠️ Erreur lors de l\'extraction du texte:', error);
+      toast.warning('IA limitée', {
+        description: 'Impossible d\'extraire le texte. L\'IA pourra seulement répondre à des questions générales.'
+      });
+    } finally {
+      setExtractingText(false);
     }
   };
 
@@ -121,17 +163,24 @@ export function PDFViewerPage() {
     );
   }
 
-  if (!document) {
+  if (!document || !documentContext) {
     return null;
   }
 
   return (
-    <PDFViewer
-      documentId={document.id}
-      documentName={document.name}
-      storagePath={document.storage_path}
-      onClose={handleClose}
-    />
+    <>
+      <PDFViewer
+        documentId={document.id}
+        documentName={document.name}
+        storagePath={document.storage_path}
+        onClose={handleClose}
+      />
+      <ChatPanel
+        documentContext={documentContext}
+        isOpen={isChatOpen}
+        onToggle={() => setIsChatOpen(!isChatOpen)}
+      />
+    </>
   );
 }
 

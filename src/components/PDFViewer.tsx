@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Download, ZoomIn, ZoomOut, Loader2 } from 'lucide-react';
+import { X, Download, ZoomIn, ZoomOut, Loader2, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
@@ -39,45 +39,64 @@ export function PDFViewer({ documentId, documentName, storagePath, onClose }: PD
       console.log('  - Document ID:', documentId);
       console.log('  - Nom affiché:', documentName);
       console.log('  - Storage path:', storagePath);
+      console.log('  - Bucket:', 'documents');
+
+      // Vérifier que storage_path n'est pas vide
+      if (!storagePath || storagePath.trim() === '') {
+        console.error('❌ storage_path est vide ou manquant');
+        throw new Error('Le chemin du fichier est manquant. Vérifiez que la colonne storage_path existe en base de données.');
+      }
 
       // RÈGLE IMPORTANTE : Utiliser storage_path (nom nettoyé) pour récupérer le fichier
       // Cela évite les erreurs "Invalid key" dues aux accents
       
-      // Méthode 1 : URL publique (si le bucket est public)
-      const { data: publicUrlData } = supabase.storage
-        .from('documents')
-        .getPublicUrl(storagePath);
-
-      if (publicUrlData?.publicUrl) {
-        console.log('✅ URL publique générée:', publicUrlData.publicUrl);
-        setPdfUrl(publicUrlData.publicUrl);
-        setLoading(false);
-        return;
-      }
-
-      // Méthode 2 : URL signée (si le bucket est privé)
-      // URL signée valide pendant 1 heure
+      console.log('🔐 Tentative de génération d\'URL signée...');
+      
+      // Utiliser directement l'URL signée (recommandé pour la sécurité)
       const { data: signedUrlData, error: signedUrlError } = await supabase.storage
         .from('documents')
         .createSignedUrl(storagePath, 3600); // 3600 secondes = 1 heure
 
       if (signedUrlError) {
         console.error('❌ Erreur lors de la génération de l\'URL signée:', signedUrlError);
+        console.error('  - Code:', signedUrlError.message);
+        console.error('  - Storage path utilisé:', storagePath);
+        
+        // Essayer avec l'URL publique en dernier recours
+        console.log('🔄 Tentative avec URL publique...');
+        const { data: publicUrlData } = supabase.storage
+          .from('documents')
+          .getPublicUrl(storagePath);
+
+        if (publicUrlData?.publicUrl) {
+          console.log('✅ URL publique générée (fallback):', publicUrlData.publicUrl);
+          setPdfUrl(publicUrlData.publicUrl);
+          setLoading(false);
+          return;
+        }
+        
         throw new Error(`Impossible de charger le PDF : ${signedUrlError.message}`);
       }
 
       if (signedUrlData?.signedUrl) {
-        console.log('✅ URL signée générée (valide 1h)');
+        console.log('✅ URL signée générée avec succès');
+        console.log('  - URL valide pendant: 1 heure');
+        console.log('  - URL (tronquée):', signedUrlData.signedUrl.substring(0, 100) + '...');
         setPdfUrl(signedUrlData.signedUrl);
       } else {
+        console.error('❌ Aucune URL générée');
         throw new Error('Impossible de générer une URL pour le PDF');
       }
 
     } catch (err: any) {
-      console.error('💥 Erreur lors du chargement du PDF:', err);
+      console.error('💥 ===== ERREUR LORS DU CHARGEMENT =====');
+      console.error('Type:', err.name);
+      console.error('Message:', err.message);
+      console.error('Stack:', err.stack);
+      
       setError(err.message || 'Erreur lors du chargement du PDF');
       toast.error('Erreur', {
-        description: 'Impossible de charger le PDF'
+        description: 'Impossible de charger le PDF. Consultez la console (F12) pour plus de détails.'
       });
     } finally {
       setLoading(false);
@@ -221,16 +240,40 @@ export function PDFViewer({ documentId, documentName, storagePath, onClose }: PD
         )}
 
         {!loading && !error && pdfUrl && (
-          <div className="w-full h-full flex items-center justify-center">
-            <iframe
-              src={`${pdfUrl}#zoom=${scale * 100}`}
-              className="w-full h-full border-0 rounded-lg shadow-2xl"
-              style={{
-                maxWidth: `${scale * 100}%`,
-                maxHeight: `${scale * 100}%`,
+          <div className="w-full h-full flex flex-col items-center justify-center gap-4">
+            {/* Bouton d'ouverture dans un nouvel onglet (en cas de problème d'iframe) */}
+            <button
+              onClick={() => {
+                console.log('🔗 Ouverture du PDF dans un nouvel onglet');
+                window.open(pdfUrl, '_blank');
               }}
-              title={documentName}
-            />
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 mb-4"
+            >
+              <Eye size={20} />
+              Ouvrir dans un nouvel onglet
+            </button>
+
+            {/* iframe pour affichage intégré */}
+            <div className="w-full h-full">
+              <iframe
+                src={`${pdfUrl}#zoom=${scale * 100}`}
+                className="w-full h-full border-0 rounded-lg shadow-2xl"
+                style={{
+                  maxWidth: `${scale * 100}%`,
+                  maxHeight: `${scale * 100}%`,
+                }}
+                title={documentName}
+                onLoad={() => {
+                  console.log('✅ iframe chargée avec succès');
+                }}
+                onError={(e) => {
+                  console.error('❌ Erreur de chargement de l\'iframe:', e);
+                  toast.error('Erreur d\'affichage', {
+                    description: 'Utilisez le bouton "Ouvrir dans un nouvel onglet" ci-dessus'
+                  });
+                }}
+              />
+            </div>
           </div>
         )}
       </div>

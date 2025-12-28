@@ -24,6 +24,8 @@ import {
   Globe,
   Download,
   Loader2,
+  Edit3,
+  FolderInput,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Document, Folder as FolderType, uploadFile } from '../lib/supabase';
@@ -33,6 +35,9 @@ import { generateUniqueFileName, getFileType } from '../utils/fileUtils';
 import { toast } from 'sonner';
 import { NewFolderModal } from '../components/modals/NewFolderModal';
 import { FolderSelector } from '../components/modals/FolderSelector';
+import { ConfirmDeleteModal } from '../components/modals/ConfirmDeleteModal';
+import { RenameModal } from '../components/modals/RenameModal';
+import { MoveDocumentModal } from '../components/modals/MoveDocumentModal';
 
 export function Library() {
   const { user } = useAuth();
@@ -49,11 +54,38 @@ export function Library() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<string>('all');
-  const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ 
+    id: string; 
+    x: number; 
+    y: number; 
+    type: 'document' | 'folder';
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const [selectedFolderForUpload, setSelectedFolderForUpload] = useState<string | null>(null);
   const [showPdfUploadModal, setShowPdfUploadModal] = useState(false);
+  
+  // États pour les modales d'actions
+  const [showDeleteModal, setShowDeleteModal] = useState<{
+    isOpen: boolean;
+    itemId: string;
+    itemName: string;
+    type: 'document' | 'folder';
+  }>({ isOpen: false, itemId: '', itemName: '', type: 'document' });
+  
+  const [showRenameModal, setShowRenameModal] = useState<{
+    isOpen: boolean;
+    itemId: string;
+    currentName: string;
+    type: 'document' | 'folder';
+  }>({ isOpen: false, itemId: '', currentName: '', type: 'document' });
+  
+  const [showMoveModal, setShowMoveModal] = useState<{
+    isOpen: boolean;
+    documentId: string;
+    documentName: string;
+    currentFolderId: string | null;
+  }>({ isOpen: false, documentId: '', documentName: '', currentFolderId: null });
 
   useEffect(() => {
     fetchData();
@@ -131,6 +163,299 @@ export function Library() {
 
     // Rafraîchir la liste des dossiers
     await fetchData();
+  };
+
+  // ✅ Fonction pour supprimer un document (BDD + Storage)
+  const handleDeleteDocument = async (documentId: string) => {
+    if (!user) {
+      toast.error('Erreur', { description: 'Vous devez être connecté' });
+      return;
+    }
+
+    console.log('🗑️ Suppression du document:', documentId);
+
+    // Récupérer les infos du document
+    const doc = documents.find(d => d.id === documentId);
+    if (!doc) {
+      toast.error('Erreur', { description: 'Document introuvable' });
+      return;
+    }
+
+    // Vérifier que l'utilisateur est le propriétaire
+    if (doc.user_id !== user.id) {
+      toast.error('Accès refusé', { 
+        description: 'Vous ne pouvez supprimer que vos propres documents' 
+      });
+      return;
+    }
+
+    try {
+      // 1. Supprimer le fichier du Storage Supabase
+      if (doc.storage_path) {
+        console.log('🗑️ Suppression du fichier Storage:', doc.storage_path);
+        const { error: storageError } = await supabase.storage
+          .from('documents')
+          .remove([doc.storage_path]);
+
+        if (storageError) {
+          console.warn('⚠️ Erreur lors de la suppression du Storage:', storageError);
+          // On continue quand même pour supprimer de la BDD
+        } else {
+          console.log('✅ Fichier supprimé du Storage');
+        }
+      }
+
+      // 2. Supprimer le document de la base de données
+      const { error: dbError } = await supabase
+        .from('documents')
+        .delete()
+        .eq('id', documentId)
+        .eq('user_id', user.id); // Sécurité : double vérification
+
+      if (dbError) {
+        console.error('❌ Erreur lors de la suppression en BDD:', dbError);
+        toast.error('Erreur', {
+          description: 'Impossible de supprimer le document'
+        });
+        return;
+      }
+
+      console.log('✅ Document supprimé de la BDD');
+      toast.success('Document supprimé !', {
+        description: `"${doc.name}" a été supprimé avec succès`
+      });
+
+      // Rafraîchir la liste
+      await fetchData();
+    } catch (error: any) {
+      console.error('❌ Erreur lors de la suppression:', error);
+      toast.error('Erreur', {
+        description: 'Une erreur est survenue lors de la suppression'
+      });
+    }
+  };
+
+  // ✅ Fonction pour supprimer un dossier
+  const handleDeleteFolder = async (folderId: string) => {
+    if (!user) {
+      toast.error('Erreur', { description: 'Vous devez être connecté' });
+      return;
+    }
+
+    console.log('🗑️ Suppression du dossier:', folderId);
+
+    // Récupérer les infos du dossier
+    const folder = folders.find(f => f.id === folderId);
+    if (!folder) {
+      toast.error('Erreur', { description: 'Dossier introuvable' });
+      return;
+    }
+
+    // Vérifier que l'utilisateur est le propriétaire
+    if (folder.user_id !== user.id) {
+      toast.error('Accès refusé', { 
+        description: 'Vous ne pouvez supprimer que vos propres dossiers' 
+      });
+      return;
+    }
+
+    try {
+      // Supprimer le dossier (les documents seront déplacés à la racine grâce à ON DELETE SET NULL)
+      const { error } = await supabase
+        .from('folders')
+        .delete()
+        .eq('id', folderId)
+        .eq('user_id', user.id); // Sécurité : double vérification
+
+      if (error) {
+        console.error('❌ Erreur lors de la suppression du dossier:', error);
+        toast.error('Erreur', {
+          description: 'Impossible de supprimer le dossier'
+        });
+        return;
+      }
+
+      console.log('✅ Dossier supprimé');
+      toast.success('Dossier supprimé !', {
+        description: `"${folder.name}" a été supprimé. Les documents ont été déplacés à la racine.`
+      });
+
+      // Si on était dans ce dossier, retourner à la racine
+      if (selectedFolder === folderId) {
+        setSelectedFolder(null);
+      }
+
+      // Rafraîchir la liste
+      await fetchData();
+    } catch (error: any) {
+      console.error('❌ Erreur lors de la suppression:', error);
+      toast.error('Erreur', {
+        description: 'Une erreur est survenue lors de la suppression'
+      });
+    }
+  };
+
+  // ✅ Fonction pour renommer un document
+  const handleRenameDocument = async (documentId: string, newName: string) => {
+    if (!user) {
+      toast.error('Erreur', { description: 'Vous devez être connecté' });
+      return;
+    }
+
+    console.log('✏️ Renommage du document:', documentId, '→', newName);
+
+    // Récupérer le document
+    const doc = documents.find(d => d.id === documentId);
+    if (!doc) {
+      toast.error('Erreur', { description: 'Document introuvable' });
+      return;
+    }
+
+    // Vérifier que l'utilisateur est le propriétaire
+    if (doc.user_id !== user.id) {
+      toast.error('Accès refusé', { 
+        description: 'Vous ne pouvez renommer que vos propres documents' 
+      });
+      return;
+    }
+
+    try {
+      // Mettre à jour le nom (PAS le storage_path)
+      const { error } = await supabase
+        .from('documents')
+        .update({ name: newName })
+        .eq('id', documentId)
+        .eq('user_id', user.id); // Sécurité : double vérification
+
+      if (error) {
+        console.error('❌ Erreur lors du renommage:', error);
+        toast.error('Erreur', {
+          description: 'Impossible de renommer le document'
+        });
+        throw error;
+      }
+
+      console.log('✅ Document renommé');
+      toast.success('Document renommé !', {
+        description: `"${doc.name}" → "${newName}"`
+      });
+
+      // Rafraîchir la liste
+      await fetchData();
+    } catch (error: any) {
+      console.error('❌ Erreur:', error);
+      throw error;
+    }
+  };
+
+  // ✅ Fonction pour renommer un dossier
+  const handleRenameFolder = async (folderId: string, newName: string) => {
+    if (!user) {
+      toast.error('Erreur', { description: 'Vous devez être connecté' });
+      return;
+    }
+
+    console.log('✏️ Renommage du dossier:', folderId, '→', newName);
+
+    // Récupérer le dossier
+    const folder = folders.find(f => f.id === folderId);
+    if (!folder) {
+      toast.error('Erreur', { description: 'Dossier introuvable' });
+      return;
+    }
+
+    // Vérifier que l'utilisateur est le propriétaire
+    if (folder.user_id !== user.id) {
+      toast.error('Accès refusé', { 
+        description: 'Vous ne pouvez renommer que vos propres dossiers' 
+      });
+      return;
+    }
+
+    try {
+      // Mettre à jour le nom
+      const { error } = await supabase
+        .from('folders')
+        .update({ name: newName })
+        .eq('id', folderId)
+        .eq('user_id', user.id); // Sécurité : double vérification
+
+      if (error) {
+        console.error('❌ Erreur lors du renommage:', error);
+        toast.error('Erreur', {
+          description: 'Impossible de renommer le dossier'
+        });
+        throw error;
+      }
+
+      console.log('✅ Dossier renommé');
+      toast.success('Dossier renommé !', {
+        description: `"${folder.name}" → "${newName}"`
+      });
+
+      // Rafraîchir la liste
+      await fetchData();
+    } catch (error: any) {
+      console.error('❌ Erreur:', error);
+      throw error;
+    }
+  };
+
+  // ✅ Fonction pour déplacer un document
+  const handleMoveDocument = async (documentId: string, newFolderId: string | null) => {
+    if (!user) {
+      toast.error('Erreur', { description: 'Vous devez être connecté' });
+      return;
+    }
+
+    console.log('📁 Déplacement du document:', documentId, '→', newFolderId || 'Racine');
+
+    // Récupérer le document
+    const doc = documents.find(d => d.id === documentId);
+    if (!doc) {
+      toast.error('Erreur', { description: 'Document introuvable' });
+      return;
+    }
+
+    // Vérifier que l'utilisateur est le propriétaire
+    if (doc.user_id !== user.id) {
+      toast.error('Accès refusé', { 
+        description: 'Vous ne pouvez déplacer que vos propres documents' 
+      });
+      return;
+    }
+
+    try {
+      // Mettre à jour le folder_id
+      const { error } = await supabase
+        .from('documents')
+        .update({ folder_id: newFolderId })
+        .eq('id', documentId)
+        .eq('user_id', user.id); // Sécurité : double vérification
+
+      if (error) {
+        console.error('❌ Erreur lors du déplacement:', error);
+        toast.error('Erreur', {
+          description: 'Impossible de déplacer le document'
+        });
+        throw error;
+      }
+
+      const destinationName = newFolderId 
+        ? folders.find(f => f.id === newFolderId)?.name || 'Dossier'
+        : 'Racine';
+
+      console.log('✅ Document déplacé');
+      toast.success('Document déplacé !', {
+        description: `"${doc.name}" → ${destinationName}`
+      });
+
+      // Rafraîchir la liste
+      await fetchData();
+    } catch (error: any) {
+      console.error('❌ Erreur:', error);
+      throw error;
+    }
   };
 
   const handleFileUpload = async (files: FileList | null) => {
@@ -338,18 +663,6 @@ export function Library() {
     }
   };
 
-  const handleDeleteDocument = async (id: string) => {
-    const doc = documents.find(d => d.id === id);
-    
-    if (doc?.storage_path) {
-      await supabase.storage.from('documents').remove([doc.storage_path]);
-    }
-    
-    await supabase.from('documents').delete().eq('id', id);
-    await fetchData();
-    setContextMenu(null);
-  };
-
   const handleDownloadDocument = (doc: Document) => {
     if (doc.storage_path) {
       const { data } = supabase.storage
@@ -551,13 +864,30 @@ export function Library() {
             {selectedFolder === null && filteredFolders.map((folder) => (
               <div
                 key={folder.id}
-                onClick={() => setSelectedFolder(folder.id)}
                 className="bg-gradient-to-br from-teal-50 to-teal-100 border-2 border-teal-200 rounded-xl overflow-hidden hover:shadow-lg transition-all group cursor-pointer"
               >
-                <div className="aspect-video flex items-center justify-center relative">
+                <div 
+                  onClick={() => setSelectedFolder(folder.id)}
+                  className="aspect-video flex items-center justify-center relative"
+                >
                   <Folder size={64} className="text-teal-600" />
+                  {/* Menu contextuel dossier */}
+                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setContextMenu({ id: folder.id, x: e.clientX, y: e.clientY, type: 'folder' });
+                      }}
+                      className="p-1.5 bg-white rounded-lg shadow hover:bg-gray-50"
+                    >
+                      <MoreVertical size={16} />
+                    </button>
+                  </div>
                 </div>
-                <div className="p-4">
+                <div 
+                  onClick={() => setSelectedFolder(folder.id)}
+                  className="p-4"
+                >
                   <h3 className="font-medium text-teal-900 truncate">
                     {folder.name}
                   </h3>
@@ -592,7 +922,7 @@ export function Library() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setContextMenu({ id: doc.id, x: e.clientX, y: e.clientY });
+                        setContextMenu({ id: doc.id, x: e.clientX, y: e.clientY, type: 'document' });
                       }}
                       className="p-1.5 bg-white rounded-lg shadow hover:bg-gray-50"
                     >
@@ -706,13 +1036,73 @@ export function Library() {
         <ContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
+          type={contextMenu.type}
           onClose={() => setContextMenu(null)}
-          onDelete={() => handleDeleteDocument(contextMenu.id)}
-          onDownload={() => {
+          onDelete={() => {
+            if (contextMenu.type === 'document') {
+              const doc = documents.find(d => d.id === contextMenu.id);
+              if (doc) {
+                setShowDeleteModal({
+                  isOpen: true,
+                  itemId: doc.id,
+                  itemName: doc.name,
+                  type: 'document'
+                });
+              }
+            } else {
+              const folder = folders.find(f => f.id === contextMenu.id);
+              if (folder) {
+                setShowDeleteModal({
+                  isOpen: true,
+                  itemId: folder.id,
+                  itemName: folder.name,
+                  type: 'folder'
+                });
+              }
+            }
+            setContextMenu(null);
+          }}
+          onDownload={contextMenu.type === 'document' ? () => {
             const doc = documents.find(d => d.id === contextMenu.id);
             if (doc) handleDownloadDocument(doc);
             setContextMenu(null);
+          } : undefined}
+          onRename={() => {
+            if (contextMenu.type === 'document') {
+              const doc = documents.find(d => d.id === contextMenu.id);
+              if (doc) {
+                setShowRenameModal({
+                  isOpen: true,
+                  itemId: doc.id,
+                  currentName: doc.name,
+                  type: 'document'
+                });
+              }
+            } else {
+              const folder = folders.find(f => f.id === contextMenu.id);
+              if (folder) {
+                setShowRenameModal({
+                  isOpen: true,
+                  itemId: folder.id,
+                  currentName: folder.name,
+                  type: 'folder'
+                });
+              }
+            }
+            setContextMenu(null);
           }}
+          onMove={contextMenu.type === 'document' ? () => {
+            const doc = documents.find(d => d.id === contextMenu.id);
+            if (doc) {
+              setShowMoveModal({
+                isOpen: true,
+                documentId: doc.id,
+                documentName: doc.name,
+                currentFolderId: doc.folder_id || null
+              });
+            }
+            setContextMenu(null);
+          } : undefined}
         />
       )}
 
@@ -759,6 +1149,50 @@ export function Library() {
           </div>
         </div>
       )}
+
+      {/* ✅ Modale Confirmation de Suppression */}
+      <ConfirmDeleteModal
+        isOpen={showDeleteModal.isOpen}
+        onClose={() => setShowDeleteModal({ isOpen: false, itemId: '', itemName: '', type: 'document' })}
+        onConfirm={async () => {
+          if (showDeleteModal.type === 'document') {
+            await handleDeleteDocument(showDeleteModal.itemId);
+          } else {
+            await handleDeleteFolder(showDeleteModal.itemId);
+          }
+        }}
+        title={`Supprimer ${showDeleteModal.type === 'folder' ? 'le dossier' : 'le document'}`}
+        message={`Êtes-vous sûr de vouloir supprimer ${showDeleteModal.type === 'folder' ? 'ce dossier' : 'ce document'} ?`}
+        itemName={showDeleteModal.itemName}
+        type={showDeleteModal.type}
+      />
+
+      {/* ✅ Modale Renommage */}
+      <RenameModal
+        isOpen={showRenameModal.isOpen}
+        onClose={() => setShowRenameModal({ isOpen: false, itemId: '', currentName: '', type: 'document' })}
+        onRename={async (newName) => {
+          if (showRenameModal.type === 'document') {
+            await handleRenameDocument(showRenameModal.itemId, newName);
+          } else {
+            await handleRenameFolder(showRenameModal.itemId, newName);
+          }
+        }}
+        currentName={showRenameModal.currentName}
+        type={showRenameModal.type}
+      />
+
+      {/* ✅ Modale Déplacement */}
+      <MoveDocumentModal
+        isOpen={showMoveModal.isOpen}
+        onClose={() => setShowMoveModal({ isOpen: false, documentId: '', documentName: '', currentFolderId: null })}
+        onMove={async (newFolderId) => {
+          await handleMoveDocument(showMoveModal.documentId, newFolderId);
+        }}
+        folders={folders}
+        currentFolderId={showMoveModal.currentFolderId}
+        documentName={showMoveModal.documentName}
+      />
     </div>
   );
 }
@@ -769,12 +1203,18 @@ function ContextMenu({
   onClose,
   onDelete,
   onDownload,
+  onRename,
+  onMove,
+  type,
 }: {
   x: number;
   y: number;
   onClose: () => void;
   onDelete: () => void;
-  onDownload: () => void;
+  onDownload?: () => void;
+  onRename: () => void;
+  onMove?: () => void;
+  type: 'document' | 'folder';
 }) {
   useEffect(() => {
     const handleClick = () => onClose();
@@ -784,18 +1224,58 @@ function ContextMenu({
 
   return (
     <div
-      className="fixed bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50 w-48"
+      className="fixed bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50 w-56"
       style={{ left: x, top: y }}
+      onClick={(e) => e.stopPropagation()}
     >
-      <button 
-        onClick={onDownload}
-        className="w-full flex items-center gap-3 px-4 py-2 text-sm hover:bg-gray-50"
-      >
-        <Download size={16} /> Télécharger
-      </button>
-      <div className="h-px bg-gray-100 my-1" />
+      {/* Download (documents uniquement) */}
+      {type === 'document' && onDownload && (
+        <>
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              onDownload();
+            }}
+            className="w-full flex items-center gap-3 px-4 py-2 text-sm hover:bg-gray-50 text-gray-700"
+          >
+            <Download size={16} /> Télécharger
+          </button>
+          <div className="h-px bg-gray-100 my-1" />
+        </>
+      )}
+
+      {/* Rename */}
       <button
-        onClick={onDelete}
+        onClick={(e) => {
+          e.stopPropagation();
+          onRename();
+        }}
+        className="w-full flex items-center gap-3 px-4 py-2 text-sm hover:bg-gray-50 text-gray-700"
+      >
+        <Edit3 size={16} /> Renommer
+      </button>
+
+      {/* Move (documents uniquement) */}
+      {type === 'document' && onMove && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onMove();
+          }}
+          className="w-full flex items-center gap-3 px-4 py-2 text-sm hover:bg-gray-50 text-gray-700"
+        >
+          <FolderInput size={16} /> Déplacer
+        </button>
+      )}
+
+      <div className="h-px bg-gray-100 my-1" />
+
+      {/* Delete */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete();
+        }}
         className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
       >
         <Trash2 size={16} /> Supprimer

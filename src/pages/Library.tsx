@@ -813,11 +813,20 @@ export function Library() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
           <input
             type="text"
-            placeholder="Rechercher un document..."
+            placeholder="Rechercher un document ou un dossier..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500"
+            className="w-full pl-10 pr-10 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all"
           />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+              title="Effacer la recherche"
+            >
+              <X size={18} />
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl p-1">
           <button
@@ -854,9 +863,29 @@ export function Library() {
       <div className="flex-1 overflow-auto">
         {filteredDocuments.length === 0 && filteredFolders.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-gray-500">
-            <FileText size={48} className="mb-4 opacity-50" />
-            <p className="text-lg font-medium">Aucun document ou dossier</p>
-            <p className="text-sm">Commencez par créer un dossier ou uploader un fichier</p>
+            {searchQuery ? (
+              // Message pour recherche sans résultat
+              <>
+                <Search size={48} className="mb-4 opacity-50" />
+                <p className="text-lg font-medium">Aucun résultat trouvé</p>
+                <p className="text-sm text-center px-4">
+                  Aucun document ou dossier ne correspond à "<span className="font-medium text-gray-700">{searchQuery}</span>"
+                </p>
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="mt-4 px-4 py-2 text-sm text-teal-600 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition-colors"
+                >
+                  Effacer la recherche
+                </button>
+              </>
+            ) : (
+              // Message pour bibliothèque vide
+              <>
+                <FileText size={48} className="mb-4 opacity-50" />
+                <p className="text-lg font-medium">Aucun document ou dossier</p>
+                <p className="text-sm">Commencez par créer un dossier ou uploader un fichier</p>
+              </>
+            )}
           </div>
         ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">

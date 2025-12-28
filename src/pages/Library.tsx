@@ -809,23 +809,40 @@ export function Library() {
 
       {/* Search and filters */}
       <div className="flex items-center gap-4 mb-6">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-          <input
-            type="text"
-            placeholder="Rechercher un document ou un dossier..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-10 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-              title="Effacer la recherche"
-            >
-              <X size={18} />
-            </button>
+        <div className="flex-1">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+            <input
+              type="text"
+              placeholder={
+                selectedFolder 
+                  ? `Rechercher dans "${folders.find(f => f.id === selectedFolder)?.name || 'ce dossier'}"...`
+                  : "Rechercher un document ou un dossier..."
+              }
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-10 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                title="Effacer la recherche"
+              >
+                <X size={18} />
+              </button>
+            )}
+          </div>
+          {/* Badge contextuel de recherche */}
+          {searchQuery && selectedFolder && (
+            <div className="mt-2 flex items-center gap-2 text-xs text-gray-600">
+              <span className="px-2 py-1 bg-teal-50 text-teal-700 rounded-full flex items-center gap-1">
+                <Folder size={12} />
+                Recherche dans : {folders.find(f => f.id === selectedFolder)?.name || 'ce dossier'}
+              </span>
+              <span className="text-gray-400">•</span>
+              <span>{filteredDocuments.length} résultat(s)</span>
+            </div>
           )}
         </div>
         <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl p-1">
@@ -869,7 +886,17 @@ export function Library() {
                 <Search size={48} className="mb-4 opacity-50" />
                 <p className="text-lg font-medium">Aucun résultat trouvé</p>
                 <p className="text-sm text-center px-4">
-                  Aucun document ou dossier ne correspond à "<span className="font-medium text-gray-700">{searchQuery}</span>"
+                  {selectedFolder ? (
+                    <>
+                      Aucun document dans "<span className="font-medium text-gray-700">
+                        {folders.find(f => f.id === selectedFolder)?.name || 'ce dossier'}
+                      </span>" ne correspond à "<span className="font-medium text-gray-700">{searchQuery}</span>"
+                    </>
+                  ) : (
+                    <>
+                      Aucun document ou dossier ne correspond à "<span className="font-medium text-gray-700">{searchQuery}</span>"
+                    </>
+                  )}
                 </p>
                 <button
                   onClick={() => setSearchQuery('')}
@@ -882,8 +909,17 @@ export function Library() {
               // Message pour bibliothèque vide
               <>
                 <FileText size={48} className="mb-4 opacity-50" />
-                <p className="text-lg font-medium">Aucun document ou dossier</p>
-                <p className="text-sm">Commencez par créer un dossier ou uploader un fichier</p>
+                {selectedFolder ? (
+                  <>
+                    <p className="text-lg font-medium">Ce dossier est vide</p>
+                    <p className="text-sm">Uploadez un fichier pour commencer</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-lg font-medium">Aucun document ou dossier</p>
+                    <p className="text-sm">Commencez par créer un dossier ou uploader un fichier</p>
+                  </>
+                )}
               </>
             )}
           </div>

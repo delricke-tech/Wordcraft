@@ -38,6 +38,7 @@ import { FolderSelector } from '../components/modals/FolderSelector';
 import { ConfirmDeleteModal } from '../components/modals/ConfirmDeleteModal';
 import { RenameModal } from '../components/modals/RenameModal';
 import { MoveDocumentModal } from '../components/modals/MoveDocumentModal';
+import { updateFileFolder } from '../utils/moveFileFolder';
 
 export function Library() {
   const { user } = useAuth();
@@ -87,9 +88,24 @@ export function Library() {
     currentFolderId: string | null;
   }>({ isOpen: false, documentId: '', documentName: '', currentFolderId: null });
 
+  // État pour le menu déroulant simple de déplacement
+  const [showQuickMoveDropdown, setShowQuickMoveDropdown] = useState<string | null>(null);
+
   useEffect(() => {
     fetchData();
   }, [selectedFolder]);
+
+  // Fermer le dropdown de déplacement rapide quand on clique ailleurs
+  useEffect(() => {
+    const handleClickOutside = () => {
+      if (showQuickMoveDropdown) {
+        setShowQuickMoveDropdown(null);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [showQuickMoveDropdown]);
 
   useEffect(() => {
     if (searchParams.get('upload') === 'true') {
@@ -675,6 +691,30 @@ export function Library() {
     }
   };
 
+  // ✅ Fonction SIMPLE wrapper pour déplacer un fichier
+  const handleQuickMove = async (fileId: string, newFolderId: string | null) => {
+    if (!user) {
+      console.error('❌ Utilisateur non connecté');
+      toast.error('Erreur', { description: 'Vous devez être connecté' });
+      return;
+    }
+
+    console.log('🚀 handleQuickMove appelé');
+    console.log('  - File ID:', fileId);
+    console.log('  - New Folder ID:', newFolderId);
+    console.log('  - User ID:', user.id);
+
+    const success = await updateFileFolder(fileId, newFolderId, user.id);
+
+    if (success) {
+      console.log('✅ Déplacement confirmé, rafraîchissement de la liste...');
+      await fetchData();
+      setShowQuickMoveDropdown(null);  // Fermer le dropdown
+    } else {
+      console.error('❌ Le déplacement a échoué');
+    }
+  };
+
   const filteredDocuments = documents.filter((doc) => {
     // Protection : vérifier que doc.name existe
     const matchesSearch = doc.name 
@@ -996,12 +1036,74 @@ export function Library() {
                   </div>
                 </div>
                 <div className="p-4">
-                  <h3 className="font-medium text-gray-900 truncate">
-                    {doc.name || 'Document sans nom'}
-                  </h3>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {doc.created_at ? format(new Date(doc.created_at), 'd MMM yyyy', { locale: fr }) : 'Date inconnue'}
-                  </p>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-gray-900 truncate">
+                        {doc.name || 'Document sans nom'}
+                      </h3>
+                      <p className="text-sm text-gray-500 mt-1">
+                        {doc.created_at ? format(new Date(doc.created_at), 'd MMM yyyy', { locale: fr }) : 'Date inconnue'}
+                      </p>
+                    </div>
+                    {/* ✅ BOUTON DÉPLACER SIMPLE */}
+                    <div className="relative">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowQuickMoveDropdown(showQuickMoveDropdown === doc.id ? null : doc.id);
+                        }}
+                        className="p-1.5 text-xs bg-teal-50 text-teal-700 hover:bg-teal-100 rounded transition-colors flex items-center gap-1"
+                        title="Déplacer vers..."
+                      >
+                        <FolderInput size={14} />
+                        <span className="hidden sm:inline">Déplacer</span>
+                      </button>
+                      
+                      {/* Dropdown simple */}
+                      {showQuickMoveDropdown === doc.id && (
+                        <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[200px] max-h-[300px] overflow-y-auto">
+                          <div className="p-2">
+                            <p className="text-xs font-medium text-gray-500 px-2 py-1">Déplacer vers :</p>
+                            {/* Option Racine */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                console.log('🎯 Clic sur Racine pour document:', doc.id);
+                                handleQuickMove(doc.id, null);
+                              }}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 rounded flex items-center gap-2"
+                            >
+                              <Folder size={14} className="text-gray-400" />
+                              <span>Racine (aucun dossier)</span>
+                            </button>
+                            {/* Liste des dossiers */}
+                            {folders.map(folder => (
+                              <button
+                                key={folder.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  console.log('🎯 Clic sur dossier:', folder.name, 'pour document:', doc.id);
+                                  handleQuickMove(doc.id, folder.id);
+                                }}
+                                className={`w-full text-left px-3 py-2 text-sm hover:bg-teal-50 rounded flex items-center gap-2 ${
+                                  doc.folder_id === folder.id ? 'bg-teal-50 text-teal-900 font-medium' : ''
+                                }`}
+                              >
+                                <Folder size={14} className="text-teal-600" />
+                                <span>{folder.name}</span>
+                                {doc.folder_id === folder.id && (
+                                  <span className="ml-auto text-xs text-teal-600">✓ Actuel</span>
+                                )}
+                              </button>
+                            ))}
+                            {folders.length === 0 && (
+                              <p className="text-xs text-gray-400 italic px-3 py-2">Aucun dossier disponible</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             ))}

@@ -38,6 +38,7 @@ export type Document = {
   user_id: string;
   folder_id?: string | null;
   file_type: 'pdf' | 'docx' | 'txt' | 'image' | 'url' | 'video' | 'audio';
+  is_favorite?: boolean; // Indique si le document est marqué comme favori
   created_at?: string;
 };
 
@@ -75,7 +76,7 @@ export type Quiz = {
  */
 export async function uploadFile(
   file: File,
-  userId?: string,
+  _userId?: string,
   fileName?: string,
   onProgress?: (progress: number) => void
 ) {

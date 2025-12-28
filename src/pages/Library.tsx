@@ -3,7 +3,6 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   FileText,
   Upload,
-  Link as LinkIcon,
   Grid,
   List,
   Search,
@@ -21,6 +20,7 @@ import {
   Download,
   Edit3,
   FolderInput,
+  Star,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Document, Folder as FolderType, uploadFile } from '../lib/supabase';
@@ -34,6 +34,7 @@ import { ConfirmDeleteModal } from '../components/modals/ConfirmDeleteModal';
 import { RenameModal } from '../components/modals/RenameModal';
 import { MoveDocumentModal } from '../components/modals/MoveDocumentModal';
 import { updateFileFolder } from '../utils/moveFileFolder';
+import { toggleFavorite } from '../utils/toggleFavorite';
 
 export function Library() {
   const { user } = useAuth();
@@ -48,7 +49,6 @@ export function Library() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [showImportModal, setShowImportModal] = useState(false);
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<string>('all');
   const [contextMenu, setContextMenu] = useState<{ 
@@ -87,6 +87,9 @@ export function Library() {
   // État pour le menu déroulant simple de déplacement
   const [showQuickMoveDropdown, setShowQuickMoveDropdown] = useState<string | null>(null);
 
+  // État pour afficher uniquement les favoris
+  const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
+
   useEffect(() => {
     fetchData();
   }, [selectedFolder]);
@@ -106,10 +109,6 @@ export function Library() {
   useEffect(() => {
     if (searchParams.get('upload') === 'true') {
       setShowUploadModal(true);
-      setSearchParams({});
-    }
-    if (searchParams.get('import') === 'true') {
-      setShowImportModal(true);
       setSearchParams({});
     }
   }, [searchParams]);
@@ -438,6 +437,29 @@ export function Library() {
     }
   };
 
+  // ✅ Fonction pour gérer les favoris
+  // RÈGLE D'OR : Ne touche JAMAIS aux colonnes storage_path ou name
+  // Cette fonction met à jour UNIQUEMENT la colonne is_favorite
+  const handleToggleFavorite = async (doc: Document, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+
+    if (!user) {
+      toast.error('Erreur', { description: 'Vous devez être connecté' });
+      return;
+    }
+
+    console.log('⭐ Toggle favori pour:', doc.name);
+
+    const success = await toggleFavorite(doc.id, user.id, doc.is_favorite || false);
+
+    if (success) {
+      // Rafraîchir la liste des documents pour refléter le changement
+      await fetchData();
+    }
+  };
+
   const handleFileUpload = async (files: FileList | null) => {
     if (!files || !user) return;
 
@@ -718,7 +740,10 @@ export function Library() {
       ? doc.folder_id === null || doc.folder_id === undefined  // Afficher les documents sans dossier
       : doc.folder_id === selectedFolder;  // Afficher les documents du dossier sélectionné
     
-    return matchesSearch && matchesFilter && matchesFolder;
+    // ✅ Filtrage par favoris
+    const matchesFavorites = !showOnlyFavorites || doc.is_favorite === true;
+    
+    return matchesSearch && matchesFilter && matchesFolder && matchesFavorites;
   });
 
   // ✅ Filtrer les dossiers également pour la recherche
@@ -812,13 +837,6 @@ export function Library() {
             onChange={(e) => handlePdfUpload(e.target.files)}
             className="hidden"
           />
-          <button
-            onClick={() => setShowImportModal(true)}
-            className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors flex items-center gap-2"
-          >
-            <LinkIcon size={20} />
-            Importer un lien
-          </button>
         </div>
       </div>
 
@@ -846,7 +864,9 @@ export function Library() {
             <input
               type="text"
               placeholder={
-                selectedFolder 
+                showOnlyFavorites 
+                  ? "Rechercher dans vos favoris..."
+                  : selectedFolder 
                   ? `Rechercher dans "${folders.find(f => f.id === selectedFolder)?.name || 'ce dossier'}"...`
                   : "Rechercher un document ou un dossier..."
               }
@@ -864,17 +884,39 @@ export function Library() {
               </button>
             )}
           </div>
-          {/* Badge contextuel de recherche */}
-          {searchQuery && selectedFolder && (
-            <div className="mt-2 flex items-center gap-2 text-xs text-gray-600">
-              <span className="px-2 py-1 bg-teal-50 text-teal-700 rounded-full flex items-center gap-1">
-                <Folder size={12} />
-                Recherche dans : {folders.find(f => f.id === selectedFolder)?.name || 'ce dossier'}
-              </span>
-              <span className="text-gray-400">•</span>
-              <span>{filteredDocuments.length} résultat(s)</span>
-            </div>
-          )}
+          {/* Badge contextuel de recherche et favoris */}
+          <div className="mt-2 flex items-center gap-2 text-xs text-gray-600">
+            {showOnlyFavorites && (
+              <>
+                <span className="px-2 py-1 bg-amber-50 text-amber-700 rounded-full flex items-center gap-1">
+                  <Star size={12} fill="currentColor" />
+                  Favoris uniquement
+                </span>
+                <button
+                  onClick={() => setShowOnlyFavorites(false)}
+                  className="text-teal-600 hover:text-teal-700"
+                >
+                  Afficher tout
+                </button>
+                {filteredDocuments.length > 0 && (
+                  <>
+                    <span className="text-gray-400">•</span>
+                    <span>{filteredDocuments.length} favori(s)</span>
+                  </>
+                )}
+              </>
+            )}
+            {searchQuery && selectedFolder && !showOnlyFavorites && (
+              <>
+                <span className="px-2 py-1 bg-teal-50 text-teal-700 rounded-full flex items-center gap-1">
+                  <Folder size={12} />
+                  Recherche dans : {folders.find(f => f.id === selectedFolder)?.name || 'ce dossier'}
+                </span>
+                <span className="text-gray-400">•</span>
+                <span>{filteredDocuments.length} résultat(s)</span>
+              </>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl p-1">
           <button
@@ -894,6 +936,24 @@ export function Library() {
             <List size={20} />
           </button>
         </div>
+        {/* Bouton Favoris */}
+        <button
+          onClick={() => setShowOnlyFavorites(!showOnlyFavorites)}
+          className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 ${
+            showOnlyFavorites 
+              ? 'bg-amber-100 text-amber-700 border border-amber-300' 
+              : 'bg-white border border-gray-200 text-gray-700 hover:bg-amber-50'
+          }`}
+          title={showOnlyFavorites ? "Afficher tous les documents" : "Afficher uniquement les favoris"}
+        >
+          <Star size={18} fill={showOnlyFavorites ? "currentColor" : "none"} />
+          <span className="hidden sm:inline">Favoris</span>
+          {documents.filter(d => d.is_favorite).length > 0 && (
+            <span className="ml-1 px-2 py-0.5 text-xs bg-amber-200 text-amber-900 rounded-full">
+              {documents.filter(d => d.is_favorite).length}
+            </span>
+          )}
+        </button>
         <select
           value={selectedFilter}
           onChange={(e) => setSelectedFilter(e.target.value)}
@@ -1034,8 +1094,25 @@ export function Library() {
                     )}
                   </div>
                   
+                  {/* Bouton Favori (toujours visible) */}
+                  <button
+                    onClick={(e) => handleToggleFavorite(doc, e)}
+                    className={`absolute top-2 right-2 p-1.5 rounded-lg shadow transition-all ${
+                      doc.is_favorite 
+                        ? 'bg-amber-100 hover:bg-amber-200' 
+                        : 'bg-white hover:bg-amber-50 opacity-0 group-hover:opacity-100'
+                    }`}
+                    title={doc.is_favorite ? "Retirer des favoris" : "Ajouter aux favoris"}
+                  >
+                    <Star 
+                      size={16} 
+                      className={doc.is_favorite ? "text-amber-500" : "text-gray-400"}
+                      fill={doc.is_favorite ? "currentColor" : "none"}
+                    />
+                  </button>
+                  
                   {/* Menu contextuel */}
-                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -1128,6 +1205,7 @@ export function Library() {
                   <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Nom</th>
                   <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Type</th>
                   <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Date</th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Favori</th>
                   <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Actions</th>
                 </tr>
               </thead>
@@ -1143,6 +1221,23 @@ export function Library() {
                     <td className="px-6 py-4 text-sm text-gray-500 uppercase">{doc.file_type}</td>
                     <td className="px-6 py-4 text-sm text-gray-500">
                       {doc.created_at ? format(new Date(doc.created_at), 'd MMM yyyy', { locale: fr }) : 'Date inconnue'}
+                    </td>
+                    <td className="px-6 py-4">
+                      <button
+                        onClick={(e) => handleToggleFavorite(doc, e)}
+                        className={`p-1.5 rounded-lg transition-all ${
+                          doc.is_favorite 
+                            ? 'bg-amber-100 hover:bg-amber-200' 
+                            : 'bg-white hover:bg-amber-50 border border-gray-200'
+                        }`}
+                        title={doc.is_favorite ? "Retirer des favoris" : "Ajouter aux favoris"}
+                      >
+                        <Star 
+                          size={16} 
+                          className={doc.is_favorite ? "text-amber-500" : "text-gray-400"}
+                          fill={doc.is_favorite ? "currentColor" : "none"}
+                        />
+                      </button>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">

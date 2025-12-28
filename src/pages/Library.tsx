@@ -418,6 +418,8 @@ export function Library() {
   };
 
   // ✅ Fonction pour déplacer un document
+  // RÈGLE D'OR : Ne change JAMAIS le nom du fichier ou son chemin dans le Storage
+  // Cette fonction met à jour UNIQUEMENT la colonne folder_id en base de données
   const handleMoveDocument = async (documentId: string, newFolderId: string | null) => {
     if (!user) {
       toast.error('Erreur', { description: 'Vous devez être connecté' });
@@ -426,51 +428,17 @@ export function Library() {
 
     console.log('📁 Déplacement du document:', documentId, '→', newFolderId || 'Racine');
 
-    // Récupérer le document
-    const doc = documents.find(d => d.id === documentId);
-    if (!doc) {
-      toast.error('Erreur', { description: 'Document introuvable' });
-      return;
-    }
-
-    // Vérifier que l'utilisateur est le propriétaire
-    if (doc.user_id !== user.id) {
-      toast.error('Accès refusé', { 
-        description: 'Vous ne pouvez déplacer que vos propres documents' 
-      });
-      return;
-    }
-
     try {
-      // Mettre à jour le folder_id
-      const { error } = await supabase
-        .from('documents')
-        .update({ folder_id: newFolderId })
-        .eq('id', documentId)
-        .eq('user_id', user.id); // Sécurité : double vérification
+      // Utiliser la fonction centralisée qui gère tout (vérifications + mise à jour folder_id)
+      const success = await updateFileFolder(documentId, newFolderId, user.id);
 
-      if (error) {
-        console.error('❌ Erreur lors du déplacement:', error);
-        toast.error('Erreur', {
-          description: 'Impossible de déplacer le document'
-        });
-        throw error;
+      if (success) {
+        // Rafraîchir la liste des documents pour refléter le changement
+        await fetchData();
       }
-
-      const destinationName = newFolderId 
-        ? folders.find(f => f.id === newFolderId)?.name || 'Dossier'
-        : 'Racine';
-
-      console.log('✅ Document déplacé');
-      toast.success('Document déplacé !', {
-        description: `"${doc.name}" → ${destinationName}`
-      });
-
-      // Rafraîchir la liste
-      await fetchData();
     } catch (error: any) {
-      console.error('❌ Erreur:', error);
-      throw error;
+      console.error('❌ Erreur inattendue:', error);
+      // L'erreur est déjà gérée par updateFileFolder (toast affiché)
     }
   };
 

@@ -41,14 +41,17 @@ export function PDFViewerPage() {
       // ✅ IMPORTANT : Inclure extracted_text et page_count pour éviter de ré-extraire
       const { data, error } = await supabase
         .from('documents')
-        .select('id, name, storage_path, file_type, user_id, extracted_text, page_count, processing_status')
+        .select('*') // Sélectionner toutes les colonnes pour éviter les erreurs de colonnes manquantes
         .eq('id', documentId)
         .single();
 
       if (error) {
         console.error('❌ Erreur lors du chargement du document:', error);
+        console.error('  - Code:', error.code);
+        console.error('  - Message:', error.message);
+        console.error('  - Details:', error.details);
         toast.error('Erreur', {
-          description: 'Document introuvable'
+          description: `Document introuvable : ${error.message}`
         });
         navigate('/library');
         return;
@@ -80,16 +83,43 @@ export function PDFViewerPage() {
         return;
       }
 
+      // ✅ FALLBACK : Si 'name' n'existe pas, utiliser 'title'
+      const documentName = data.name || data.title || 'Document sans nom';
+      
+      // ✅ FALLBACK : Si 'storage_path' n'existe pas, utiliser 'file_url'
+      const storagePath = data.storage_path || data.file_url || '';
+
       console.log('✅ Document chargé:', {
         id: data.id,
-        name: data.name,
-        storage_path: data.storage_path,
+        name: documentName,
+        storage_path: storagePath,
         file_type: data.file_type,
         extracted_text_length: data.extracted_text?.length || 0,
-        processing_status: data.processing_status
+        processing_status: data.processing_status,
+        has_name_column: !!data.name,
+        has_storage_path_column: !!data.storage_path
       });
 
-      setDocument(data as Document);
+      // Mettre à jour l'objet data avec les fallbacks
+      const documentData = {
+        ...data,
+        name: documentName,
+        storage_path: storagePath
+      };
+
+      setDocument(documentData as Document);
+
+      // ⚠️ Vérifier si les colonnes essentielles existent
+      if (!data.name || !data.storage_path) {
+        console.warn('⚠️ ===== COLONNES MANQUANTES =====');
+        console.warn('  Les colonnes "name" et/ou "storage_path" n\'existent pas dans la BDD');
+        console.warn('  📝 Solution : Exécuter le script FIX_DOCUMENT_COLUMNS.sql');
+        console.warn('  📍 Localisation : FIX_DOCUMENT_COLUMNS.sql à la racine du projet');
+        toast.warning('Configuration incomplète', {
+          description: 'Certaines colonnes sont manquantes. Veuillez exécuter le script de migration SQL. (Voir console F12)',
+          duration: 6000
+        });
+      }
 
       // ✅ VÉRIFICATION : Si le texte est déjà en BDD, l'utiliser directement
       if (data.extracted_text && data.extracted_text.trim() !== '') {
@@ -98,8 +128,8 @@ export function PDFViewerPage() {
         // Préparer le contexte avec le texte déjà disponible
         setDocumentContext({
           documentId: data.id,
-          documentName: data.name,
-          storagePath: data.storage_path,
+          documentName: documentName,
+          storagePath: storagePath,
           extractedText: data.extracted_text // ✅ Utiliser le texte de la BDD
         });
 
@@ -112,12 +142,18 @@ export function PDFViewerPage() {
         
         setDocumentContext({
           documentId: data.id,
-          documentName: data.name,
-          storagePath: data.storage_path
+          documentName: documentName,
+          storagePath: storagePath
         });
 
         // Extraire le texte du PDF en arrière-plan pour l'IA
-        extractTextInBackground(data.storage_path, data.id);
+        if (storagePath) {
+          extractTextInBackground(storagePath, data.id);
+        } else {
+          toast.error('Erreur', {
+            description: 'Impossible de localiser le fichier PDF. Chemin manquant.'
+          });
+        }
       }
 
     } catch (err: any) {

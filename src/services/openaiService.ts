@@ -1,14 +1,22 @@
 /**
- * Service OpenAI pour l'analyse de documents PDF
+ * Service OpenAI avec support du proxy pour éviter CORS
  * 
- * RÈGLE IMPORTANTE : Ce service utilise toujours storage_path pour accéder aux fichiers
- * et ne touche JAMAIS au nom d'affichage pour éviter les erreurs "Invalid key"
+ * Configuration :
+ * - Par défaut : Utilise Supabase directement
+ * - Si CORS bloque : Utilise le proxy local (localhost:3001)
+ * 
+ * RÈGLE IMPORTANTE : Utilise TOUJOURS storage_path (pas le nom d'affichage)
+ * pour éviter les erreurs "Invalid key" liées aux accents
  * 
  * Date: 28 décembre 2024
  */
 
 import OpenAI from 'openai';
 import { supabase } from '../lib/supabase';
+
+// Configuration du proxy (activer si CORS bloque)
+const USE_PROXY = false; // Mettre à true si CORS bloque
+const PROXY_URL = 'http://localhost:3001';
 
 // Types
 export interface ChatMessage {
@@ -19,8 +27,8 @@ export interface ChatMessage {
 
 export interface DocumentContext {
   documentId: string;
-  documentName: string; // Pour l'affichage uniquement
-  storagePath: string; // Pour accéder au fichier
+  documentName: string; // Pour l'affichage uniquement (nom avec accents)
+  storagePath: string; // Pour accéder au fichier (chemin nettoyé)
   extractedText?: string;
 }
 
@@ -39,14 +47,32 @@ const getOpenAIClient = () => {
 };
 
 /**
- * Extrait le texte d'un PDF depuis Supabase Storage
+ * Télécharge un PDF depuis Supabase (avec ou sans proxy)
  * UTILISE storage_path (pas le nom d'affichage)
  */
-export async function extractPDFText(storagePath: string): Promise<string> {
-  try {
-    console.log('📄 Extraction du texte PDF...');
-    console.log('  - Storage path:', storagePath);
+async function downloadPDF(storagePath: string): Promise<Blob> {
+  console.log('📥 Téléchargement PDF...');
+  console.log('  - Storage path:', storagePath);
+  console.log('  - Utilise proxy:', USE_PROXY);
 
+  if (USE_PROXY) {
+    // Option 1 : Via proxy (évite CORS)
+    console.log('🔄 Téléchargement via proxy...');
+    const response = await fetch(`${PROXY_URL}/download/${storagePath}`);
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(`Erreur proxy: ${error.error || response.statusText}`);
+    }
+
+    const blob = await response.blob();
+    console.log('✅ PDF téléchargé via proxy:', blob.size, 'bytes');
+    return blob;
+
+  } else {
+    // Option 2 : Direct depuis Supabase (peut avoir CORS)
+    console.log('📦 Téléchargement direct depuis Supabase...');
+    
     // RÈGLE : Utiliser storage_path pour récupérer le fichier
     const { data, error } = await supabase.storage
       .from('documents')
@@ -54,6 +80,16 @@ export async function extractPDFText(storagePath: string): Promise<string> {
 
     if (error) {
       console.error('❌ Erreur lors du téléchargement:', error);
+      
+      // Si erreur CORS, suggérer le proxy
+      if (error.message.includes('CORS') || error.message.includes('blocked')) {
+        throw new Error(
+          'Erreur CORS détectée. ' +
+          'Solution : Activez le proxy en mettant USE_PROXY = true dans openaiService.ts, ' +
+          'puis lancez "node proxy-server.js" dans un terminal.'
+        );
+      }
+      
       throw new Error(`Impossible de télécharger le PDF: ${error.message}`);
     }
 
@@ -61,34 +97,29 @@ export async function extractPDFText(storagePath: string): Promise<string> {
       throw new Error('Aucune donnée retournée par Supabase');
     }
 
-    console.log('✅ PDF téléchargé, taille:', data.size, 'bytes');
+    console.log('✅ PDF téléchargé:', data.size, 'bytes');
+    return data;
+  }
+}
 
-    // Convertir le Blob en ArrayBuffer
-    const arrayBuffer = await data.arrayBuffer();
+/**
+ * Extrait le texte d'un PDF depuis Supabase Storage
+ * UTILISE storage_path (pas le nom d'affichage)
+ * 
+ * Note: Cette fonction utilise maintenant le service pdfExtractor
+ * qui gère nativement le téléchargement depuis Supabase Storage
+ */
+export async function extractPDFText(storagePath: string): Promise<string> {
+  try {
+    console.log('📄 Extraction PDF via pdfExtractor service...');
     
-    // Utiliser pdfjs-dist pour extraire le texte
-    const pdfjsLib = await import('pdfjs-dist');
+    // Utiliser le service dédié d'extraction PDF
+    const { extractPDFFromStorage } = await import('./pdfExtractor');
+    const result = await extractPDFFromStorage(storagePath);
     
-    // Configuration du worker
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+    console.log('✅ Texte extrait avec succès:', result.metadata);
+    return result.cleanText; // Retourner le texte nettoyé
 
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    console.log('📖 PDF chargé:', pdf.numPages, 'pages');
-
-    let fullText = '';
-
-    // Extraire le texte de chaque page
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const textContent = await page.getTextContent();
-      const pageText = textContent.items
-        .map((item: any) => item.str)
-        .join(' ');
-      fullText += pageText + '\n\n';
-    }
-
-    console.log('✅ Texte extrait:', fullText.length, 'caractères');
-    return fullText.trim();
   } catch (error: any) {
     console.error('💥 Erreur lors de l\'extraction du texte:', error);
     throw new Error(`Échec de l'extraction du texte: ${error.message}`);
@@ -241,4 +272,3 @@ export async function analyzeUploadedDocument(file: File): Promise<string> {
     throw new Error(`Impossible d'analyser le fichier: ${error.message}`);
   }
 }
-

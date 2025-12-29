@@ -13,9 +13,12 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Document } from '../lib/supabase';
-import { extractAndTransformPDF, ExtractedDocument } from '../services/documentTransformer';
+import { extractPDFFromStorage, ExtractedPDFResult } from '../services/pdfExtractor';
 import { generateQuizFromText, GeneratedQuiz } from '../services/quizGenerator';
 import { QuizPlayer } from '../components/quiz/QuizPlayer';
+
+// Type compatible avec l'ancien ExtractedDocument
+type ExtractedDocument = ExtractedPDFResult;
 
 export function DocumentView() {
   const { id } = useParams<{ id: string }>();
@@ -76,12 +79,17 @@ export function DocumentView() {
 
   // Extraire et transformer le texte du PDF
   const handleExtractText = async () => {
-    if (!document || !document.file_url) return;
+    // RÈGLE : Utiliser storage_path (chemin nettoyé) pour accéder au fichier
+    if (!document || !document.storage_path) return;
 
     setExtracting(true);
     try {
-      console.log('🔍 Extraction et transformation du PDF...');
-      const extracted = await extractAndTransformPDF(document.file_url, document.id);
+      console.log('🔍 Extraction du PDF depuis Supabase Storage...');
+      console.log('  - Nom avec accents (affichage):', document.name);
+      console.log('  - Storage path (téléchargement):', document.storage_path);
+      
+      // Utiliser le service d'extraction qui télécharge depuis Supabase
+      const extracted = await extractPDFFromStorage(document.storage_path);
       setExtractedDocument(extracted);
 
       console.log('📊 Statistiques du document:', extracted.metadata);
@@ -122,7 +130,7 @@ export function DocumentView() {
       // Utiliser le texte nettoyé optimisé pour l'IA
       const quiz = await generateQuizFromText(
         extractedDocument.cleanText,
-        document.title,
+        document.name, // Utiliser name (nom avec accents)
         document.id
       );
       
@@ -179,17 +187,18 @@ export function DocumentView() {
             <ArrowLeft size={24} />
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{document.title}</h1>
+            {/* RÈGLE : Afficher name (avec accents) pour l'utilisateur */}
+            <h1 className="text-2xl font-bold text-gray-900">{document.name}</h1>
             <p className="text-sm text-gray-500 mt-1">
-              {document.file_type.toUpperCase()} • {Math.round(document.file_size / 1024)} KB
+              {document.file_type.toUpperCase()} • {Math.round((document.file_size || 0) / 1024)} KB
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
-          {document.file_url && (
+          {document.storage_path && (
             <a
-              href={document.file_url}
+              href={supabase.storage.from('documents').getPublicUrl(document.storage_path).data.publicUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"

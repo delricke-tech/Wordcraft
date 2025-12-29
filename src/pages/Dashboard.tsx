@@ -202,7 +202,8 @@ export function Dashboard() {
                     <FileText size={22} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-white truncate text-lg">{doc.title}</p>
+                    {/* RÈGLE : Afficher name (avec accents) pour l'utilisateur */}
+                    <p className="font-semibold text-white truncate text-lg">{doc.name || 'Document sans nom'}</p>
                     <p className="text-sm text-slate-400">
                       {format(new Date(doc.created_at), 'd MMM yyyy', { locale: fr })}
                     </p>

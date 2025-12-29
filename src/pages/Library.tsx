@@ -90,6 +90,10 @@ export function Library() {
   // État pour afficher uniquement les favoris
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
 
+  // État pour la modale de suppression totale
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
+
   useEffect(() => {
     fetchData();
   }, [selectedFolder]);

@@ -250,6 +250,84 @@ export function Library() {
     }
   };
 
+  // ✅ Fonction pour supprimer TOUS les documents
+  const handleDeleteAll = async () => {
+    if (!user) {
+      toast.error('Erreur', { description: 'Vous devez être connecté' });
+      return;
+    }
+
+    setIsDeletingAll(true);
+    const loadingToast = toast.loading('Suppression de tous les documents...');
+
+    try {
+      console.log('🗑️ Suppression de tous les documents de l\'utilisateur');
+
+      // 1. Récupérer tous les documents de l'utilisateur
+      const { data: userDocs, error: fetchError } = await supabase
+        .from('documents')
+        .select('id, storage_path')
+        .eq('user_id', user.id);
+
+      if (fetchError) {
+        throw fetchError;
+      }
+
+      if (!userDocs || userDocs.length === 0) {
+        toast.info('Aucun document à supprimer', { id: loadingToast });
+        setShowDeleteAllModal(false);
+        setIsDeletingAll(false);
+        return;
+      }
+
+      const totalDocs = userDocs.length;
+      console.log(`📄 ${totalDocs} document(s) à supprimer`);
+
+      // 2. Supprimer les fichiers du Storage
+      const storagePaths = userDocs
+        .filter(doc => doc.storage_path)
+        .map(doc => doc.storage_path);
+
+      if (storagePaths.length > 0) {
+        console.log('🗑️ Suppression des fichiers du Storage...');
+        const { error: storageError } = await supabase.storage
+          .from('documents')
+          .remove(storagePaths);
+
+        if (storageError) {
+          console.warn('⚠️ Erreur Storage (certains fichiers peuvent ne pas exister):', storageError);
+        }
+      }
+
+      // 3. Supprimer tous les documents de la BDD
+      console.log('🗑️ Suppression des entrées en BDD...');
+      const { error: dbError } = await supabase
+        .from('documents')
+        .delete()
+        .eq('user_id', user.id);
+
+      if (dbError) {
+        throw dbError;
+      }
+
+      console.log('✅ Tous les documents supprimés');
+      toast.success(`${totalDocs} document(s) supprimé(s) !`, { id: loadingToast });
+
+      // Rafraîchir la liste
+      await fetchData();
+      setShowDeleteAllModal(false);
+
+    } catch (error: any) {
+      console.error('❌ Erreur lors de la suppression totale:', error);
+      toast.error('Erreur', {
+        id: loadingToast,
+        description: 'Une erreur est survenue lors de la suppression'
+      });
+    } finally {
+      setIsDeletingAll(false);
+    }
+  };
+
   // ✅ Fonction pour supprimer un dossier
   const handleDeleteFolder = async (folderId: string) => {
     if (!user) {
@@ -877,6 +955,17 @@ export function Library() {
             <File size={20} />
             Upload PDF
           </button>
+          {/* ✅ Bouton Supprimer Tout */}
+          {documents.length > 0 && (
+            <button
+              onClick={() => setShowDeleteAllModal(true)}
+              className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors flex items-center gap-2"
+              title="Supprimer tous les documents"
+            >
+              <Trash2 size={20} />
+              Tout supprimer
+            </button>
+          )}
           <input
             ref={pdfInputRef}
             type="file"
@@ -1506,6 +1595,63 @@ export function Library() {
         itemName={showDeleteModal.itemName}
         type={showDeleteModal.type}
       />
+
+      {/* ✅ Modale Suppression Totale */}
+      {showDeleteAllModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
+            <div className="p-6">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                  <Trash2 className="w-6 h-6 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">
+                    Supprimer tous les documents ?
+                  </h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Cette action est irréversible
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                <p className="text-sm text-red-800">
+                  <strong>Attention :</strong> Vous êtes sur le point de supprimer <strong>{documents.length} document(s)</strong> et tous leurs fichiers du stockage.
+                  Cette action ne peut pas être annulée.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDeleteAllModal(false)}
+                  disabled={isDeletingAll}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleDeleteAll}
+                  disabled={isDeletingAll}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isDeletingAll ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                      Suppression...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 size={18} />
+                      Tout supprimer
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ✅ Modale Renommage */}
       <RenameModal

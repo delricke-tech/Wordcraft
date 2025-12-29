@@ -471,6 +471,9 @@ export function Library() {
     const loadingToastId = toast.loading(`Upload de ${totalFiles} fichier(s) en cours...`);
 
     try {
+      // Importer le service d'extraction PDF
+      const { extractPDFFromStorage } = await import('../services/pdfExtractor');
+
       for (let i = 0; i < totalFiles; i++) {
         const file = Array.from(files)[i];
         
@@ -481,11 +484,11 @@ export function Library() {
         // Utiliser l'utilitaire pour déterminer le type de fichier
         const fileType = getFileType(file.name);
         
-        // Générer un nom de fichier sûr avec l'utilitaire
+        // RÈGLE : Générer storage_path sans accents [cite: 2025-12-27]
         const safePath = generateUniqueFileName(file.name);
 
         console.log('📤 Upload du fichier vers Supabase Storage:', file.name);
-        console.log('📤 Chemin sûr généré:', safePath);
+        console.log('📤 Storage path (sans accents):', safePath);
         
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('documents')
@@ -505,7 +508,7 @@ export function Library() {
 
         console.log('✅ Fichier uploadé avec succès:', uploadData.path);
 
-        // RÈGLE PROJET : Conserver le nom original en BDD pour l'affichage
+        // RÈGLE : Conserver name avec accents pour l'affichage [cite: 2025-12-27]
         const documentName = file.name || `document-${Date.now()}`;
         
         console.log('💾 Insertion en BDD:', {
@@ -513,16 +516,23 @@ export function Library() {
           storage_path: uploadData.path,
           user_id: user.id,
           file_type: fileType,
+          folder_id: selectedFolder, // SÉCURITÉ: Assurer que folder_id est passé
         });
 
-        const { error: dbError } = await supabase
+        // SÉCURITÉ: Inclure folder_id dans l'insertion
+        const { data: insertedDoc, error: dbError } = await supabase
           .from('documents')
           .insert({
             name: documentName,
             storage_path: uploadData.path,
             user_id: user.id,
             file_type: fileType,
-          });
+            folder_id: selectedFolder, // Attribuer au dossier sélectionné
+            file_size: file.size,
+            processing_status: 'pending'
+          })
+          .select('id')
+          .single();
 
         if (dbError) {
           console.error('❌ Erreur lors de l\'enregistrement en BDD:', dbError);
@@ -535,6 +545,40 @@ export function Library() {
         }
 
         console.log('✅ Document enregistré en BDD avec succès');
+
+        // EXTRACTION AUTO: Si PDF, extraire le texte immédiatement
+        if (fileType === 'pdf' && insertedDoc) {
+          console.log('🤖 Extraction automatique du texte PDF...');
+          try {
+            const extracted = await extractPDFFromStorage(uploadData.path);
+            
+            // Mettre à jour extracted_text immédiatement
+            const { error: updateError } = await supabase
+              .from('documents')
+              .update({
+                extracted_text: extracted.cleanText,
+                page_count: extracted.metadata.pages,
+                processing_status: 'completed'
+              })
+              .eq('id', insertedDoc.id);
+
+            if (updateError) {
+              console.error('⚠️  Erreur mise à jour texte:', updateError);
+            } else {
+              console.log(`✅ Texte extrait: ${extracted.metadata.pages} pages, ${extracted.metadata.words} mots`);
+            }
+          } catch (extractError: any) {
+            console.error('⚠️  Erreur extraction:', extractError.message);
+            // Marquer comme échoué mais ne pas bloquer l'upload
+            await supabase
+              .from('documents')
+              .update({
+                processing_status: 'failed',
+                processing_error: extractError.message
+              })
+              .eq('id', insertedDoc.id);
+          }
+        }
       }
 
       await fetchData();

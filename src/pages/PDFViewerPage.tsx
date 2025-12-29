@@ -5,7 +5,8 @@ import { PDFViewer } from '../components/PDFViewer';
 import { ChatPanel } from '../components/ChatPanel';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { extractPDFText, DocumentContext } from '../services/openaiService';
+import { extractPDFFromStorage } from '../services/pdfExtractor';
+import { DocumentContext } from '../services/openaiService';
 
 /**
  * Page PDFViewerPage pour afficher un PDF en plein écran
@@ -176,59 +177,47 @@ export function PDFViewerPage() {
       console.log('  - Document ID:', documentId);
 
       // ✅ Utiliser le storage_path (chemin nettoyé) pour l'extraction
-      const extractedText = await extractPDFText(storagePath);
+      // La fonction extractPDFFromStorage va maintenant sauvegarder automatiquement en BDD
+      const extracted = await extractPDFFromStorage(storagePath, documentId);
       
-      console.log('📄 Texte récupéré:', extractedText ? `${extractedText.length} caractères` : 'NULL/VIDE');
+      console.log('📄 Texte récupéré:', extracted.cleanText ? `${extracted.cleanText.length} caractères` : 'NULL/VIDE');
 
       // ✅ VÉRIFICATION : Le texte doit exister
-      if (!extractedText || extractedText.trim() === '') {
+      if (!extracted.cleanText || extracted.cleanText.trim() === '') {
         throw new Error('Le texte extrait est vide. Le PDF pourrait être scanné ou corrompu.');
       }
 
       // Mettre à jour le contexte avec le texte extrait
       setDocumentContext(prev => prev ? {
         ...prev,
-        extractedText
+        extractedText: extracted.cleanText
       } : null);
 
-      console.log('✅ Texte extrait pour l\'IA:', extractedText.length, 'caractères');
-      console.log('  - Premiers 100 caractères:', extractedText.slice(0, 100));
+      console.log('✅ Texte extrait pour l\'IA:', extracted.cleanText.length, 'caractères');
+      console.log('  - Premiers 100 caractères:', extracted.cleanText.slice(0, 100));
+      console.log('💾 Texte déjà sauvegardé en BDD par extractPDFFromStorage()');
 
-      // Sauvegarder le texte en BDD pour éviter de ré-extraire
-      try {
-        const { error: updateError } = await supabase
-          .from('documents')
-          .update({ 
-            extracted_text: extractedText,
-            processing_status: 'completed'
-          })
-          .eq('id', documentId);
-
-        if (updateError) {
-          console.warn('⚠️ Impossible de sauvegarder le texte en BDD:', updateError);
-        } else {
-          console.log('✅ Texte sauvegardé en BDD');
-        }
-      } catch (saveError) {
-        console.warn('⚠️ Erreur lors de la sauvegarde en BDD:', saveError);
-      }
-
-      toast.success('IA prête', {
-        description: 'Le document a été analysé et l\'assistant IA est disponible !'
+      // ✅ RÈGLE 4 : Changer l'état du chat de 'Impossible d'extraire' à 'Prêt pour vos questions'
+      toast.success('IA prête pour vos questions ! 🎉', {
+        description: `Document analysé : ${extracted.metadata.pages} pages, ${extracted.metadata.words} mots. Le texte est maintenant en base.`,
+        duration: 5000
       });
     } catch (error: any) {
       console.error('⚠️ ===== ERREUR EXTRACTION =====');
       console.error('  - Message:', error.message);
       console.error('  - Stack:', error.stack);
       
-      toast.error('Erreur d\'extraction', {
-        description: 'Impossible d\'extraire le texte du PDF. L\'IA ne sera pas disponible.'
+      toast.error('Impossible d\'extraire le texte', {
+        description: 'Le PDF ne peut pas être analysé. L\'IA ne sera pas disponible pour ce document.'
       });
 
       // Mettre à jour le statut en BDD
       await supabase
         .from('documents')
-        .update({ processing_status: 'failed' })
+        .update({ 
+          processing_status: 'failed',
+          processing_error: error.message
+        })
         .eq('id', documentId);
     } finally {
       setExtractingText(false);

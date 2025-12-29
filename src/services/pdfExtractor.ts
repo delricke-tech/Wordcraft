@@ -32,49 +32,79 @@ export interface ExtractedPDFResult {
 }
 
 /**
- * Télécharge un fichier PDF depuis Supabase Storage en utilisant storage_path
+ * Télécharge un fichier PDF depuis Supabase Storage PUBLIC en utilisant storage_path
  * 
- * @param storagePath - Le chemin storage nettoyé (sans accents)
+ * ✅ BUCKET PUBLIC : Utilise getPublicUrl au lieu de download pour un accès direct
+ * 
+ * @param storagePath - Le chemin storage nettoyé (sans accents) depuis la colonne storage_path
  * @returns Blob du fichier PDF
  */
 async function downloadPDFFromStorage(storagePath: string): Promise<Blob> {
-  console.log('📥 Téléchargement PDF depuis Supabase Storage...');
-  console.log('  - Storage path:', storagePath);
+  console.log('📥 ===== TÉLÉCHARGEMENT PDF =====');
+  console.log('  - Storage path (brut):', storagePath);
+  console.log('  - Bucket: documents (PUBLIC)');
 
-  const { data, error } = await supabase.storage
+  // ✅ RÈGLE 1 : Utiliser getPublicUrl avec la valeur BRUTE de storage_path
+  // Ne jamais modifier la clé, juste l'encoder dans l'URL si nécessaire
+  const { data: publicUrlData } = supabase.storage
     .from('documents')
-    .download(storagePath);
+    .getPublicUrl(storagePath); // Passer la valeur brute, Supabase encode automatiquement
 
-  if (error) {
+  if (!publicUrlData?.publicUrl) {
+    throw new Error('Impossible de générer l\'URL publique du PDF');
+  }
+
+  console.log('  - URL publique générée:', publicUrlData.publicUrl);
+
+  // ✅ RÈGLE 2 : Télécharger via l'URL publique (déjà encodée par Supabase)
+  try {
+    const response = await fetch(publicUrlData.publicUrl);
+    
+    if (!response.ok) {
+      throw new Error(`Erreur HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const blob = await response.blob();
+    console.log('✅ PDF téléchargé:', blob.size, 'bytes');
+    console.log('===== FIN TÉLÉCHARGEMENT =====');
+    
+    return blob;
+  } catch (error: any) {
     console.error('❌ Erreur lors du téléchargement:', error);
     throw new Error(`Impossible de télécharger le PDF: ${error.message}`);
   }
-
-  if (!data) {
-    throw new Error('Aucune donnée retournée par Supabase');
-  }
-
-  console.log('✅ PDF téléchargé:', data.size, 'bytes');
-  return data;
 }
 
 /**
  * Extrait le texte d'un PDF en utilisant storage_path
  * 
- * UTILISE storage_path (chemin nettoyé) pour télécharger depuis Supabase Storage
+ * ✅ UTILISE storage_path (chemin nettoyé) pour télécharger depuis Supabase Storage PUBLIC
+ * ✅ SAUVEGARDE automatiquement dans extracted_text (content_text)
  * 
  * @param storagePath - Le chemin storage nettoyé (depuis la colonne storage_path)
+ * @param documentId - ID du document (optionnel, pour sauvegarde en BDD)
  * @returns Document extrait avec texte et métadonnées
  */
 export async function extractPDFFromStorage(
-  storagePath: string
+  storagePath: string | File,
+  documentId?: string
 ): Promise<ExtractedPDFResult> {
   try {
     console.log('📄 ===== EXTRACTION TEXTE PDF =====');
-    console.log('  - Storage path:', storagePath);
+    
+    let blob: Blob;
 
-    // 1. Télécharger le PDF depuis Supabase Storage
-    const blob = await downloadPDFFromStorage(storagePath);
+    // Gérer le cas où on passe un File object directement (upload depuis chat)
+    if (storagePath instanceof File) {
+      console.log('  - Source: File object (upload direct)');
+      blob = storagePath;
+    } else {
+      // Cas normal : télécharger depuis Supabase Storage
+      console.log('  - Source: Supabase Storage');
+      console.log('  - Storage path:', storagePath);
+      console.log('  - Document ID:', documentId || 'Non fourni');
+      blob = await downloadPDFFromStorage(storagePath);
+    }
 
     // 2. Convertir le Blob en ArrayBuffer
     const arrayBuffer = await blob.arrayBuffer();
@@ -133,6 +163,35 @@ export async function extractPDFFromStorage(
       words: result.metadata.words,
       characters: result.metadata.characters
     });
+
+    // ✅ RÈGLE 3 : FORCE UPDATE - Sauvegarder immédiatement dans extracted_text (content_text)
+    if (documentId && typeof storagePath === 'string') {
+      console.log('💾 Sauvegarde du texte extrait en BDD...');
+      console.log('  - Document ID:', documentId);
+      console.log('  - Colonne: extracted_text (content_text)');
+      console.log('  - Texte: ', cleanText.length, 'caractères');
+
+      try {
+        const { error: updateError } = await supabase
+          .from('documents')
+          .update({
+            extracted_text: cleanText, // Alias: content_text
+            page_count: result.metadata.pages,
+            processing_status: 'completed'
+          })
+          .eq('id', documentId);
+
+        if (updateError) {
+          console.error('⚠️ Erreur lors de la sauvegarde en BDD:', updateError);
+        } else {
+          console.log('✅ Texte sauvegardé en BDD avec succès !');
+          console.log('   → L\'IA n\'aura plus besoin de relire le PDF à l\'avenir');
+        }
+      } catch (saveError: any) {
+        console.error('⚠️ Erreur inattendue lors de la sauvegarde:', saveError);
+      }
+    }
+
     console.log('===== FIN EXTRACTION =====');
 
     return result;

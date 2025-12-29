@@ -18,6 +18,7 @@ import { AIAssistant } from './pages/AIAssistant';
 import { Settings } from './pages/Settings';
 import { Subscription } from './pages/Subscription';
 import { TeacherDashboard } from './pages/teacher/TeacherDashboard';
+import { MigrationPDF } from './pages/MigrationPDF';
 import { Toaster } from 'sonner';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -91,6 +92,7 @@ function AppRoutes() {
         <Route path="library" element={<Library />} />
         <Route path="library/:id" element={<DocumentView />} />
         <Route path="library/:id/view" element={<PDFViewerPage />} />
+        <Route path="migration-pdf" element={<MigrationPDF />} />
         <Route path="cards" element={<StudyCards />} />
         <Route path="cards/new" element={<StudyCards />} />
         <Route path="cards/:id" element={<StudyCards />} />

@@ -131,12 +131,24 @@ export async function extractPDFText(storagePath: string): Promise<string> {
  */
 export async function summarizeDocument(documentText: string, documentName: string): Promise<string> {
   try {
-    console.log('🤖 Génération du résumé avec OpenAI...');
+    console.log('🤖 ===== GÉNÉRATION RÉSUMÉ =====');
+    console.log('  - Document:', documentName);
+    console.log('📄 Texte récupéré:', documentText ? `${documentText.length} caractères` : 'NULL/VIDE');
+    
+    // ✅ VÉRIFICATION : Le texte doit exister
+    if (!documentText || documentText.trim() === '') {
+      throw new Error(
+        `Erreur : Le texte de ce cours n'a pas encore été extrait.\n\n` +
+        `Document : "${documentName}"\n\n` +
+        `Veuillez patienter quelques secondes et réessayer.`
+      );
+    }
     
     const openai = getOpenAIClient();
 
     // Limiter le texte si trop long (max 15000 caractères pour éviter les limites)
     const truncatedText = documentText.slice(0, 15000);
+    console.log('  - Texte tronqué pour OpenAI:', truncatedText.length, 'caractères');
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
@@ -183,9 +195,37 @@ export async function sendChatMessage(
   conversationHistory: ChatMessage[]
 ): Promise<string> {
   try {
-    console.log('💬 Envoi du message au chat...');
-    console.log('  - Message:', message);
-    console.log('  - Document:', context.documentName);
+    console.log('💬 ===== ENVOI MESSAGE CHAT =====');
+    console.log('  - Message utilisateur:', message);
+    console.log('  - Document ID:', context.documentId);
+    console.log('  - Document Name:', context.documentName);
+    console.log('  - Storage Path:', context.storagePath);
+    
+    // ✅ LOG 1 : Vérifier si le texte arrive vraiment
+    console.log('📄 Texte récupéré:', context.extractedText ? `${context.extractedText.length} caractères` : 'NULL/VIDE');
+    
+    // ✅ VÉRIFICATION 1 : Le contexte doit exister
+    if (!context || !context.documentId || !context.storagePath) {
+      console.error('❌ Contexte invalide:', context);
+      throw new Error('Erreur : Le contexte du document est manquant ou invalide.');
+    }
+
+    // ✅ VÉRIFICATION 2 : Le texte doit être disponible (FALLBACK)
+    if (!context.extractedText || context.extractedText.trim() === '') {
+      console.error('❌ Le texte extrait est vide ou NULL');
+      console.error('   Storage Path utilisé:', context.storagePath);
+      throw new Error(
+        `Erreur : Le texte de ce cours n'a pas encore été extrait.\n\n` +
+        `Document : "${context.documentName}"\n` +
+        `Fichier identifié : ${context.storagePath}\n\n` +
+        `Veuillez patienter quelques secondes et réessayer. Si le problème persiste, ` +
+        `retournez à la bibliothèque et rouvrez le document.`
+      );
+    }
+
+    console.log('✅ Contexte valide, texte disponible');
+    console.log('  - Longueur du texte:', context.extractedText.length);
+    console.log('  - Premiers 100 caractères:', context.extractedText.slice(0, 100) + '...');
 
     const openai = getOpenAIClient();
 
@@ -195,8 +235,8 @@ export async function sendChatMessage(
         role: 'system',
         content: `Tu es un assistant pédagogique expert qui aide les étudiants à comprendre le document "${context.documentName}". 
 
-${context.extractedText ? `Contexte du document (extrait) :
-${context.extractedText.slice(0, 3000)}...` : 'Le texte du document n\'est pas encore chargé.'}
+Contexte du document (extrait) :
+${context.extractedText.slice(0, 3000)}...
 
 Règles :
 - Réponds en français
@@ -215,6 +255,7 @@ Règles :
       }
     ];
 
+    console.log('🤖 Appel à OpenAI en cours...');
     const completion = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
       messages,
@@ -223,7 +264,7 @@ Règles :
     });
 
     const response = completion.choices[0]?.message?.content || 'Désolé, je n\'ai pas pu générer de réponse.';
-    console.log('✅ Réponse reçue');
+    console.log('✅ Réponse reçue de OpenAI:', response.slice(0, 100) + '...');
     return response;
   } catch (error: any) {
     console.error('💥 Erreur lors de l\'envoi du message:', error);

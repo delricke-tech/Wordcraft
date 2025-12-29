@@ -38,9 +38,10 @@ export function PDFViewerPage() {
       console.log('📄 Chargement du document:', documentId);
 
       // Récupérer les informations du document depuis la BDD
+      // ✅ IMPORTANT : Inclure extracted_text et page_count pour éviter de ré-extraire
       const { data, error } = await supabase
         .from('documents')
-        .select('id, name, storage_path, file_type, user_id')
+        .select('id, name, storage_path, file_type, user_id, extracted_text, page_count, processing_status')
         .eq('id', documentId)
         .single();
 
@@ -83,20 +84,41 @@ export function PDFViewerPage() {
         id: data.id,
         name: data.name,
         storage_path: data.storage_path,
-        file_type: data.file_type
+        file_type: data.file_type,
+        extracted_text_length: data.extracted_text?.length || 0,
+        processing_status: data.processing_status
       });
 
       setDocument(data as Document);
 
-      // Préparer le contexte du document pour l'IA
-      setDocumentContext({
-        documentId: data.id,
-        documentName: data.name,  // Pour l'affichage
-        storagePath: data.storage_path  // Pour accéder au fichier
-      });
+      // ✅ VÉRIFICATION : Si le texte est déjà en BDD, l'utiliser directement
+      if (data.extracted_text && data.extracted_text.trim() !== '') {
+        console.log('✅ Texte déjà extrait trouvé en BDD:', data.extracted_text.length, 'caractères');
+        
+        // Préparer le contexte avec le texte déjà disponible
+        setDocumentContext({
+          documentId: data.id,
+          documentName: data.name,
+          storagePath: data.storage_path,
+          extractedText: data.extracted_text // ✅ Utiliser le texte de la BDD
+        });
 
-      // Extraire le texte du PDF en arrière-plan pour l'IA
-      extractTextInBackground(data.storage_path);
+        toast.success('IA prête', {
+          description: 'Le document a déjà été analysé. L\'assistant IA est disponible !'
+        });
+      } else {
+        // Si pas de texte en BDD, préparer le contexte sans texte et lancer l'extraction
+        console.log('⚠️ Aucun texte en BDD, extraction nécessaire...');
+        
+        setDocumentContext({
+          documentId: data.id,
+          documentName: data.name,
+          storagePath: data.storage_path
+        });
+
+        // Extraire le texte du PDF en arrière-plan pour l'IA
+        extractTextInBackground(data.storage_path, data.id);
+      }
 
     } catch (err: any) {
       console.error('💥 Erreur inattendue:', err);
@@ -110,27 +132,68 @@ export function PDFViewerPage() {
   };
 
   // Extraire le texte du PDF pour l'IA (en arrière-plan)
-  const extractTextInBackground = async (storagePath: string) => {
+  const extractTextInBackground = async (storagePath: string, documentId: string) => {
     try {
       setExtractingText(true);
-      console.log('🤖 Extraction du texte pour l\'IA...');
+      console.log('🤖 ===== EXTRACTION DU TEXTE =====');
+      console.log('  - Storage Path:', storagePath);
+      console.log('  - Document ID:', documentId);
 
+      // ✅ Utiliser le storage_path (chemin nettoyé) pour l'extraction
       const extractedText = await extractPDFText(storagePath);
+      
+      console.log('📄 Texte récupéré:', extractedText ? `${extractedText.length} caractères` : 'NULL/VIDE');
 
+      // ✅ VÉRIFICATION : Le texte doit exister
+      if (!extractedText || extractedText.trim() === '') {
+        throw new Error('Le texte extrait est vide. Le PDF pourrait être scanné ou corrompu.');
+      }
+
+      // Mettre à jour le contexte avec le texte extrait
       setDocumentContext(prev => prev ? {
         ...prev,
         extractedText
       } : null);
 
       console.log('✅ Texte extrait pour l\'IA:', extractedText.length, 'caractères');
+      console.log('  - Premiers 100 caractères:', extractedText.slice(0, 100));
+
+      // Sauvegarder le texte en BDD pour éviter de ré-extraire
+      try {
+        const { error: updateError } = await supabase
+          .from('documents')
+          .update({ 
+            extracted_text: extractedText,
+            processing_status: 'completed'
+          })
+          .eq('id', documentId);
+
+        if (updateError) {
+          console.warn('⚠️ Impossible de sauvegarder le texte en BDD:', updateError);
+        } else {
+          console.log('✅ Texte sauvegardé en BDD');
+        }
+      } catch (saveError) {
+        console.warn('⚠️ Erreur lors de la sauvegarde en BDD:', saveError);
+      }
+
       toast.success('IA prête', {
         description: 'Le document a été analysé et l\'assistant IA est disponible !'
       });
     } catch (error: any) {
-      console.error('⚠️ Erreur lors de l\'extraction du texte:', error);
-      toast.warning('IA limitée', {
-        description: 'Impossible d\'extraire le texte. L\'IA pourra seulement répondre à des questions générales.'
+      console.error('⚠️ ===== ERREUR EXTRACTION =====');
+      console.error('  - Message:', error.message);
+      console.error('  - Stack:', error.stack);
+      
+      toast.error('Erreur d\'extraction', {
+        description: 'Impossible d\'extraire le texte du PDF. L\'IA ne sera pas disponible.'
       });
+
+      // Mettre à jour le statut en BDD
+      await supabase
+        .from('documents')
+        .update({ processing_status: 'failed' })
+        .eq('id', documentId);
     } finally {
       setExtractingText(false);
     }
@@ -179,6 +242,7 @@ export function PDFViewerPage() {
         documentContext={documentContext}
         isOpen={isChatOpen}
         onToggle={() => setIsChatOpen(!isChatOpen)}
+        isExtractingText={extractingText}
       />
     </>
   );

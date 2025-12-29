@@ -34,9 +34,10 @@ interface ChatPanelProps {
   documentContext: DocumentContext;
   isOpen: boolean;
   onToggle: () => void;
+  isExtractingText?: boolean; // Indique si l'extraction du texte est en cours
 }
 
-export function ChatPanel({ documentContext, isOpen, onToggle }: ChatPanelProps) {
+export function ChatPanel({ documentContext, isOpen, onToggle, isExtractingText = false }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -83,6 +84,15 @@ N'hésitez pas à me poser des questions !`,
     const messageToSend = message || inputMessage;
     if (!messageToSend.trim() || isLoading) return;
 
+    // ✅ VÉRIFICATION : Le texte doit être disponible avant d'envoyer
+    if (!documentContext.extractedText || documentContext.extractedText.trim() === '') {
+      console.error('❌ Tentative d\'envoi sans texte extrait');
+      toast.error('Erreur', {
+        description: 'Le texte du document n\'est pas encore disponible. Veuillez patienter...'
+      });
+      return;
+    }
+
     // Masquer les suggestions après le premier message
     setShowSuggestions(false);
 
@@ -97,11 +107,17 @@ N'hésitez pas à me poser des questions !`,
     setIsLoading(true);
 
     try {
+      console.log('📤 Envoi du message à l\'IA...');
+      console.log('  - Message:', messageToSend);
+      console.log('  - Contexte disponible:', documentContext.extractedText.length, 'caractères');
+      
       const response = await sendChatMessage(
         messageToSend,
         documentContext,
         messages
       );
+
+      console.log('📥 Réponse reçue de l\'IA');
 
       const assistantMessage: ChatMessage = {
         role: 'assistant',
@@ -112,13 +128,20 @@ N'hésitez pas à me poser des questions !`,
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error: any) {
       console.error('❌ Erreur lors de l\'envoi du message:', error);
+      
+      // Message d'erreur personnalisé selon le type d'erreur
+      let errorDescription = error.message;
+      if (error.message.includes('n\'a pas encore été extrait')) {
+        errorDescription = 'Le texte de ce cours n\'est pas encore disponible. Veuillez retourner à la bibliothèque et rouvrir le document.';
+      }
+      
       toast.error('Erreur', {
-        description: error.message || 'Impossible d\'envoyer le message'
+        description: errorDescription
       });
 
       const errorMessage: ChatMessage = {
         role: 'assistant',
-        content: `⚠️ Désolé, une erreur s'est produite : ${error.message}`,
+        content: `⚠️ **Erreur**\n\n${error.message}\n\nSi le problème persiste, essayez de :\n1. Retourner à la bibliothèque\n2. Rouvrir le document\n3. Attendre quelques secondes que l'extraction se termine`,
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMessage]);
@@ -128,12 +151,25 @@ N'hésitez pas à me poser des questions !`,
   };
 
   const handleSummarize = async () => {
-    if (!documentContext.extractedText || isSummarizing) return;
+    // ✅ VÉRIFICATION : Le texte doit être disponible
+    if (!documentContext.extractedText || documentContext.extractedText.trim() === '') {
+      console.error('❌ Tentative de résumé sans texte extrait');
+      toast.error('Erreur', {
+        description: 'Le texte du document n\'est pas encore disponible. Veuillez patienter...'
+      });
+      return;
+    }
+
+    if (isSummarizing) return;
 
     setIsSummarizing(true);
     toast.loading('Génération du résumé en cours...', { id: 'summary' });
 
     try {
+      console.log('📝 Demande de résumé...');
+      console.log('  - Document:', documentContext.documentName);
+      console.log('  - Texte disponible:', documentContext.extractedText.length, 'caractères');
+      
       const summary = await summarizeDocument(
         documentContext.extractedText,
         documentContext.documentName
@@ -149,10 +185,24 @@ N'hésitez pas à me poser des questions !`,
       toast.success('Résumé généré !', { id: 'summary' });
     } catch (error: any) {
       console.error('❌ Erreur lors de la génération du résumé:', error);
+      
+      let errorDescription = error.message || 'Impossible de générer le résumé';
+      if (error.message.includes('n\'a pas encore été extrait')) {
+        errorDescription = 'Le texte de ce cours n\'est pas encore disponible.';
+      }
+      
       toast.error('Erreur', {
         id: 'summary',
-        description: error.message || 'Impossible de générer le résumé'
+        description: errorDescription
       });
+
+      // Afficher aussi le message d'erreur dans le chat
+      const errorMessage: ChatMessage = {
+        role: 'assistant',
+        content: `⚠️ **Erreur lors de la génération du résumé**\n\n${error.message}`,
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsSummarizing(false);
     }
@@ -192,19 +242,81 @@ N'hésitez pas à me poser des questions !`,
     }
   };
 
+  // Gérer le clic sur la bulle flottante avec vérification du contexte
+  const handleToggleClick = () => {
+    // Si le panel est déjà ouvert, le fermer simplement
+    if (isOpen) {
+      onToggle();
+      return;
+    }
+
+    // Si l'extraction est en cours, afficher un message
+    if (isExtractingText) {
+      console.log('⏳ Extraction du texte en cours...');
+      toast.info('Analyse du texte en cours...', {
+        description: 'L\'IA analyse le document. La bulle s\'activera automatiquement une fois prête.',
+        duration: 3000
+      });
+      return;
+    }
+
+    // Si le panel n'est pas ouvert, vérifier d'abord si le texte est disponible
+    console.log('📄 Vérification du contexte du document...');
+    console.log('  - Document ID:', documentContext.documentId);
+    console.log('  - Document Name:', documentContext.documentName);
+    console.log('  - Storage Path:', documentContext.storagePath);
+    console.log('  - Extracted Text:', documentContext.extractedText ? `${documentContext.extractedText.length} caractères` : 'NULL');
+
+    // Si le texte n'est pas disponible (NULL ou vide), afficher un message
+    if (!documentContext.extractedText || documentContext.extractedText.trim() === '') {
+      console.warn('⚠️ Le texte du document n\'est pas encore extrait');
+      toast.warning('Analyse du texte en cours...', {
+        description: `Le document "${documentContext.documentName}" est en cours d\'analyse. Veuillez patienter quelques instants...`,
+        duration: 4000
+      });
+      return;
+    }
+
+    // Si tout est OK, ouvrir le panel
+    console.log('✅ Texte disponible, ouverture du chat...');
+    console.log('✅ Fichier identifié via storage_path:', documentContext.storagePath);
+    onToggle();
+  };
+
   return (
     <>
-      {/* Bouton de toggle */}
+      {/* Bouton de toggle (bulle flottante opérationnelle) */}
       <motion.button
-        onClick={onToggle}
-        className="fixed top-1/2 right-0 -translate-y-1/2 z-50 bg-gradient-to-br from-purple-600/90 to-blue-600/90 backdrop-blur-md text-white p-3 rounded-l-xl shadow-lg hover:shadow-xl transition-all"
-        whileHover={{ scale: 1.05, x: -4 }}
-        whileTap={{ scale: 0.95 }}
+        onClick={handleToggleClick}
+        disabled={isExtractingText}
+        className={`fixed top-1/2 right-0 -translate-y-1/2 z-50 backdrop-blur-md text-white p-3 rounded-l-xl shadow-lg hover:shadow-xl transition-all ${
+          isExtractingText 
+            ? 'bg-gradient-to-br from-orange-500/90 to-amber-500/90 cursor-wait opacity-90' 
+            : 'bg-gradient-to-br from-purple-600/90 to-blue-600/90 cursor-pointer'
+        }`}
+        whileHover={!isExtractingText ? { scale: 1.05, x: -4 } : {}}
+        whileTap={!isExtractingText ? { scale: 0.95 } : {}}
         style={{
           border: '1px solid rgba(255, 255, 255, 0.2)'
         }}
+        title={
+          isExtractingText 
+            ? 'Analyse du document en cours...'
+            : !documentContext.extractedText 
+            ? 'Analyse du document en cours...'
+            : `Discuter avec l'IA à propos de ${documentContext.documentName}`
+        }
       >
-        {isOpen ? <ChevronRight size={24} /> : <ChevronLeft size={24} />}
+        {isExtractingText ? (
+          <div className="relative">
+            <Loader2 size={24} className="animate-spin" />
+            <Sparkles size={12} className="absolute -top-1 -right-1 animate-pulse" />
+          </div>
+        ) : isOpen ? (
+          <ChevronRight size={24} />
+        ) : (
+          <ChevronLeft size={24} />
+        )}
       </motion.button>
 
       {/* Panneau de chat - Glassmorphism Optimisé */}

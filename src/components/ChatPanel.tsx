@@ -207,7 +207,7 @@ N'hésitez pas à me poser des questions !`,
         {isOpen ? <ChevronRight size={24} /> : <ChevronLeft size={24} />}
       </motion.button>
 
-      {/* Panneau de chat - Glassmorphism */}
+      {/* Panneau de chat - Glassmorphism Optimisé */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -217,11 +217,11 @@ N'hésitez pas à me poser des questions !`,
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             className="fixed top-0 right-0 h-full w-full md:w-[500px] z-40 flex flex-col"
             style={{
-              background: 'rgba(255, 255, 255, 0.1)',
-              backdropFilter: 'blur(20px)',
-              WebkitBackdropFilter: 'blur(20px)',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-              boxShadow: '-10px 0 40px rgba(0, 0, 0, 0.1)'
+              background: 'rgba(15, 23, 42, 0.85)', // Fond sombre avec transparence
+              backdropFilter: 'blur(24px) saturate(180%)', // Flou + saturation pour effet verre
+              WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              boxShadow: '-20px 0 60px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.05)'
             }}
           >
             {/* Header */}
@@ -302,7 +302,11 @@ N'hésitez pas à me poser des questions !`,
                         onClick={() => handleSendMessage(suggestion.text)}
                         disabled={isLoading}
                         className="flex items-center gap-3 px-4 py-3 bg-white/10 hover:bg-white/20 rounded-xl text-left text-white transition-all border border-white/10 hover:border-white/30 disabled:opacity-50 disabled:cursor-not-allowed group"
-                        style={{ backdropFilter: 'blur(10px)' }}
+                        style={{ 
+                          backdropFilter: 'blur(12px) saturate(150%)',
+                          WebkitBackdropFilter: 'blur(12px) saturate(150%)',
+                          boxShadow: '0 4px 16px 0 rgba(0, 0, 0, 0.1)'
+                        }}
                       >
                         <span className="text-2xl group-hover:scale-110 transition-transform">{suggestion.icon}</span>
                         <span className="text-sm flex-1">{suggestion.text}</span>
@@ -326,11 +330,13 @@ N'hésitez pas à me poser des questions !`,
                     className={`max-w-[85%] px-4 py-3 rounded-2xl ${
                       msg.role === 'user'
                         ? 'bg-gradient-to-br from-purple-500/80 to-blue-500/80 text-white'
-                        : 'bg-white/20 text-white'
+                        : 'bg-white/10 text-white'
                     }`}
                     style={{
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
-                      backdropFilter: 'blur(10px)'
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      backdropFilter: 'blur(12px) saturate(150%)',
+                      WebkitBackdropFilter: 'blur(12px) saturate(150%)',
+                      boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.2)'
                     }}
                   >
                     <div className="prose prose-sm prose-invert max-w-none">
@@ -341,12 +347,17 @@ N'hésitez pas à me poser des questions !`,
                           p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
                           ul: ({ children }) => <ul className="list-disc ml-4 mb-2">{children}</ul>,
                           ol: ({ children }) => <ol className="list-decimal ml-4 mb-2">{children}</ol>,
-                          code: ({ children, className }) => {
-                            const isInline = !className;
-                            return isInline ? (
-                              <code className="bg-black/30 px-1.5 py-0.5 rounded text-sm">{children}</code>
+                          code: ({ node, inline, className, children, ...props }) => {
+                            // Correction du bug: typage correct pour éviter les erreurs className
+                            const match = /language-(\w+)/.exec(className || '');
+                            return !inline ? (
+                              <code className={className || ''} {...props}>
+                                {children}
+                              </code>
                             ) : (
-                              <code className={className}>{children}</code>
+                              <code className="bg-black/30 px-1.5 py-0.5 rounded text-sm" {...props}>
+                                {children}
+                              </code>
                             );
                           }
                         }}
@@ -366,7 +377,15 @@ N'hésitez pas à me poser des questions !`,
                   animate={{ opacity: 1 }}
                   className="flex justify-start"
                 >
-                  <div className="bg-white/20 px-4 py-3 rounded-2xl" style={{ border: '1px solid rgba(255, 255, 255, 0.2)' }}>
+                  <div 
+                    className="bg-white/10 px-4 py-3 rounded-2xl" 
+                    style={{ 
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      backdropFilter: 'blur(12px) saturate(150%)',
+                      WebkitBackdropFilter: 'blur(12px) saturate(150%)',
+                      boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.2)'
+                    }}
+                  >
                     <div className="flex items-center gap-2 text-white">
                       <Loader2 className="w-4 h-4 animate-spin" />
                       <span className="text-sm">L'IA réfléchit...</span>
@@ -388,7 +407,10 @@ N'hésitez pas à me poser des questions !`,
                   placeholder={showSuggestions && messages.length <= 1 ? "Ou tapez votre propre question..." : "Posez une question sur le document..."}
                   disabled={isLoading}
                   className="flex-1 px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-500/50 disabled:opacity-50"
-                  style={{ backdropFilter: 'blur(10px)' }}
+                  style={{ 
+                    backdropFilter: 'blur(12px) saturate(150%)',
+                    WebkitBackdropFilter: 'blur(12px) saturate(150%)'
+                  }}
                 />
                 <button
                   onClick={() => handleSendMessage()}

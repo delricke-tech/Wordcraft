@@ -543,7 +543,8 @@ export function Library() {
   };
 
   const handleFileUpload = async (files: FileList | null) => {
-    if (!files || !user) return;
+    // ✅ OPTION A : Permettre les uploads anonymes (user_id peut être NULL)
+    if (!files) return;
 
     setIsUploading(true);
     setUploadProgress(0);
@@ -566,12 +567,18 @@ export function Library() {
         // Utiliser l'utilitaire pour déterminer le type de fichier
         const fileType = getFileType(file.name);
         
-        // RÈGLE : Générer storage_path sans accents [cite: 2025-12-27]
+        // ✅ RÈGLE CRITIQUE : Générer storage_path normalisé [cite: 2025-12-27]
+        // Le trigger SQL va normaliser automatiquement (minuscules, sans accents, tirets)
+        // On envoie déjà un chemin normalisé pour que le Webhook puisse faire le lien
         const safePath = generateUniqueFileName(file.name);
 
-        console.log('📤 Upload du fichier vers Supabase Storage:', file.name);
-        console.log('📤 Storage path (sans accents):', safePath);
+        console.log('📤 ===== UPLOAD VERS SUPABASE =====');
+        console.log('  - Nom original:', file.name);
+        console.log('  - Storage path normalisé:', safePath);
+        console.log('  - Bucket: documents');
+        console.log('  - User ID:', user?.id || 'ANONYME (NULL)');
         
+        // ✅ ÉTAPE 1 : Upload vers le bucket "documents"
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('documents')
           .upload(safePath, file, {
@@ -580,7 +587,7 @@ export function Library() {
           });
 
         if (uploadError) {
-          console.error('❌ Erreur lors de l\'upload:', uploadError);
+          console.error('❌ Erreur lors de l\'upload vers Storage:', uploadError);
           toast.error(`Erreur lors de l'upload de ${file.name}`, {
             id: loadingToastId,
             description: uploadError.message
@@ -588,37 +595,44 @@ export function Library() {
           continue;
         }
 
-        console.log('✅ Fichier uploadé avec succès:', uploadData.path);
+        console.log('✅ Fichier uploadé avec succès vers Storage');
+        console.log('  - Path retourné:', uploadData.path);
 
-        // RÈGLE : Conserver name avec accents pour l'affichage [cite: 2025-12-27]
+        // ✅ RÈGLE : Conserver name avec accents pour l'affichage [cite: 2025-12-27]
         const documentName = file.name || `document-${Date.now()}`;
         
-        console.log('💾 Insertion en BDD:', {
-          name: documentName,
-          storage_path: uploadData.path,
-          user_id: user.id,
+        // ✅ ÉTAPE 2 : Insertion en BDD (user_id peut être NULL si anonyme)
+        const insertData = {
+          name: documentName, // Nom avec accents pour l'affichage
+          storage_path: uploadData.path, // Chemin normalisé (le trigger va re-normaliser)
+          user_id: user?.id || null, // ✅ NULL si anonyme (Option A)
           file_type: fileType,
-          folder_id: selectedFolder, // SÉCURITÉ: Assurer que folder_id est passé
-        });
+          folder_id: selectedFolder || null,
+          file_size: file.size,
+          processing_status: 'pending' // Edge Function va le passer à 'completed'
+        };
 
-        // SÉCURITÉ: Inclure folder_id dans l'insertion
+        console.log('💾 Insertion en BDD:', insertData);
+        console.log('  - Le trigger SQL va normaliser storage_path automatiquement');
+        console.log('  - L\'Edge Function process-pdf va extraire le texte');
+
+        // ✅ Attendre que la ligne soit créée en BDD
         const { data: insertedDoc, error: dbError } = await supabase
           .from('documents')
-          .insert({
-            name: documentName,
-            storage_path: uploadData.path,
-            user_id: user.id,
-            file_type: fileType,
-            folder_id: selectedFolder, // Attribuer au dossier sélectionné
-            file_size: file.size,
-            processing_status: 'pending'
-          })
-          .select('id')
+          .insert(insertData)
+          .select('id, storage_path')
           .single();
 
         if (dbError) {
           console.error('❌ Erreur lors de l\'enregistrement en BDD:', dbError);
+          console.error('  - Code:', dbError.code);
+          console.error('  - Message:', dbError.message);
+          console.error('  - Détails:', dbError.details);
+          
+          // Nettoyer le fichier du Storage si l'insertion BDD échoue
           await supabase.storage.from('documents').remove([uploadData.path]);
+          console.log('🧹 Fichier supprimé du Storage (rollback)');
+          
           toast.error(`Erreur lors de l'enregistrement de ${file.name}`, {
             id: loadingToastId,
             description: dbError.message
@@ -627,12 +641,25 @@ export function Library() {
         }
 
         console.log('✅ Document enregistré en BDD avec succès');
+        console.log('  - Document ID:', insertedDoc.id);
+        console.log('  - Storage path en BDD (normalisé par trigger):', insertedDoc.storage_path);
+        
+        // ✅ Vérifier que le trigger a bien normalisé le storage_path
+        if (insertedDoc.storage_path && insertedDoc.storage_path !== uploadData.path) {
+          console.warn('⚠️ Le trigger SQL a modifié le storage_path :');
+          console.warn('  - Envoyé au Storage:', uploadData.path);
+          console.warn('  - Sauvegardé en BDD:', insertedDoc.storage_path);
+          console.warn('  → Le Webhook devra utiliser le path normalisé');
+        }
 
-        // EXTRACTION AUTO: Si PDF, extraire le texte immédiatement
+        // ✅ OPTION : Extraction locale OU attendre l'Edge Function
+        // L'Edge Function process-pdf va s'en charger automatiquement via Webhook
+        // Si vous souhaitez l'extraction locale immédiate, décommentez ce bloc :
+        /*
         if (fileType === 'pdf' && insertedDoc) {
-          console.log('🤖 Extraction automatique du texte PDF...');
+          console.log('🤖 Extraction locale du texte PDF...');
           try {
-            const extracted = await extractPDFFromStorage(uploadData.path);
+            const extracted = await extractPDFFromStorage(insertedDoc.storage_path || uploadData.path);
             
             // Mettre à jour extracted_text immédiatement
             const { error: updateError } = await supabase
@@ -661,15 +688,25 @@ export function Library() {
               .eq('id', insertedDoc.id);
           }
         }
+        */
+        
+        // ✅ INFO : L'Edge Function process-pdf va gérer l'extraction automatiquement
+        console.log('📡 En attente de l\'Edge Function process-pdf pour l\'extraction...');
+        console.log('  → Le statut passera de "pending" à "completed" automatiquement');
+        
+        // Délai entre les uploads pour éviter la surcharge
+        if (i < totalFiles - 1) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
       }
 
       await fetchData();
       setShowUploadModal(false);
       
       // Toast de succès
-      toast.success('Document ajouté !', {
+      toast.success('Document(s) uploadé(s) ! 🎉', {
         id: loadingToastId,
-        description: `${totalFiles} fichier(s) uploadé(s) avec succès`
+        description: `${totalFiles} fichier(s) envoyé(s) avec succès. L'extraction PDF se fera automatiquement.`
       });
       
     } catch (error) {

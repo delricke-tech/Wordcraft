@@ -619,7 +619,14 @@ export function Library() {
         console.log('💾 Insertion en BDD (APRÈS upload):', insertData);
         console.log('  - Le trigger SQL va normaliser storage_path automatiquement [cite: 2025-12-27]');
         console.log('  - Ceci garantit que le Webhook pourra retrouver le document');
-
+        
+        // 🔍 LOGS DE DÉBOGAGE DÉTAILLÉS
+        console.log('🔍 Informations de session avant insertion :');
+        console.log('  - user existe?', !!user);
+        console.log('  - user.id:', user?.id);
+        console.log('  - user.email:', user?.email);
+        console.log('  - Supabase URL:', import.meta.env.VITE_SUPABASE_URL);
+        
         // ✅ Attendre que la ligne soit créée en BDD
         const { data: insertedDoc, error: dbError } = await supabase
           .from('documents')
@@ -628,10 +635,24 @@ export function Library() {
           .single();
 
         if (dbError) {
-          console.error('❌ Erreur lors de l\'enregistrement en BDD:', dbError);
-          console.error('  - Code:', dbError.code);
-          console.error('  - Message:', dbError.message);
-          console.error('  - Détails:', dbError.details);
+          console.error('❌ ═══════════════════════════════════════════════════════');
+          console.error('❌ ERREUR LORS DE L\'INSERTION EN BASE DE DONNÉES');
+          console.error('❌ ═══════════════════════════════════════════════════════');
+          console.error('📋 Type d\'erreur:', typeof dbError);
+          console.error('📋 Code d\'erreur:', dbError.code);
+          console.error('📋 Message:', dbError.message);
+          console.error('📋 Détails:', dbError.details);
+          console.error('📋 Hint:', dbError.hint);
+          console.error('📋 Erreur complète:', JSON.stringify(dbError, null, 2));
+          console.error('');
+          console.error('🔍 Données tentées d\'insertion:', JSON.stringify(insertData, null, 2));
+          console.error('');
+          console.error('💡 Solutions possibles:');
+          console.error('   1. Vérifiez les politiques RLS dans Supabase Dashboard');
+          console.error('   2. Assurez-vous que la table "documents" accepte user_id NULL');
+          console.error('   3. Vérifiez que vous êtes bien connecté avec le bon compte');
+          console.error('   4. Consultez CORRECTION_CORS.md pour plus de détails');
+          console.error('❌ ═══════════════════════════════════════════════════════');
           
           // Nettoyer le fichier du Storage si l'insertion BDD échoue
           await supabase.storage.from('documents').remove([uploadData.path]);
@@ -781,6 +802,19 @@ export function Library() {
               // ✅ ÉTAPE 2 : Enregistrer en BDD APRÈS l'upload [cite: 2025-12-27]
               // result.data.path contient le chemin exact retourné par Supabase Storage [cite: 2025-12-27]
               // Le trigger SQL en base de données normalisera automatiquement storage_path si nécessaire
+              
+              // 🔍 LOGS DE DÉBOGAGE pour handlePdfUpload
+              console.log('🔍 Insertion PDF - Informations de session :');
+              console.log('  - user existe?', !!user);
+              console.log('  - user.id:', user?.id);
+              console.log('  - Données à insérer:', {
+                name: originalFileName,
+                storage_path: result.data?.path,
+                user_id: user?.id || null,
+                file_type: 'pdf',
+                folder_id: selectedFolderForUpload
+              });
+              
               const { error: dbError } = await supabase
                 .from('documents')
                 .insert({
@@ -792,6 +826,15 @@ export function Library() {
                 });
 
             if (dbError) {
+              console.error('❌ ═══════════════════════════════════════════════════════');
+              console.error('❌ ERREUR handlePdfUpload - Insertion BDD');
+              console.error('❌ ═══════════════════════════════════════════════════════');
+              console.error('📋 Code:', dbError.code);
+              console.error('📋 Message:', dbError.message);
+              console.error('📋 Détails:', dbError.details);
+              console.error('📋 Erreur complète:', JSON.stringify(dbError, null, 2));
+              console.error('❌ ═══════════════════════════════════════════════════════');
+              
               // Nettoyer le fichier uploadé en cas d'erreur
               if (result.data?.path) {
                 await supabase.storage.from('documents').remove([result.data.path]);

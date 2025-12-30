@@ -60,6 +60,7 @@ export function Library() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const [selectedFolderForUpload, setSelectedFolderForUpload] = useState<string | null>(null);
+  const [selectedFolderForGeneralUpload, setSelectedFolderForGeneralUpload] = useState<string | null>(null);
   const [showPdfUploadModal, setShowPdfUploadModal] = useState(false);
   
   // États pour les modales d'actions
@@ -577,6 +578,7 @@ export function Library() {
         console.log('  - Storage path normalisé:', safePath);
         console.log('  - Bucket: documents');
         console.log('  - User ID:', user?.id || 'ANONYME (NULL)');
+        console.log('  - Dossier sélectionné:', selectedFolderForGeneralUpload || 'Racine (NULL)');
         
         // ✅ ÉTAPE 1 : Upload vers le bucket "documents"
         const { data: uploadData, error: uploadError } = await supabase.storage
@@ -607,7 +609,7 @@ export function Library() {
           storage_path: uploadData.path, // Chemin normalisé (le trigger va re-normaliser)
           user_id: user?.id || null, // ✅ NULL si anonyme (Option A)
           file_type: fileType,
-          folder_id: selectedFolder || null,
+          folder_id: selectedFolderForGeneralUpload || null, // ✅ Utiliser le dossier sélectionné dans la modal
           file_size: file.size,
           processing_status: 'pending' // Edge Function va le passer à 'completed'
         };
@@ -702,6 +704,7 @@ export function Library() {
 
       await fetchData();
       setShowUploadModal(false);
+      setSelectedFolderForGeneralUpload(null); // ✅ Réinitialiser la sélection
       
       // Toast de succès
       toast.success('Document(s) uploadé(s) ! 🎉', {
@@ -1462,13 +1465,28 @@ export function Library() {
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h2 className="text-xl font-bold">Uploader des fichiers</h2>
               <button
-                onClick={() => setShowUploadModal(false)}
+                onClick={() => {
+                  setShowUploadModal(false);
+                  setSelectedFolderForGeneralUpload(null);
+                }}
                 className="p-2 hover:bg-gray-100 rounded-lg"
               >
                 <X size={20} />
               </button>
             </div>
             <div className="p-6">
+              {/* ✅ Sélecteur de dossier */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Dossier de destination
+                </label>
+                <FolderSelector
+                  folders={folders}
+                  selectedFolderId={selectedFolderForGeneralUpload}
+                  onSelectFolder={setSelectedFolderForGeneralUpload}
+                />
+              </div>
+
               <input
                 ref={fileInputRef}
                 type="file"

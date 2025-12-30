@@ -126,10 +126,17 @@ export async function uploadFile(
       onProgress(100); // Complet
     }
 
+    // ✅ [cite: 2025-12-27] : Retourner le chemin EXACT retourné par Supabase Storage
+    // Un trigger SQL en base de données normalisera automatiquement storage_path si nécessaire
+    console.log('✅ Upload terminé vers Storage');
+    console.log('  - Path envoyé pour upload:', safePath);
+    console.log('  - Path retourné par Storage:', data.path);
+    console.log('  → Ce path sera utilisé en BDD puis normalisé par le trigger SQL [cite: 2025-12-27]');
+
     return {
       success: true,
       data: {
-        path: data.path,
+        path: data.path, // ✅ IMPORTANT : Retourner le chemin exact de Storage [cite: 2025-12-27]
         fullPath: data.fullPath,
         publicUrl,
         fileName: originalName,  // Retourner le nom original pour l'affichage

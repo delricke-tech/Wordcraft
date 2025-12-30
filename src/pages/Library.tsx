@@ -156,7 +156,7 @@ export function Library() {
     const { data, error } = await supabase
       .from('folders')
       .insert({
-        user_id: user.id,
+        user_id: user?.id || null, // ✅ NULL si ID invalide
         name: folderName,
         color: '#6B7280',
         icon: 'folder',
@@ -598,25 +598,27 @@ export function Library() {
         }
 
         console.log('✅ Fichier uploadé avec succès vers Storage');
-        console.log('  - Path retourné:', uploadData.path);
+        console.log('  - Path retourné par Supabase Storage:', uploadData.path);
 
-        // ✅ RÈGLE : Conserver name avec accents pour l'affichage [cite: 2025-12-27]
+        // ✅ RÈGLE [cite: 2025-12-27] : Conserver name avec accents pour l'affichage
         const documentName = file.name || `document-${Date.now()}`;
         
-        // ✅ ÉTAPE 2 : Insertion en BDD (user_id peut être NULL si anonyme)
+        // ✅ ÉTAPE 2 : Insertion en BDD APRÈS l'upload [cite: 2025-12-27]
+        // On utilise le chemin EXACT retourné par Supabase Storage (uploadData.path)
+        // Le trigger SQL en base de données normalisera automatiquement storage_path [cite: 2025-12-27]
         const insertData = {
-          name: documentName, // Nom avec accents pour l'affichage
-          storage_path: uploadData.path, // Chemin normalisé (le trigger va re-normaliser)
-          user_id: user?.id || null, // ✅ NULL si anonyme (Option A)
+          name: documentName, // Nom original avec accents pour l'affichage utilisateur
+          storage_path: uploadData.path, // ✅ CRITIQUE [cite: 2025-12-27] : Chemin exact retourné par Storage
+          user_id: user?.id || null, // ✅ NULL si non connecté pour éviter erreur 400 [cite: 2025-12-27]
           file_type: fileType,
-          folder_id: selectedFolderForGeneralUpload || null, // ✅ Utiliser le dossier sélectionné dans la modal
+          folder_id: selectedFolderForGeneralUpload || null,
           file_size: file.size,
           processing_status: 'pending' // Edge Function va le passer à 'completed'
         };
 
-        console.log('💾 Insertion en BDD:', insertData);
-        console.log('  - Le trigger SQL va normaliser storage_path automatiquement');
-        console.log('  - L\'Edge Function process-pdf va extraire le texte');
+        console.log('💾 Insertion en BDD (APRÈS upload):', insertData);
+        console.log('  - Le trigger SQL va normaliser storage_path automatiquement [cite: 2025-12-27]');
+        console.log('  - Ceci garantit que le Webhook pourra retrouver le document');
 
         // ✅ Attendre que la ligne soit créée en BDD
         const { data: insertedDoc, error: dbError } = await supabase
@@ -644,14 +646,18 @@ export function Library() {
 
         console.log('✅ Document enregistré en BDD avec succès');
         console.log('  - Document ID:', insertedDoc.id);
+        console.log('  - Storage path original (envoyé):', uploadData.path);
         console.log('  - Storage path en BDD (normalisé par trigger):', insertedDoc.storage_path);
         
-        // ✅ Vérifier que le trigger a bien normalisé le storage_path
-        if (insertedDoc.storage_path && insertedDoc.storage_path !== uploadData.path) {
-          console.warn('⚠️ Le trigger SQL a modifié le storage_path :');
-          console.warn('  - Envoyé au Storage:', uploadData.path);
-          console.warn('  - Sauvegardé en BDD:', insertedDoc.storage_path);
-          console.warn('  → Le Webhook devra utiliser le path normalisé');
+        // ✅ INFO [cite: 2025-12-27] : Le trigger SQL normalise storage_path automatiquement
+        // C'est normal que le chemin en BDD soit différent du chemin Storage si des accents étaient présents
+        if (insertedDoc.storage_path !== uploadData.path) {
+          console.log('📝 Le trigger SQL a normalisé le storage_path (attendu) :');
+          console.log('  - Avant normalisation:', uploadData.path);
+          console.log('  - Après normalisation:', insertedDoc.storage_path);
+          console.log('  → Le Webhook utilisera le path normalisé pour retrouver le document [cite: 2025-12-27]');
+        } else {
+          console.log('✅ Aucune normalisation nécessaire : le path était déjà propre');
         }
 
         // ✅ OPTION : Extraction locale OU attendre l'Edge Function
@@ -726,7 +732,8 @@ export function Library() {
 
   // Fonction spécifique pour l'upload de PDF uniquement
   const handlePdfUpload = async (files: FileList | null) => {
-    if (!files || !user) return;
+    // ✅ Permettre les uploads même si l'utilisateur n'est pas connecté (user_id sera NULL)
+    if (!files) return;
 
     // Vérifier que tous les fichiers sont des PDF
     const nonPdfFiles = Array.from(files).filter(file => file.type !== 'application/pdf');
@@ -763,22 +770,25 @@ export function Library() {
               setUploadProgress(totalProgress);
             };
             
-            // Upload avec progression
-            const result = await uploadFile(file, user.id, undefined, onProgress);
+            // ✅ RÈGLE CRITIQUE [cite: 2025-12-27] : uploadFile utilise generateUniqueFileName automatiquement
+            // Upload avec progression - le nom du fichier sera automatiquement nettoyé (sans accents ni espaces)
+            const result = await uploadFile(file, user?.id, undefined, onProgress);
 
             if (!result.success) {
               throw new Error(result.error || 'Erreur d\'upload');
             }
 
-              // Enregistrer en BDD avec le nom original
+              // ✅ ÉTAPE 2 : Enregistrer en BDD APRÈS l'upload [cite: 2025-12-27]
+              // result.data.path contient le chemin exact retourné par Supabase Storage [cite: 2025-12-27]
+              // Le trigger SQL en base de données normalisera automatiquement storage_path si nécessaire
               const { error: dbError } = await supabase
                 .from('documents')
                 .insert({
-                  name: originalFileName, // ✅ Nom original avec accents pour l'affichage
-                  storage_path: result.data?.path || '',
-                  user_id: user.id,
+                  name: originalFileName, // ✅ Nom original avec accents pour l'affichage utilisateur
+                  storage_path: result.data?.path || '', // ✅ Chemin exact retourné par Storage [cite: 2025-12-27]
+                  user_id: user?.id || null, // ✅ NULL si non connecté pour éviter erreur 400 [cite: 2025-12-27]
                   file_type: 'pdf',
-                  folder_id: selectedFolderForUpload, // ✅ Ajouter le dossier sélectionné
+                  folder_id: selectedFolderForUpload, // ✅ Dossier sélectionné (ou NULL pour racine)
                 });
 
             if (dbError) {

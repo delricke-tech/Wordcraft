@@ -1,8 +1,15 @@
 import { useState, useEffect } from 'react';
-import { X, Download, ZoomIn, ZoomOut, Loader2, Eye } from 'lucide-react';
+import { X, Download, ZoomIn, ZoomOut, Loader2, Eye, MessageCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
+import { ChatMessage, DocumentContext, sendChatMessage } from '../services/openaiService';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 
 interface PDFViewerProps {
   documentId: string;
@@ -25,10 +32,19 @@ export function PDFViewer({ documentId, documentName, storagePath, onClose }: PD
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [scale, setScale] = useState(1.0);
+  
+  // ✅ États pour le chat AI intégré
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [inputMessage, setInputMessage] = useState('');
+  const [isLoadingChat, setIsLoadingChat] = useState(false);
+  const [documentContext, setDocumentContext] = useState<DocumentContext | null>(null);
+  const [extractedText, setExtractedText] = useState<string | null>(null);
 
   useEffect(() => {
     loadPDF();
-  }, [storagePath]);
+    loadDocumentContext();
+  }, [storagePath, documentId]);
 
   const loadPDF = async () => {
     try {
@@ -147,6 +163,110 @@ export function PDFViewer({ documentId, documentName, storagePath, onClose }: PD
 
   const handleResetZoom = () => {
     setScale(1.0);
+  };
+
+  // ✅ Charger le contexte du document pour l'IA
+  const loadDocumentContext = async () => {
+    try {
+      console.log('🤖 Chargement du contexte pour l\'IA...');
+      
+      // Récupérer les informations du document depuis la BDD
+      const { data, error } = await supabase
+        .from('documents')
+        .select('id, name, storage_path, extracted_text')
+        .eq('id', documentId)
+        .single();
+
+      if (error) {
+        console.error('❌ Erreur lors du chargement du contexte:', error);
+        return;
+      }
+
+      if (data) {
+        console.log('✅ Contexte chargé:', {
+          id: data.id,
+          name: data.name,
+          has_text: !!data.extracted_text,
+          text_length: data.extracted_text?.length || 0
+        });
+
+        setExtractedText(data.extracted_text);
+        setDocumentContext({
+          documentId: data.id,
+          documentName: data.name || documentName,
+          storagePath: data.storage_path || storagePath,
+          extractedText: data.extracted_text
+        });
+
+        // Message de bienvenue
+        if (data.extracted_text) {
+          setMessages([{
+            role: 'assistant',
+            content: `Bonjour ! 👋 Je suis votre assistant IA pour le document **${data.name || documentName}**.\n\nJe peux vous aider à comprendre son contenu. Posez-moi vos questions !`,
+            timestamp: new Date()
+          }]);
+        }
+      }
+    } catch (err) {
+      console.error('💥 Erreur lors du chargement du contexte:', err);
+    }
+  };
+
+  // ✅ Envoyer un message au chat
+  const handleSendMessage = async () => {
+    if (!inputMessage.trim() || isLoadingChat || !documentContext) return;
+
+    // ✅ RÈGLE 5 : Vérifier si content_text est disponible
+    if (!documentContext.extractedText || documentContext.extractedText.trim() === '') {
+      toast.warning('Analyse du document en cours...', {
+        description: 'Le texte de ce document est en cours d\'extraction. Veuillez patienter quelques instants.',
+        duration: 4000
+      });
+      return;
+    }
+
+    const userMessage: ChatMessage = {
+      role: 'user',
+      content: inputMessage,
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInputMessage('');
+    setIsLoadingChat(true);
+
+    try {
+      console.log('📤 Envoi du message à l\'IA...');
+      
+      const response = await sendChatMessage(
+        inputMessage,
+        documentContext,
+        messages
+      );
+
+      const assistantMessage: ChatMessage = {
+        role: 'assistant',
+        content: response,
+        timestamp: new Date()
+      };
+
+      setMessages(prev => [...prev, assistantMessage]);
+    } catch (error: any) {
+      console.error('❌ Erreur lors de l\'envoi du message:', error);
+      
+      toast.error('Erreur', {
+        description: error.message || 'Impossible d\'envoyer le message'
+      });
+
+      const errorMessage: ChatMessage = {
+        role: 'assistant',
+        content: `⚠️ **Erreur**\n\n${error.message}`,
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoadingChat(false);
+    }
   };
 
   return (
@@ -292,6 +412,224 @@ export function PDFViewer({ documentId, documentName, storagePath, onClose }: PD
           </div>
         </div>
       </div>
+
+      {/* ✅ RÈGLE 1 : Icône flottante Glassmorphism en bas à droite */}
+      {!isChatOpen && (
+        <motion.button
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0, opacity: 0 }}
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => setIsChatOpen(true)}
+          className="fixed bottom-8 right-8 z-50 w-16 h-16 rounded-full shadow-2xl flex items-center justify-center group"
+          style={{
+            background: 'rgba(99, 102, 241, 0.9)', // Indigo semi-transparent
+            backdropFilter: 'blur(12px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(12px) saturate(180%)',
+            border: '2px solid rgba(255, 255, 255, 0.3)',
+            boxShadow: '0 8px 32px rgba(99, 102, 241, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1)'
+          }}
+          title="Ouvrir le chat IA"
+        >
+          <motion.div
+            animate={{ 
+              rotate: [0, 10, -10, 0],
+              scale: [1, 1.1, 1]
+            }}
+            transition={{ 
+              repeat: Infinity, 
+              duration: 2,
+              ease: "easeInOut"
+            }}
+          >
+            <MessageCircle className="w-7 h-7 text-white" />
+          </motion.div>
+          
+          {/* Pulse animation */}
+          <span className="absolute inset-0 rounded-full bg-indigo-400 opacity-75 animate-ping" />
+        </motion.button>
+      )}
+
+      {/* ✅ RÈGLE 2 : Panneau de chat latéral (Glassmorphism) */}
+      <AnimatePresence>
+        {isChatOpen && (
+          <motion.div
+            initial={{ x: '100%', opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: '100%', opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            className="fixed top-0 right-0 h-full w-full md:w-[450px] z-50 flex flex-col"
+            style={{
+              background: 'rgba(17, 24, 39, 0.95)', // Gris foncé semi-transparent
+              backdropFilter: 'blur(20px) saturate(150%)',
+              WebkitBackdropFilter: 'blur(20px) saturate(150%)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              boxShadow: '-20px 0 60px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.05)'
+            }}
+          >
+            {/* Header du chat */}
+            <div className="p-6 border-b border-white/10">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                    <MessageCircle className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-white text-base">Assistant IA</h3>
+                    <p className="text-xs text-white/60">Copilot PDF</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsChatOpen(false)}
+                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-white" />
+                </button>
+              </div>
+
+              {/* ✅ RÈGLE 4 : Afficher le titre du document avec la colonne 'name' (accents) */}
+              <div 
+                className="px-3 py-2 rounded-lg text-xs text-white/80 truncate"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)'
+                }}
+                title={documentContext?.documentName || documentName}
+              >
+                📄 {documentContext?.documentName || documentName}
+              </div>
+            </div>
+
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {/* ✅ RÈGLE 5 : Message si content_text est vide */}
+              {!extractedText && (
+                <div 
+                  className="p-4 rounded-lg text-sm text-amber-200"
+                  style={{
+                    background: 'rgba(251, 191, 36, 0.1)',
+                    border: '1px solid rgba(251, 191, 36, 0.3)'
+                  }}
+                >
+                  <p className="font-semibold mb-1">⏳ Analyse du document en cours...</p>
+                  <p className="text-xs text-amber-200/70">
+                    Le texte de ce document est en cours d'extraction. Veuillez patienter quelques instants.
+                  </p>
+                </div>
+              )}
+
+              {messages.map((msg, index) => (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`max-w-[85%] px-4 py-3 rounded-2xl ${
+                      msg.role === 'user'
+                        ? 'bg-gradient-to-br from-indigo-500/80 to-purple-500/80 text-white'
+                        : 'bg-white/10 text-white'
+                    }`}
+                    style={{
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      backdropFilter: 'blur(10px)',
+                      WebkitBackdropFilter: 'blur(10px)',
+                      boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)'
+                    }}
+                  >
+                    <div className="prose prose-sm prose-invert max-w-none">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm, remarkMath]}
+                        rehypePlugins={[rehypeKatex]}
+                        components={{
+                          p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                          ul: ({ children }) => <ul className="list-disc ml-4 mb-2">{children}</ul>,
+                          ol: ({ children }) => <ol className="list-decimal ml-4 mb-2">{children}</ol>,
+                          code: ({ node, inline, className, children, ...props }) => {
+                            return inline ? (
+                              <code className="bg-black/30 px-1.5 py-0.5 rounded text-sm" {...props}>
+                                {children}
+                              </code>
+                            ) : (
+                              <code className={className || ''} {...props}>
+                                {children}
+                              </code>
+                            );
+                          }
+                        }}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
+                    </div>
+                    <p className="text-xs opacity-60 mt-2">
+                      {msg.timestamp?.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                </motion.div>
+              ))}
+
+              {isLoadingChat && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex justify-start"
+                >
+                  <div 
+                    className="bg-white/10 px-4 py-3 rounded-2xl" 
+                    style={{ 
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      backdropFilter: 'blur(10px)'
+                    }}
+                  >
+                    <div className="flex items-center gap-2 text-white">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="text-sm">L'IA réfléchit...</span>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </div>
+
+            {/* Input */}
+            <div className="p-6 border-t border-white/10">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
+                  placeholder={extractedText ? "Posez une question sur le document..." : "En attente de l'extraction..."}
+                  disabled={isLoadingChat || !extractedText}
+                  className="flex-1 px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:opacity-50"
+                  style={{ 
+                    backdropFilter: 'blur(10px)',
+                    WebkitBackdropFilter: 'blur(10px)'
+                  }}
+                />
+                <button
+                  onClick={handleSendMessage}
+                  disabled={!inputMessage.trim() || isLoadingChat || !extractedText}
+                  className="px-4 py-3 bg-gradient-to-br from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ border: '1px solid rgba(255, 255, 255, 0.2)' }}
+                  title={!extractedText ? "En attente de l'extraction du texte" : "Envoyer"}
+                >
+                  {isLoadingChat ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <MessageCircle className="w-5 h-5" />
+                  )}
+                </button>
+              </div>
+              <p className="text-xs text-white/50 mt-2 text-center">
+                L'IA peut faire des erreurs. Vérifiez les informations importantes.
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

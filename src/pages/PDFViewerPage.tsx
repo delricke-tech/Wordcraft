@@ -199,9 +199,14 @@ export function PDFViewerPage() {
 
       // ✅ RÈGLE 4 : Changer l'état du chat de 'Impossible d'extraire' à 'Prêt pour vos questions'
       toast.success('IA prête pour vos questions ! 🎉', {
-        description: `Document analysé : ${extracted.metadata.pages} pages, ${extracted.metadata.words} mots. Le texte est maintenant en base.`,
+        description: `Document analysé : ${extracted.metadata.pages} pages, ${extracted.metadata.words} mots. Cliquez sur la bulle violette pour discuter !`,
         duration: 5000
       });
+
+      // ✅ CORRECTION : Ouvrir automatiquement le chat après extraction réussie
+      setTimeout(() => {
+        setIsChatOpen(true);
+      }, 1000); // Attendre 1 seconde pour que le toast soit visible
     } catch (error: any) {
       console.error('⚠️ ===== ERREUR EXTRACTION =====');
       console.error('  - Message:', error.message);

@@ -2406,9 +2406,8 @@ export function Library() {
             </div>
 
             <div className="p-6 max-h-[calc(100vh-200px)] overflow-y-auto">
-              {/* Mode Visualisation */}
-                <div className="space-y-4">
-                  {generatedFlashcards.cards.map((card, idx) => (
+              <div className="space-y-4">
+                {generatedFlashcards.cards.map((card, idx) => (
                     <div
                       key={idx}
                       className={`bg-white border-2 rounded-lg p-4 transition-all ${
@@ -2450,7 +2449,6 @@ export function Library() {
                     </div>
                   ))}
                 </div>
-              )}
             </div>
           </div>
         </div>

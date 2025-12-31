@@ -631,7 +631,7 @@ export function Library() {
           user_id: user?.id || null, // ✅ NULL si non connecté pour éviter erreur 400 [cite: 2025-12-27]
           file_type: fileType,
           folder_id: selectedFolderForGeneralUpload || null,
-          file_size: file.size,
+          // file_size supprimé car colonne n'existe pas dans la table
           processing_status: 'pending' // Edge Function va le passer à 'completed'
         };
 

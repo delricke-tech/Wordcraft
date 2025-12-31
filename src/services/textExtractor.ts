@@ -51,6 +51,16 @@ export async function extractText(
         extractedText = await extractTextFromDOCX(storagePath);
         break;
 
+      case 'pptx':
+        // Extraire le texte d'un PowerPoint
+        extractedText = await extractTextFromPowerPoint(storagePath);
+        break;
+
+      case 'xlsx':
+        // Extraire le texte d'un fichier Excel
+        extractedText = await extractTextFromExcel(storagePath);
+        break;
+
       case 'image':
         // Extraire le texte d'une image via OCR (optionnel, nécessite Tesseract.js)
         extractedText = await extractTextFromImage(storagePath);
@@ -256,6 +266,93 @@ async function extractTextFromImage(storagePath: string | File): Promise<string>
       return `[Image]\n\nPour activer l'extraction automatique du texte des images (OCR), exécutez :\n\nnpm install tesseract.js\n\nEn attendant, vous pouvez retaper le texte manuellement.`;
     }
     
+    throw error;
+  }
+}
+
+/**
+ * Extrait le texte d'un fichier PowerPoint (.pptx)
+ */
+async function extractTextFromPowerPoint(storagePath: string | File): Promise<string> {
+  console.log('📊 Extraction depuis fichier PowerPoint...');
+  
+  try {
+    // Pour PowerPoint, on utilise une approche simplifiée
+    // Les .pptx sont des archives ZIP contenant du XML
+    // Une extraction complète nécessiterait une bibliothèque spécialisée
+    
+    let arrayBuffer: ArrayBuffer;
+
+    if (storagePath instanceof File) {
+      arrayBuffer = await storagePath.arrayBuffer();
+    } else {
+      const { data: publicUrlData } = supabase.storage
+        .from('documents')
+        .getPublicUrl(storagePath);
+
+      if (!publicUrlData?.publicUrl) {
+        throw new Error('Impossible de générer l\'URL publique du fichier PowerPoint');
+      }
+
+      const response = await fetch(publicUrlData.publicUrl);
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP ${response.status}`);
+      }
+
+      arrayBuffer = await response.arrayBuffer();
+    }
+
+    // Extraire le nom du fichier pour info
+    const fileName = storagePath instanceof File ? storagePath.name : storagePath.split('/').pop();
+    
+    console.log('✅ Fichier PowerPoint détecté:', fileName);
+    
+    // Pour l'instant, on retourne un message indiquant qu'il faut convertir en PDF
+    // Une vraie extraction nécessiterait une bibliothèque comme pptx-parser
+    return `[Présentation PowerPoint]\n\nFichier: ${fileName}\n\n💡 Pour que l'IA puisse analyser ce contenu :\n- Exportez votre PowerPoint en PDF\n- Ou copiez le texte des diapositives dans un fichier TXT\n\nL'extraction automatique de PowerPoint sera ajoutée prochainement !`;
+  } catch (error: any) {
+    console.error('❌ Erreur extraction PowerPoint:', error);
+    throw error;
+  }
+}
+
+/**
+ * Extrait le texte d'un fichier Excel (.xlsx)
+ */
+async function extractTextFromExcel(storagePath: string | File): Promise<string> {
+  console.log('📈 Extraction depuis fichier Excel...');
+  
+  try {
+    let arrayBuffer: ArrayBuffer;
+
+    if (storagePath instanceof File) {
+      arrayBuffer = await storagePath.arrayBuffer();
+    } else {
+      const { data: publicUrlData } = supabase.storage
+        .from('documents')
+        .getPublicUrl(storagePath);
+
+      if (!publicUrlData?.publicUrl) {
+        throw new Error('Impossible de générer l\'URL publique du fichier Excel');
+      }
+
+      const response = await fetch(publicUrlData.publicUrl);
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP ${response.status}`);
+      }
+
+      arrayBuffer = await response.arrayBuffer();
+    }
+
+    const fileName = storagePath instanceof File ? storagePath.name : storagePath.split('/').pop();
+    
+    console.log('✅ Fichier Excel détecté:', fileName);
+    
+    // Pour l'instant, on retourne un message indiquant qu'il faut convertir en CSV
+    // Une vraie extraction nécessiterait une bibliothèque comme xlsx ou exceljs
+    return `[Tableur Excel]\n\nFichier: ${fileName}\n\n💡 Pour que l'IA puisse analyser ce contenu :\n- Exportez votre Excel en CSV ou PDF\n- Ou copiez les données dans un fichier TXT\n\nL'extraction automatique d'Excel sera ajoutée prochainement !`;
+  } catch (error: any) {
+    console.error('❌ Erreur extraction Excel:', error);
     throw error;
   }
 }

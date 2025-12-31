@@ -108,16 +108,19 @@ export function getFileExtension(fileName: string): string {
  * Obtient le type de fichier basé sur l'extension
  * 
  * @param fileName - Le nom du fichier
- * @returns Le type de fichier (pdf, docx, txt, image, video, audio, url)
+ * @returns Le type de fichier (pdf, docx, pptx, xlsx, txt, image, video, audio, url)
  */
-export function getFileType(fileName: string): 'pdf' | 'docx' | 'txt' | 'image' | 'video' | 'audio' | 'url' {
+export function getFileType(fileName: string): 'pdf' | 'docx' | 'pptx' | 'xlsx' | 'txt' | 'image' | 'video' | 'audio' | 'url' {
   const ext = getFileExtension(fileName).toLowerCase();
   
   if (ext === '.pdf') return 'pdf';
   if (['.doc', '.docx'].includes(ext)) return 'docx';
-  if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'].includes(ext)) return 'image';
-  if (['.mp4', '.avi', '.mov', '.webm'].includes(ext)) return 'video';
-  if (['.mp3', '.wav', '.ogg'].includes(ext)) return 'audio';
+  if (['.ppt', '.pptx'].includes(ext)) return 'pptx';
+  if (['.xls', '.xlsx'].includes(ext)) return 'xlsx';
+  if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.tiff', '.heic', '.heif'].includes(ext)) return 'image';
+  if (['.mp4', '.avi', '.mov', '.webm', '.mkv'].includes(ext)) return 'video';
+  if (['.mp3', '.wav', '.ogg', '.aac', '.flac'].includes(ext)) return 'audio';
+  if (['.txt', '.md', '.rtf', '.csv'].includes(ext)) return 'txt';
   
   return 'txt';
 }

@@ -1082,7 +1082,7 @@ export function Library() {
           <input
             ref={pdfInputRef}
             type="file"
-            accept=".pdf,.docx,.doc,.txt,.jpg,.jpeg,.png,.gif,.webp,.mp4,.avi,.mov,.webm,.mp3,.wav,.ogg"
+            accept=".pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.txt,.md,.rtf,.csv,.jpg,.jpeg,.png,.gif,.webp,.bmp,.tiff,.heic,.mp4,.avi,.mov,.webm,.mp3,.wav,.ogg,.aac,.flac"
             multiple
             onChange={(e) => handlePdfUpload(e.target.files)}
             className="hidden"

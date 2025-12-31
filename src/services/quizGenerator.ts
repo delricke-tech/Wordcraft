@@ -36,13 +36,15 @@ export async function generateQuizFromText(
     }
 
     console.log('🤖 Génération de quiz avec OpenAI...');
-    console.log('📝 Texte source:', text.substring(0, 200) + '...');
+    console.log('📝 Longueur texte source:', text.length, 'caractères');
 
-    // Limiter le texte si trop long (GPT-4 a une limite de tokens)
-    const maxTextLength = 8000; // ~2000 tokens
+    // ⚡ OPTIMISATION : Réduire drastiquement le texte pour accélérer (3000 caractères = ~750 tokens)
+    const maxTextLength = 3000;
     const truncatedText = text.length > maxTextLength 
       ? text.substring(0, maxTextLength) + '...' 
       : text;
+    
+    console.log('⚡ Texte optimisé:', truncatedText.length, 'caractères');
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -55,37 +57,17 @@ export async function generateQuizFromText(
         messages: [
           {
             role: 'system',
-            content: `Tu es un professeur expert qui crée des quiz pédagogiques. 
-Tu dois générer 5 questions à choix multiples (QCM) basées sur le contenu fourni.
-
-Pour chaque question :
-- Pose une question claire et précise
-- Fournis 4 options de réponse (A, B, C, D)
-- Indique quelle option est correcte (0 pour A, 1 pour B, 2 pour C, 3 pour D)
-- Fournis une explication détaillée de la bonne réponse
-
-Format JSON strict à respecter :
-{
-  "questions": [
-    {
-      "question": "Question ici ?",
-      "options": ["Option A", "Option B", "Option C", "Option D"],
-      "correctAnswer": 0,
-      "explanation": "Explication de la réponse correcte"
-    }
-  ]
-}
-
-Crée des questions variées : définitions, compréhension, application, analyse.
-Les questions doivent être en français et adaptées au niveau universitaire.`
+            content: `Créer 5 QCM niveau universitaire. Format JSON strict:
+{"questions":[{"question":"?","options":["A","B","C","D"],"correctAnswer":0,"explanation":""}]}
+Questions variées: définition, compréhension, application. Réponses en français.`
           },
           {
             role: 'user',
-            content: `Génère 5 questions QCM basées sur ce cours :\n\n${truncatedText}`
+            content: `5 QCM sur:\n${truncatedText}`
           }
         ],
         temperature: 0.7,
-        max_tokens: 2000,
+        max_tokens: 800, // ⚡ RÉDUIT de 2000 à 800 pour plus de rapidité
         response_format: { type: 'json_object' }
       }),
     });

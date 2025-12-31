@@ -1004,12 +1004,12 @@ export function Library() {
     try {
       console.log('🎯 Génération de quiz pour:', doc.name);
 
-      // Récupérer ou extraire le texte du document
+      // ⚡ ÉTAPE 1/3 : Récupérer ou extraire le texte
       let extractedText = doc.extracted_text;
 
       if (!extractedText || extractedText.trim() === '') {
         console.log('📄 Extraction du texte nécessaire...');
-        toast.loading('Extraction du texte en cours...', { id: loadingToast });
+        toast.loading('⚡ Étape 1/3 : Extraction du texte...', { id: loadingToast });
 
         const extracted = await extractText(doc.storage_path, doc.file_type, doc.id);
         extractedText = extracted.text;
@@ -1021,10 +1021,12 @@ export function Library() {
         console.log('✅ Texte extrait:', extractedText.length, 'caractères');
       } else {
         console.log('✅ Texte déjà disponible:', extractedText.length, 'caractères');
+        toast.loading('⚡ Étape 1/3 : Texte récupéré', { id: loadingToast });
+        await new Promise(resolve => setTimeout(resolve, 300)); // Petit délai pour afficher le message
       }
 
-      // Générer le quiz avec OpenAI
-      toast.loading('Génération du quiz avec l\'IA...', { id: loadingToast });
+      // ⚡ ÉTAPE 2/3 : Générer le quiz avec OpenAI (OPTIMISÉ)
+      toast.loading('⚡ Étape 2/3 : IA génère 5 questions... (~5-10s)', { id: loadingToast });
       const quiz = await generateQuizFromText(extractedText, doc.name, doc.id);
 
       console.log('✅ Quiz généré:', quiz);
@@ -1060,9 +1062,9 @@ export function Library() {
       setGeneratedQuiz(quiz);
       setShowQuizModal(true);
 
-      toast.success('Quiz généré et sauvegardé !', {
+      toast.success('✅ Quiz prêt !', {
         id: loadingToast,
-        description: `${quiz.questions.length} questions créées avec succès`
+        description: `${quiz.questions.length} questions • Sauvegardé dans l'onglet Quiz`
       });
     } catch (error: any) {
       console.error('❌ Erreur lors de la génération du quiz:', error);
@@ -1097,12 +1099,12 @@ export function Library() {
     try {
       console.log('🃏 Génération de flashcards pour:', doc.name);
 
-      // Récupérer ou extraire le texte du document
+      // ⚡ ÉTAPE 1/3 : Récupérer ou extraire le texte
       let extractedText = doc.extracted_text;
 
       if (!extractedText || extractedText.trim() === '') {
         console.log('📄 Extraction du texte nécessaire...');
-        toast.loading('Extraction du texte en cours...', { id: loadingToast });
+        toast.loading('⚡ Étape 1/3 : Extraction du texte...', { id: loadingToast });
 
         const extracted = await extractText(doc.storage_path, doc.file_type, doc.id);
         extractedText = extracted.text;
@@ -1114,10 +1116,12 @@ export function Library() {
         console.log('✅ Texte extrait:', extractedText.length, 'caractères');
       } else {
         console.log('✅ Texte déjà disponible:', extractedText.length, 'caractères');
+        toast.loading('⚡ Étape 1/3 : Texte récupéré', { id: loadingToast });
+        await new Promise(resolve => setTimeout(resolve, 300));
       }
 
-      // Générer les flashcards avec OpenAI
-      toast.loading('Génération des fiches avec l\'IA...', { id: loadingToast });
+      // ⚡ ÉTAPE 2/3 : Générer les flashcards avec OpenAI (OPTIMISÉ)
+      toast.loading('⚡ Étape 2/3 : IA crée 10-15 fiches... (~8-12s)', { id: loadingToast });
       const flashcards = await generateFlashcardsFromText(extractedText, doc.name, doc.id);
 
       console.log('✅ Flashcards générées:', flashcards);
@@ -1159,9 +1163,9 @@ export function Library() {
       setGeneratedFlashcards(flashcards);
       setShowFlashcardsModal(true);
 
-      toast.success('Fiches générées et sauvegardées !', {
+      toast.success('✅ Fiches prêtes !', {
         id: loadingToast,
-        description: `${flashcards.cards.length} cartes créées avec succès`
+        description: `${flashcards.cards.length} cartes • Sauvegardées dans Fiches d'étude`
       });
     } catch (error: any) {
       console.error('❌ Erreur lors de la génération des flashcards:', error);

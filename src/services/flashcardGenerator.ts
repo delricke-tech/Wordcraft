@@ -41,13 +41,15 @@ export async function generateFlashcardsFromText(
 
     console.log('🤖 Génération de flashcards avec OpenAI...');
     console.log(`📄 Document: ${documentTitle}`);
-    console.log(`📝 Texte: ${text.length} caractères`);
+    console.log(`📝 Longueur texte: ${text.length} caractères`);
 
-    // Limiter le texte si trop long (environ 10000 tokens = 40000 caractères)
-    const maxLength = 40000;
+    // ⚡ OPTIMISATION : Réduire drastiquement le texte pour accélérer (6000 caractères = ~1500 tokens)
+    const maxLength = 6000;
     const truncatedText = text.length > maxLength 
-      ? text.substring(0, maxLength) + '\n\n[Texte tronqué...]'
+      ? text.substring(0, maxLength) + '...'
       : text;
+
+    console.log(`⚡ Texte optimisé: ${truncatedText.length} caractères`);
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -60,56 +62,17 @@ export async function generateFlashcardsFromText(
         messages: [
           {
             role: 'system',
-            content: `Tu es un expert en création de fiches de révision (flashcards). 
-Ton rôle est d'extraire du contenu pédagogique les informations les plus importantes.
-
-Tu dois créer des flashcards de différents types :
-
-1. **DÉFINITIONS** : Concepts clés avec leurs définitions
-   - Front: "Qu'est-ce que [concept] ?"
-   - Back: Définition claire et concise
-
-2. **DATES** : Événements historiques ou dates importantes
-   - Front: "En quelle année [événement] ?"
-   - Back: Date + contexte bref
-
-3. **CONCEPTS** : Idées principales à retenir
-   - Front: Question sur le concept
-   - Back: Explication courte
-
-4. **FORMULES** : Formules mathématiques, chimiques, etc.
-   - Front: "Quelle est la formule de [X] ?"
-   - Back: Formule + explication
-
-Format JSON strict à respecter :
-{
-  "cards": [
-    {
-      "front": "Question ou concept (recto)",
-      "back": "Réponse ou définition (verso)",
-      "type": "definition",
-      "category": "Biologie"
-    }
-  ]
-}
-
-Types possibles : "definition", "date", "concept", "formula"
-
-Règles importantes :
-- Crée au minimum 10 flashcards et au maximum 30
-- Privilégie les définitions et concepts clés
-- Les réponses doivent être concises (2-3 phrases max)
-- Utilise un langage clair et pédagogique
-- Catégorise les cartes par thème si possible
-- Réponds toujours en français`
+            content: `Créer 10-15 flashcards (recto/verso). Types: definition, date, concept, formula.
+Format JSON strict: {"cards":[{"front":"?","back":"réponse","type":"definition","category":""}]}
+Réponses concises (max 2 phrases). Français.`
           },
           {
             role: 'user',
-            content: `Génère des flashcards de révision basées sur ce cours :\n\n${truncatedText}`
+            content: `10-15 flashcards sur:\n${truncatedText}`
           }
         ],
         temperature: 0.7,
-        max_tokens: 3000,
+        max_tokens: 1200, // ⚡ RÉDUIT de 3000 à 1200 pour plus de rapidité
         response_format: { type: 'json_object' }
       }),
     });

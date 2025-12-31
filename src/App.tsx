@@ -10,6 +10,7 @@ import { DocumentView } from './pages/DocumentView';
 import { PDFViewerPage } from './pages/PDFViewerPage';
 import { StudyCards } from './pages/StudyCards';
 import { CardDetail } from './pages/CardDetail';
+import { MergeCards } from './pages/MergeCards';
 import { Quizzes } from './pages/Quizzes';
 import { Revision } from './pages/Revision';
 import { Groups } from './pages/Groups';

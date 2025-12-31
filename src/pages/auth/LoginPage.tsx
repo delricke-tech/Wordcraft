@@ -101,9 +101,11 @@ export function LoginPage() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 border border-[#223155] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1559d8] focus:border-transparent transition-all text-white bg-[#1a2335] placeholder-[#7fa8df]"
+                    className="w-full pl-10 pr-4 py-2.5 border border-[#223155] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1559d8] focus:border-transparent transition-all text-white bg-[#0f1820] placeholder-[#7fa8df]"
+                    style={{ caretColor: '#59cfff' }}
                     placeholder="vous@exemple.com"
                     required
+                    autoComplete="email"
                   />
                 </div>
               </div>
@@ -119,9 +121,11 @@ export function LoginPage() {
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-10 pr-12 py-2.5 border border-[#223155] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1559d8] focus:border-transparent transition-all text-white bg-[#1a2335] placeholder-[#7fa8df]"
+                    className="w-full pl-10 pr-12 py-2.5 border border-[#223155] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1559d8] focus:border-transparent transition-all text-white bg-[#0f1820] placeholder-[#7fa8df]"
+                    style={{ caretColor: '#59cfff' }}
                     placeholder="Entrez votre mot de passe"
                     required
+                    autoComplete="current-password"
                   />
                   <button
                     type="button"

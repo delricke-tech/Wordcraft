@@ -26,6 +26,9 @@ import {
   Loader2,
   ScrollText,
   FileDown,
+  Save,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Document, Folder as FolderType, uploadFile } from '../lib/supabase';
@@ -113,6 +116,12 @@ export function Library() {
   const [showQuizModal, setShowQuizModal] = useState(false);
   const [showFlashcardsModal, setShowFlashcardsModal] = useState(false);
   const [savedCardId, setSavedCardId] = useState<string | null>(null);
+  
+  // États pour l'édition et sélection multiple des fiches
+  const [isEditingCard, setIsEditingCard] = useState(false);
+  const [editedCardContent, setEditedCardContent] = useState<any>(null);
+  const [selectedCards, setSelectedCards] = useState<number[]>([]);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -680,15 +689,79 @@ export function Library() {
     }
   };
 
-  // ✏️ Fonction pour modifier une fiche
+  // ✏️ Fonction pour modifier une fiche directement dans le volet
   const handleEditCard = async (cardId: string) => {
     if (!cardId || !user) return;
     
-    // Naviguer vers la page d'édition
-    navigate(`/cards/${cardId}`);
+    try {
+      // Récupérer la fiche depuis la BDD
+      const { data: card, error } = await supabase
+        .from('study_cards')
+        .select('*')
+        .eq('id', cardId)
+        .eq('user_id', user.id)
+        .single();
+
+      if (error || !card) {
+        throw new Error('Fiche introuvable');
+      }
+
+      // Activer le mode édition et charger le contenu
+      setEditedCardContent(card.content);
+      setIsEditingCard(true);
+    } catch (error: any) {
+      console.error('❌ Erreur chargement fiche:', error);
+      toast.error('Erreur', {
+        description: 'Impossible de charger la fiche'
+      });
+    }
   };
 
-  // 🗑️ Fonction pour supprimer une ou plusieurs fiches
+  // 💾 Fonction pour sauvegarder les modifications de la fiche
+  const handleSaveCardEdits = async () => {
+    if (!savedCardId || !user || !editedCardContent) return;
+
+    try {
+      toast.loading('Sauvegarde en cours...', { id: 'save-card' });
+
+      const { error } = await supabase
+        .from('study_cards')
+        .update({ content: editedCardContent })
+        .eq('id', savedCardId)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      // Mettre à jour l'état local
+      if (generatedFlashcards) {
+        const updatedFlashcards = {
+          ...generatedFlashcards,
+          cards: generatedFlashcards.cards.map((card, idx) => {
+            if (editedCardContent.definitions && editedCardContent.definitions[idx]) {
+              return {
+                ...card,
+                front: editedCardContent.definitions[idx].term,
+                back: editedCardContent.definitions[idx].definition
+              };
+            }
+            return card;
+          })
+        };
+        setGeneratedFlashcards(updatedFlashcards);
+      }
+
+      setIsEditingCard(false);
+      toast.success('Fiche mise à jour !', { id: 'save-card' });
+    } catch (error: any) {
+      console.error('❌ Erreur sauvegarde:', error);
+      toast.error('Erreur', {
+        id: 'save-card',
+        description: error.message
+      });
+    }
+  };
+
+  // 🗑️ Fonction pour supprimer une ou plusieurs fiches (sélection multiple)
   const handleDeleteCards = async (cardIds: string[]) => {
     if (!cardIds || cardIds.length === 0 || !user) return;
 
@@ -720,12 +793,29 @@ export function Library() {
         setShowFlashcardsModal(false);
         setGeneratedFlashcards(null);
       }
+      setSelectedCards([]);
+      setIsSelectionMode(false);
     } catch (error: any) {
       console.error('❌ Erreur suppression:', error);
       toast.error('Erreur', {
         id: 'delete-cards',
         description: error.message
       });
+    }
+  };
+
+  // 🔘 Fonction pour supprimer les cartes sélectionnées
+  const handleDeleteSelectedCards = async () => {
+    if (!generatedFlashcards || selectedCards.length === 0) return;
+    
+    // Pour l'instant, on ne peut supprimer que la fiche complète
+    // car les cartes individuelles ne sont pas stockées séparément
+    toast.info('Info', {
+      description: 'Cette action supprimera la fiche complète avec toutes les cartes'
+    });
+    
+    if (savedCardId) {
+      await handleDeleteCards([savedCardId]);
     }
   };
 
@@ -2291,7 +2381,7 @@ export function Library() {
         </div>
       )}
 
-      {/* ✅ Modale Flashcards */}
+      {/* ✅ Modale Flashcards avec Édition et Sélection Multiple */}
       {showFlashcardsModal && generatedFlashcards && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl w-full max-w-4xl shadow-2xl my-8">
@@ -2300,7 +2390,9 @@ export function Library() {
                 <div className="flex-1">
                   <h2 className="text-2xl font-bold text-gray-900">{generatedFlashcards.title}</h2>
                   <p className="text-sm text-gray-500 mt-1">
-                    {generatedFlashcards.cards.length} cartes générées par l'IA • Fiche complète sauvegardée
+                    {generatedFlashcards.cards.length} cartes • 
+                    {isEditingCard ? ' Mode édition' : ' Fiche sauvegardée'} •
+                    {isSelectionMode && ` ${selectedCards.length} sélectionnée(s)`}
                   </p>
                 </div>
                 <button
@@ -2308,6 +2400,9 @@ export function Library() {
                     setShowFlashcardsModal(false);
                     setGeneratedFlashcards(null);
                     setSavedCardId(null);
+                    setIsEditingCard(false);
+                    setSelectedCards([]);
+                    setIsSelectionMode(false);
                   }}
                   className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                 >
@@ -2316,44 +2411,193 @@ export function Library() {
               </div>
               
               {/* Boutons d'action */}
-              {savedCardId && (
-                <div className="flex gap-3">
+              {savedCardId && !isEditingCard && (
+                <div className="flex gap-3 flex-wrap">
+                  {!isSelectionMode ? (
+                    <>
+                      <button
+                        onClick={() => handleReadCompleteCard(savedCardId)}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                      >
+                        <ScrollText size={18} />
+                        Lire
+                      </button>
+                      <button
+                        onClick={() => {
+                          const docName = generatedFlashcards.title.replace('Fiches : ', '');
+                          handleDownloadCompleteCard(savedCardId, docName);
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors font-medium"
+                      >
+                        <FileDown size={18} />
+                        Télécharger
+                      </button>
+                      <button
+                        onClick={() => handleEditCard(savedCardId)}
+                        className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors font-medium"
+                      >
+                        <Edit3 size={18} />
+                        Modifier
+                      </button>
+                      <button
+                        onClick={() => setIsSelectionMode(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
+                      >
+                        <CheckSquare size={18} />
+                        Sélectionner
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCards([savedCardId])}
+                        className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                      >
+                        <Trash2 size={18} />
+                        Supprimer tout
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => {
+                          setIsSelectionMode(false);
+                          setSelectedCards([]);
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium"
+                      >
+                        <X size={18} />
+                        Annuler
+                      </button>
+                      <button
+                        onClick={() => {
+                          const allIndices = generatedFlashcards.cards.map((_, idx) => idx);
+                          setSelectedCards(allIndices);
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                      >
+                        <CheckSquare size={18} />
+                        Tout sélectionner
+                      </button>
+                      {selectedCards.length > 0 && (
+                        <button
+                          onClick={handleDeleteSelectedCards}
+                          className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                        >
+                          <Trash2 size={18} />
+                          Supprimer ({selectedCards.length})
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Boutons de sauvegarde en mode édition */}
+              {isEditingCard && (
+                <div className="flex gap-3 mt-4">
                   <button
-                    onClick={() => handleReadCompleteCard(savedCardId)}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                    onClick={handleSaveCardEdits}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
                   >
-                    <ScrollText size={18} />
-                    Lire la fiche complète
+                    <Save size={18} />
+                    Sauvegarder
                   </button>
                   <button
                     onClick={() => {
-                      const docName = generatedFlashcards.title.replace('Fiches : ', '');
-                      handleDownloadCompleteCard(savedCardId, docName);
+                      setIsEditingCard(false);
+                      setEditedCardContent(null);
                     }}
-                    className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors font-medium"
+                    className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium"
                   >
-                    <FileDown size={18} />
-                    Télécharger la fiche
-                  </button>
-                  <button
-                    onClick={() => handleEditCard(savedCardId)}
-                    className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors font-medium"
-                  >
-                    <Edit3 size={18} />
-                    Modifier
-                  </button>
-                  <button
-                    onClick={() => handleDeleteCards([savedCardId])}
-                    className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
-                  >
-                    <Trash2 size={18} />
-                    Supprimer
+                    <X size={18} />
+                    Annuler
                   </button>
                 </div>
               )}
             </div>
+
             <div className="p-6 max-h-[calc(100vh-200px)] overflow-y-auto">
-              <FlashcardPlayer flashcards={generatedFlashcards} />
+              {isEditingCard && editedCardContent ? (
+                /* Mode Édition */
+                <div className="space-y-4">
+                  <h3 className="text-lg font-bold text-gray-900 mb-4">✏️ Modifier la fiche</h3>
+                  
+                  {editedCardContent.definitions && editedCardContent.definitions.map((def: any, idx: number) => (
+                    <div key={idx} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Terme {idx + 1}
+                      </label>
+                      <input
+                        type="text"
+                        value={def.term || ''}
+                        onChange={(e) => {
+                          const newDefinitions = [...editedCardContent.definitions];
+                          newDefinitions[idx] = { ...def, term: e.target.value };
+                          setEditedCardContent({ ...editedCardContent, definitions: newDefinitions });
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 mb-3"
+                      />
+                      
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Définition {idx + 1}
+                      </label>
+                      <textarea
+                        value={def.definition || ''}
+                        onChange={(e) => {
+                          const newDefinitions = [...editedCardContent.definitions];
+                          newDefinitions[idx] = { ...def, definition: e.target.value };
+                          setEditedCardContent({ ...editedCardContent, definitions: newDefinitions });
+                        }}
+                        rows={4}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                /* Mode Visualisation */
+                <div className="space-y-4">
+                  {generatedFlashcards.cards.map((card, idx) => (
+                    <div
+                      key={idx}
+                      className={`bg-white border-2 rounded-lg p-4 transition-all ${
+                        isSelectionMode
+                          ? selectedCards.includes(idx)
+                            ? 'border-teal-500 bg-teal-50'
+                            : 'border-gray-200 hover:border-teal-300 cursor-pointer'
+                          : 'border-gray-200'
+                      }`}
+                      onClick={() => {
+                        if (isSelectionMode) {
+                          setSelectedCards(prev =>
+                            prev.includes(idx)
+                              ? prev.filter(i => i !== idx)
+                              : [...prev, idx]
+                          );
+                        }
+                      }}
+                    >
+                      <div className="flex items-start gap-3">
+                        {isSelectionMode && (
+                          <div className="mt-1">
+                            {selectedCards.includes(idx) ? (
+                              <CheckSquare className="text-teal-600" size={24} />
+                            ) : (
+                              <Square className="text-gray-400" size={24} />
+                            )}
+                          </div>
+                        )}
+                        <div className="flex-1">
+                          <div className="font-bold text-gray-900 mb-2">
+                            {card.front}
+                          </div>
+                          <div className="text-gray-700">
+                            {card.back}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

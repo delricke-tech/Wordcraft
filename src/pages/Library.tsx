@@ -24,6 +24,8 @@ import {
   Sparkles,
   BookOpen,
   Loader2,
+  ScrollText,
+  FileDown,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Document, Folder as FolderType, uploadFile } from '../lib/supabase';
@@ -674,6 +676,55 @@ export function Library() {
       console.error('❌ Erreur lors du téléchargement:', error);
       toast.error('Erreur', {
         description: 'Impossible de télécharger la fiche'
+      });
+    }
+  };
+
+  // ✏️ Fonction pour modifier une fiche
+  const handleEditCard = async (cardId: string) => {
+    if (!cardId || !user) return;
+    
+    // Naviguer vers la page d'édition
+    navigate(`/cards/${cardId}`);
+  };
+
+  // 🗑️ Fonction pour supprimer une ou plusieurs fiches
+  const handleDeleteCards = async (cardIds: string[]) => {
+    if (!cardIds || cardIds.length === 0 || !user) return;
+
+    const confirmMessage = cardIds.length === 1
+      ? 'Êtes-vous sûr de vouloir supprimer cette fiche ?'
+      : `Êtes-vous sûr de vouloir supprimer ces ${cardIds.length} fiches ?`;
+
+    if (!confirm(confirmMessage)) return;
+
+    try {
+      toast.loading('Suppression en cours...', { id: 'delete-cards' });
+
+      const { error } = await supabase
+        .from('study_cards')
+        .delete()
+        .in('id', cardIds)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      toast.success(
+        cardIds.length === 1 ? 'Fiche supprimée !' : `${cardIds.length} fiches supprimées !`,
+        { id: 'delete-cards' }
+      );
+
+      // Réinitialiser l'état et fermer la modale
+      if (savedCardId && cardIds.includes(savedCardId)) {
+        setSavedCardId(null);
+        setShowFlashcardsModal(false);
+        setGeneratedFlashcards(null);
+      }
+    } catch (error: any) {
+      console.error('❌ Erreur suppression:', error);
+      toast.error('Erreur', {
+        id: 'delete-cards',
+        description: error.message
       });
     }
   };
@@ -2283,6 +2334,20 @@ export function Library() {
                   >
                     <FileDown size={18} />
                     Télécharger la fiche
+                  </button>
+                  <button
+                    onClick={() => handleEditCard(savedCardId)}
+                    className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors font-medium"
+                  >
+                    <Edit3 size={18} />
+                    Modifier
+                  </button>
+                  <button
+                    onClick={() => handleDeleteCards([savedCardId])}
+                    className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                  >
+                    <Trash2 size={18} />
+                    Supprimer
                   </button>
                 </div>
               )}

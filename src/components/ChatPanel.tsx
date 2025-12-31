@@ -43,6 +43,7 @@ export function ChatPanel({ documentContext, isOpen, onToggle, isExtractingText 
   const [isLoading, setIsLoading] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
+  const [detailLevel, setDetailLevel] = useState<'concis' | 'standard' | 'détaillé'>('détaillé'); // Niveau de détail des réponses
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -114,7 +115,11 @@ N'hésitez pas à me poser des questions !`,
       const response = await sendChatMessage(
         messageToSend,
         documentContext,
-        messages
+        messages,
+        {
+          detailLevel: detailLevel,
+          useWebSearch: false // Peut être activé si une API de recherche est configurée
+        }
       );
 
       console.log('📥 Réponse reçue de l\'IA');
@@ -345,7 +350,7 @@ N'hésitez pas à me poser des questions !`,
                   </div>
                   <div>
                     <h3 className="font-bold text-white text-lg">Assistant IA</h3>
-                    <p className="text-xs text-white/70">Propulsé par OpenAI</p>
+                    <p className="text-xs text-white/70">Propulsé par OpenAI GPT-4</p>
                   </div>
                 </div>
                 <button
@@ -354,6 +359,34 @@ N'hésitez pas à me poser des questions !`,
                 >
                   <X className="w-5 h-5 text-white" />
                 </button>
+              </div>
+
+              {/* Sélecteur de niveau de détail */}
+              <div className="mb-3">
+                <label className="text-xs text-white/70 mb-2 block">📊 Niveau de détail :</label>
+                <div className="flex gap-2">
+                  {(['concis', 'standard', 'détaillé'] as const).map((level) => (
+                    <button
+                      key={level}
+                      onClick={() => setDetailLevel(level)}
+                      className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        detailLevel === level
+                          ? 'bg-gradient-to-r from-purple-500/80 to-blue-500/80 text-white'
+                          : 'bg-white/10 text-white/70 hover:bg-white/20'
+                      }`}
+                      style={{ border: '1px solid rgba(255, 255, 255, 0.2)' }}
+                    >
+                      {level === 'concis' && '🎯 Concis'}
+                      {level === 'standard' && '⚖️ Standard'}
+                      {level === 'détaillé' && '📚 Détaillé'}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-white/50 mt-1">
+                  {detailLevel === 'concis' && '• Réponses courtes et précises'}
+                  {detailLevel === 'standard' && '• Réponses équilibrées avec exemples'}
+                  {detailLevel === 'détaillé' && '• Réponses exhaustives et approfondies ✨'}
+                </p>
               </div>
 
               {/* Boutons d'action */}

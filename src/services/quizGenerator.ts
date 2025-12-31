@@ -38,13 +38,13 @@ export async function generateQuizFromText(
     console.log('🤖 Génération de quiz avec OpenAI...');
     console.log('📝 Longueur texte source:', text.length, 'caractères');
 
-    // ⚡ OPTIMISATION : Réduire drastiquement le texte pour accélérer (3000 caractères = ~750 tokens)
-    const maxTextLength = 3000;
+    // ✅ QUALITÉ OPTIMALE : Texte plus long pour des questions de qualité
+    const maxTextLength = 8000; // Augmenté pour garantir la qualité des questions
     const truncatedText = text.length > maxTextLength 
       ? text.substring(0, maxTextLength) + '...' 
       : text;
     
-    console.log('⚡ Texte optimisé:', truncatedText.length, 'caractères');
+    console.log('📝 Texte analysé:', truncatedText.length, 'caractères');
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -57,17 +57,27 @@ export async function generateQuizFromText(
         messages: [
           {
             role: 'system',
-            content: `Créer 5 QCM niveau universitaire. Format JSON strict:
-{"questions":[{"question":"?","options":["A","B","C","D"],"correctAnswer":0,"explanation":""}]}
-Questions variées: définition, compréhension, application. Réponses en français.`
+            content: `Tu es un professeur expert qui crée des quiz pédagogiques de qualité.
+Génère 5 questions à choix multiples (QCM) basées sur le contenu fourni.
+
+Pour chaque question :
+- Pose une question claire et précise
+- Fournis 4 options de réponse pertinentes (A, B, C, D)
+- Indique l'option correcte (0 pour A, 1 pour B, 2 pour C, 3 pour D)
+- Fournis une explication détaillée et pédagogique
+
+Format JSON strict :
+{"questions":[{"question":"Question détaillée ?","options":["Option A","Option B","Option C","Option D"],"correctAnswer":0,"explanation":"Explication complète"}]}
+
+Questions variées : définitions, compréhension, application, analyse. Réponses en français.`
           },
           {
             role: 'user',
-            content: `5 QCM sur:\n${truncatedText}`
+            content: `Génère 5 questions QCM de qualité basées sur ce cours :\n\n${truncatedText}`
           }
         ],
         temperature: 0.7,
-        max_tokens: 800, // ⚡ RÉDUIT de 2000 à 800 pour plus de rapidité
+        max_tokens: 1500, // Augmenté pour des explications plus détaillées
         response_format: { type: 'json_object' }
       }),
     });

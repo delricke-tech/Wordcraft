@@ -43,13 +43,13 @@ export async function generateFlashcardsFromText(
     console.log(`📄 Document: ${documentTitle}`);
     console.log(`📝 Longueur texte: ${text.length} caractères`);
 
-    // ⚡ OPTIMISATION : Réduire drastiquement le texte pour accélérer (6000 caractères = ~1500 tokens)
-    const maxLength = 6000;
+    // ✅ QUALITÉ MAXIMALE : Texte plus long pour un contenu complet et de qualité
+    const maxLength = 15000; // Augmenté pour garantir la qualité du contenu
     const truncatedText = text.length > maxLength 
       ? text.substring(0, maxLength) + '...'
       : text;
 
-    console.log(`⚡ Texte optimisé: ${truncatedText.length} caractères`);
+    console.log(`📝 Texte analysé: ${truncatedText.length} caractères`);
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -62,17 +62,27 @@ export async function generateFlashcardsFromText(
         messages: [
           {
             role: 'system',
-            content: `Créer 10-15 flashcards (recto/verso). Types: definition, date, concept, formula.
-Format JSON strict: {"cards":[{"front":"?","back":"réponse","type":"definition","category":""}]}
-Réponses concises (max 2 phrases). Français.`
+            content: `Tu es un expert en création de fiches de révision complètes et détaillées.
+Extrais les informations essentielles du document et crée 20-30 flashcards de qualité.
+
+Types de cartes :
+- definition : Définitions clés avec explications détaillées
+- date : Dates importantes avec contexte complet
+- concept : Concepts principaux avec exemples
+- formula : Formules avec explications d'application
+
+Format JSON strict :
+{"cards":[{"front":"Question détaillée ?","back":"Réponse complète et détaillée","type":"definition","category":"Catégorie"}]}
+
+IMPORTANT : Réponses complètes et détaillées (3-5 phrases). Couvrir tous les points importants du document. Français.`
           },
           {
             role: 'user',
-            content: `10-15 flashcards sur:\n${truncatedText}`
+            content: `Génère 20-30 flashcards détaillées basées sur ce contenu :\n\n${truncatedText}`
           }
         ],
         temperature: 0.7,
-        max_tokens: 1200, // ⚡ RÉDUIT de 3000 à 1200 pour plus de rapidité
+        max_tokens: 2500, // Augmenté pour des réponses plus complètes et détaillées
         response_format: { type: 'json_object' }
       }),
     });

@@ -110,6 +110,7 @@ export function Library() {
   const [generatedFlashcards, setGeneratedFlashcards] = useState<GeneratedFlashcards | null>(null);
   const [showQuizModal, setShowQuizModal] = useState(false);
   const [showFlashcardsModal, setShowFlashcardsModal] = useState(false);
+  const [savedCardId, setSavedCardId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -574,6 +575,106 @@ export function Library() {
     if (success) {
       // Rafraîchir la liste des documents pour refléter le changement
       await fetchData();
+    }
+  };
+
+  // ✅ Fonction pour lire la fiche complète
+  const handleReadCompleteCard = async (cardId: string) => {
+    if (!user) {
+      toast.error('Erreur', { description: 'Vous devez être connecté' });
+      return;
+    }
+
+    try {
+      const { data: card, error } = await supabase
+        .from('study_cards')
+        .select('*')
+        .eq('id', cardId)
+        .eq('user_id', user.id)
+        .single();
+
+      if (error || !card) {
+        throw new Error('Fiche introuvable');
+      }
+
+      // Naviguer vers la page de visualisation de la fiche
+      navigate(`/cards/${cardId}`);
+    } catch (error: any) {
+      console.error('❌ Erreur lors de la lecture de la fiche:', error);
+      toast.error('Erreur', {
+        description: 'Impossible de charger la fiche'
+      });
+    }
+  };
+
+  // ✅ Fonction pour télécharger la fiche complète en format texte
+  const handleDownloadCompleteCard = async (cardId: string, documentName: string) => {
+    if (!user) {
+      toast.error('Erreur', { description: 'Vous devez être connecté' });
+      return;
+    }
+
+    try {
+      const { data: card, error } = await supabase
+        .from('study_cards')
+        .select('*')
+        .eq('id', cardId)
+        .eq('user_id', user.id)
+        .single();
+
+      if (error || !card) {
+        throw new Error('Fiche introuvable');
+      }
+
+      // Créer le contenu du fichier texte
+      let content = `# ${card.title}\n\n`;
+      content += `Généré par WordCraft IA\n`;
+      content += `Date : ${new Date().toLocaleDateString('fr-FR')}\n\n`;
+      content += `─────────────────────────────────────\n\n`;
+
+      // Ajouter les définitions
+      if (card.content.definitions && card.content.definitions.length > 0) {
+        content += `## 📖 DÉFINITIONS\n\n`;
+        card.content.definitions.forEach((def: any) => {
+          content += `**${def.term}**\n${def.definition}\n\n`;
+        });
+      }
+
+      // Ajouter les points clés
+      if (card.content.key_points && card.content.key_points.length > 0) {
+        content += `## 💡 CONCEPTS CLÉS\n\n`;
+        card.content.key_points.forEach((point: string) => {
+          content += `${point}\n\n`;
+        });
+      }
+
+      // Ajouter les sections personnalisées (dates, formules)
+      if (card.content.custom_sections && card.content.custom_sections.length > 0) {
+        card.content.custom_sections.forEach((section: any) => {
+          content += `## ${section.title}\n\n`;
+          content += `${section.content}\n\n`;
+        });
+      }
+
+      // Créer un blob et télécharger
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `fiche-${documentName.replace(/\.[^/.]+$/, '')}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast.success('Téléchargement réussi !', {
+        description: 'La fiche a été téléchargée en format texte'
+      });
+    } catch (error: any) {
+      console.error('❌ Erreur lors du téléchargement:', error);
+      toast.error('Erreur', {
+        description: 'Impossible de télécharger la fiche'
+      });
     }
   };
 
@@ -1120,8 +1221,8 @@ export function Library() {
         await new Promise(resolve => setTimeout(resolve, 300));
       }
 
-      // ⚡ ÉTAPE 2/3 : Générer les flashcards avec OpenAI (OPTIMISÉ)
-      toast.loading('⚡ Étape 2/3 : IA crée 10-15 fiches... (~8-12s)', { id: loadingToast });
+      // ⚡ ÉTAPE 2/3 : Générer les flashcards avec OpenAI (QUALITÉ MAXIMALE)
+      toast.loading('⚡ Étape 2/3 : IA crée 20-30 fiches complètes... (~15-20s)', { id: loadingToast });
       const flashcards = await generateFlashcardsFromText(extractedText, doc.name, doc.id);
 
       console.log('✅ Flashcards générées:', flashcards);
@@ -1129,36 +1230,68 @@ export function Library() {
       // ✅ SAUVEGARDE AUTOMATIQUE EN BDD
       toast.loading('Enregistrement des fiches...', { id: loadingToast });
       
-      // Sauvegarder chaque carte individuellement dans la table study_cards
-      let savedCount = 0;
-      for (const card of flashcards.cards) {
-        const { error: saveError } = await supabase
-          .from('study_cards')
-          .insert({
-            user_id: user.id,
-            title: card.front,
-            content: {
-              key_points: [card.back],
-              definitions: card.type === 'definition' ? [{ term: card.front, definition: card.back }] : [],
-              signs: [],
-              diagnostics: [],
-              treatments: [],
-              custom_sections: [],
-            },
-            tags: card.category ? [card.category, card.type] : [card.type],
-            is_ai_generated: true,
-            mastery_level: 0,
-            review_count: 0,
-          });
-
-        if (saveError) {
-          console.warn('⚠️ Avertissement: Carte non sauvegardée:', card.front, saveError);
-        } else {
-          savedCount++;
-        }
+      // ✅ NOUVELLE APPROCHE : Créer UNE SEULE fiche déroulante avec TOUT le contenu
+      const definitions = flashcards.cards
+        .filter(c => c.type === 'definition')
+        .map(c => ({ term: c.front, definition: c.back }));
+      
+      const keyPoints = flashcards.cards
+        .filter(c => c.type === 'concept')
+        .map(c => `${c.front}\n${c.back}`);
+      
+      const dates = flashcards.cards
+        .filter(c => c.type === 'date')
+        .map(c => `${c.front}\n${c.back}`);
+      
+      const formulas = flashcards.cards
+        .filter(c => c.type === 'formula')
+        .map(c => `${c.front}\n${c.back}`);
+      
+      // Créer des sections personnalisées pour les dates et formules
+      const customSections = [];
+      if (dates.length > 0) {
+        customSections.push({
+          title: 'Dates Importantes',
+          content: dates.join('\n\n')
+        });
       }
+      if (formulas.length > 0) {
+        customSections.push({
+          title: 'Formules',
+          content: formulas.join('\n\n')
+        });
+      }
+      
+      // Sauvegarder UNE SEULE fiche complète avec TOUT le contenu
+      const { data: savedCard, error: saveError } = await supabase
+        .from('study_cards')
+        .insert({
+          user_id: user.id,
+          title: `Fiche complète : ${doc.name}`,
+          content: {
+            key_points: keyPoints,
+            definitions: definitions,
+            signs: [],
+            diagnostics: [],
+            treatments: [],
+            custom_sections: customSections,
+          },
+          tags: ['IA', 'fiche-complete', doc.file_type],
+          is_ai_generated: true,
+          mastery_level: 0,
+          review_count: 0,
+        })
+        .select()
+        .single();
 
-      console.log(`✅ ${savedCount}/${flashcards.cards.length} fiches sauvegardées en BDD`);
+      if (saveError) {
+        console.warn('⚠️ Avertissement: Fiche non sauvegardée:', saveError);
+      } else {
+        console.log('✅ Fiche complète sauvegardée en BDD avec', flashcards.cards.length, 'éléments');
+        console.log('📝 ID de la fiche:', savedCard?.id);
+        // Sauvegarder l'ID de la carte pour l'utiliser dans les boutons Lire/Télécharger
+        setSavedCardId(savedCard?.id || null);
+      }
 
       setGeneratedFlashcards(flashcards);
       setShowFlashcardsModal(true);
@@ -2112,23 +2245,47 @@ export function Library() {
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl w-full max-w-4xl shadow-2xl my-8">
             <div className="sticky top-0 bg-white border-b border-gray-200 p-6 rounded-t-2xl z-10">
-              <div className="flex items-center justify-between">
-                <div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex-1">
                   <h2 className="text-2xl font-bold text-gray-900">{generatedFlashcards.title}</h2>
                   <p className="text-sm text-gray-500 mt-1">
-                    {generatedFlashcards.cards.length} cartes générées par l'IA
+                    {generatedFlashcards.cards.length} cartes générées par l'IA • Fiche complète sauvegardée
                   </p>
                 </div>
                 <button
                   onClick={() => {
                     setShowFlashcardsModal(false);
                     setGeneratedFlashcards(null);
+                    setSavedCardId(null);
                   }}
                   className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <X size={24} />
                 </button>
               </div>
+              
+              {/* Boutons d'action */}
+              {savedCardId && (
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => handleReadCompleteCard(savedCardId)}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                  >
+                    <ScrollText size={18} />
+                    Lire la fiche complète
+                  </button>
+                  <button
+                    onClick={() => {
+                      const docName = generatedFlashcards.title.replace('Fiches : ', '');
+                      handleDownloadCompleteCard(savedCardId, docName);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors font-medium"
+                  >
+                    <FileDown size={18} />
+                    Télécharger la fiche
+                  </button>
+                </div>
+              )}
             </div>
             <div className="p-6 max-h-[calc(100vh-200px)] overflow-y-auto">
               <FlashcardPlayer flashcards={generatedFlashcards} />

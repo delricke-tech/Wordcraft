@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   BookOpen,
   ChevronLeft,
   FileDown,
-  Pencil,
   Trash2,
   Sparkles,
   ChevronDown,
@@ -177,9 +176,12 @@ export function CardDetail() {
       <div className="text-center py-16">
         <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
         <h3 className="text-lg font-medium text-gray-900 mb-2">Fiche introuvable</h3>
-        <Link to="/cards" className="text-teal-600 hover:text-teal-700">
+        <button
+          onClick={() => navigate('/cards')}
+          className="text-teal-600 hover:text-teal-700 font-medium"
+        >
           Retour aux fiches
-        </Link>
+        </button>
       </div>
     );
   }
@@ -219,13 +221,6 @@ export function CardDetail() {
             <FileDown size={18} />
             Télécharger
           </button>
-          <Link
-            to={`/cards/${card.id}/edit`}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-          >
-            <Pencil size={18} />
-            Modifier
-          </Link>
           <button
             onClick={handleDelete}
             className="flex items-center gap-2 px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors font-medium"

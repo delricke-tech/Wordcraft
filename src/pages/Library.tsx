@@ -121,20 +121,38 @@ export function Library() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [docsResult, foldersResult] = await Promise.all([
-        supabase.from('documents').select('*').order('created_at', { ascending: false }),
-        supabase.from('folders').select('*').order('name'),
-      ]);
+      console.log('📡 Fetching data pour user:', user?.id || 'NON CONNECTÉ');
+      
+      // ✅ FILTRAGE STRICT : Toujours filtrer par user_id [cite: 2025-12-27]
+      // Si user existe, filtrer par son ID. Sinon, ne récupérer que les documents sans propriétaire.
+      const docsQuery = user 
+        ? supabase.from('documents').select('*').eq('user_id', user.id).order('created_at', { ascending: false })
+        : supabase.from('documents').select('*').is('user_id', null).order('created_at', { ascending: false });
+      
+      const foldersQuery = user
+        ? supabase.from('folders').select('*').eq('user_id', user.id).order('name')
+        : supabase.from('folders').select('*').is('user_id', null).order('name');
+
+      const [docsResult, foldersResult] = await Promise.all([docsQuery, foldersQuery]);
 
       if (docsResult.error) {
         console.error('❌ Erreur lors de la récupération des documents:', docsResult.error);
+        console.error('  - Code:', docsResult.error.code);
+        console.error('  - Message:', docsResult.error.message);
       }
+
+      if (foldersResult.error) {
+        console.error('❌ Erreur lors de la récupération des dossiers:', foldersResult.error);
+      }
+
+      console.log('✅ Documents récupérés:', docsResult.data?.length || 0);
+      console.log('✅ Dossiers récupérés:', foldersResult.data?.length || 0);
 
       // Protection : s'assurer que c'est toujours un tableau
       setDocuments(Array.isArray(docsResult.data) ? docsResult.data : []);
       setFolders(Array.isArray(foldersResult.data) ? foldersResult.data : []);
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error('❌ Error fetching data:', error);
       setDocuments([]);
       setFolders([]);
     } finally {
@@ -550,6 +568,7 @@ export function Library() {
     setIsUploading(true);
     setUploadProgress(0);
     const totalFiles = files.length;
+    let successfulUploads = 0; // ✅ Compteur pour valider les succès réels
     
     // Toast de chargement
     const loadingToastId = toast.loading(`Upload de ${totalFiles} fichier(s) en cours...`);
@@ -594,7 +613,7 @@ export function Library() {
             id: loadingToastId,
             description: uploadError.message
           });
-          continue;
+          continue; // Passer au fichier suivant
         }
 
         console.log('✅ Fichier uploadé avec succès vers Storage');
@@ -662,8 +681,11 @@ export function Library() {
             id: loadingToastId,
             description: dbError.message
           });
-          continue;
+          continue; // Passer au fichier suivant
         }
+
+        // ✅ INSERTION RÉUSSIE - Incrémenter le compteur
+        successfulUploads++;
 
         console.log('✅ Document enregistré en BDD avec succès');
         console.log('  - Document ID:', insertedDoc.id);
@@ -729,15 +751,27 @@ export function Library() {
         }
       }
 
-      await fetchData();
+      // ✅ VALIDATION : Ne rafraîchir et afficher le succès QUE si des fichiers ont été uploadés
+      if (successfulUploads > 0) {
+        await fetchData();
+        
+        // ✅ Toast de succès UNIQUEMENT si au moins un fichier a réussi
+        toast.success(`${successfulUploads}/${totalFiles} document(s) uploadé(s) ! 🎉`, {
+          id: loadingToastId,
+          description: successfulUploads === totalFiles
+            ? `Tous les fichiers ont été envoyés avec succès.`
+            : `${successfulUploads} fichier(s) réussi(s), ${totalFiles - successfulUploads} échec(s).`
+        });
+      } else {
+        // Aucun fichier uploadé avec succès
+        toast.error('Échec de l\'upload', {
+          id: loadingToastId,
+          description: 'Aucun fichier n\'a pu être uploadé. Consultez la console pour plus de détails.'
+        });
+      }
+      
       setShowUploadModal(false);
       setSelectedFolderForGeneralUpload(null); // ✅ Réinitialiser la sélection
-      
-      // Toast de succès
-      toast.success('Document(s) uploadé(s) ! 🎉', {
-        id: loadingToastId,
-        description: `${totalFiles} fichier(s) envoyé(s) avec succès. L'extraction PDF se fera automatiquement.`
-      });
       
     } catch (error) {
       console.error('❌ Erreur générale:', error);

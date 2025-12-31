@@ -630,8 +630,8 @@ export function Library() {
           storage_path: uploadData.path, // ✅ CRITIQUE [cite: 2025-12-27] : Chemin exact retourné par Storage
           user_id: user?.id || null, // ✅ NULL si non connecté pour éviter erreur 400 [cite: 2025-12-27]
           file_type: fileType,
-          folder_id: selectedFolderForGeneralUpload || null
-          // file_size et processing_status supprimés car colonnes n'existent pas dans la table
+          folder_id: selectedFolderForGeneralUpload || null,
+          processing_status: 'pending' // ✅ Statut pour l'extraction IA
         };
 
         console.log('💾 Insertion en BDD (APRÈS upload):', insertData);

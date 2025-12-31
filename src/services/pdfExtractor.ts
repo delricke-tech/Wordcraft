@@ -10,9 +10,10 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import { supabase } from '../lib/supabase';
 
-// Configuration du worker PDF.js
+// Configuration du worker PDF.js - Utiliser unpkg CDN qui est plus stable
 if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+  // Utiliser unpkg.com qui est plus fiable que cdnjs pour les modules ES
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 }
 
 export interface ExtractedPDFResult {

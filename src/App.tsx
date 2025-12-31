@@ -9,6 +9,7 @@ import { Library } from './pages/Library';
 import { DocumentView } from './pages/DocumentView';
 import { PDFViewerPage } from './pages/PDFViewerPage';
 import { StudyCards } from './pages/StudyCards';
+import { CardDetail } from './pages/CardDetail';
 import { Quizzes } from './pages/Quizzes';
 import { Revision } from './pages/Revision';
 import { Groups } from './pages/Groups';
@@ -97,7 +98,8 @@ function AppRoutes() {
         <Route path="auto-fix-orphans" element={<AutoFixOrphans />} />
         <Route path="cards" element={<StudyCards />} />
         <Route path="cards/new" element={<StudyCards />} />
-        <Route path="cards/:id" element={<StudyCards />} />
+        <Route path="cards/merge" element={<MergeCards />} />
+        <Route path="cards/:id" element={<CardDetail />} />
         <Route path="cards/:id/edit" element={<StudyCards />} />
         <Route path="cards/:id/study" element={<Revision />} />
         <Route path="quizzes" element={<Quizzes />} />

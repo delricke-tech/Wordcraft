@@ -14,11 +14,15 @@ import {
   Target,
   Sparkles,
   X,
+  FileDown,
+  Eye,
+  Combine,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, StudyCard } from '../lib/supabase';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { toast } from 'sonner';
 
 export function StudyCards() {
   useAuth();
@@ -61,6 +65,85 @@ export function StudyCards() {
     }
   };
 
+  const handleDownloadCard = (card: StudyCard, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    // Créer le contenu du fichier texte
+    let content = `# ${card.title}\n\n`;
+    content += `Généré par WordCraft IA\n`;
+    content += `Date : ${format(new Date(card.created_at), 'dd MMMM yyyy', { locale: fr })}\n\n`;
+    content += `─────────────────────────────────────\n\n`;
+
+    // Ajouter les définitions
+    if (card.content.definitions && card.content.definitions.length > 0) {
+      content += `## 📖 DÉFINITIONS\n\n`;
+      card.content.definitions.forEach((def: any) => {
+        content += `**${def.term}**\n${def.definition}\n\n`;
+      });
+    }
+
+    // Ajouter les points clés
+    if (card.content.key_points && card.content.key_points.length > 0) {
+      content += `## 💡 CONCEPTS CLÉS\n\n`;
+      card.content.key_points.forEach((point: string) => {
+        content += `${point}\n\n`;
+      });
+    }
+
+    // Ajouter les signes
+    if (card.content.signs && card.content.signs.length > 0) {
+      content += `## 🔍 SIGNES\n\n`;
+      card.content.signs.forEach((sign: string) => {
+        content += `• ${sign}\n`;
+      });
+      content += `\n`;
+    }
+
+    // Ajouter les diagnostics
+    if (card.content.diagnostics && card.content.diagnostics.length > 0) {
+      content += `## 🩺 DIAGNOSTICS\n\n`;
+      card.content.diagnostics.forEach((diag: string) => {
+        content += `• ${diag}\n`;
+      });
+      content += `\n`;
+    }
+
+    // Ajouter les traitements
+    if (card.content.treatments && card.content.treatments.length > 0) {
+      content += `## 💊 TRAITEMENTS\n\n`;
+      card.content.treatments.forEach((treatment: string) => {
+        content += `• ${treatment}\n`;
+      });
+      content += `\n`;
+    }
+
+    // Ajouter les sections personnalisées
+    if (card.content.custom_sections && card.content.custom_sections.length > 0) {
+      card.content.custom_sections.forEach((section: any) => {
+        content += `## ${section.title}\n\n`;
+        content += `${section.content}\n\n`;
+      });
+    }
+
+    // Créer un blob et télécharger
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `fiche-${card.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    toast.success('Téléchargement réussi !', {
+      description: 'La fiche a été téléchargée en format texte'
+    });
+  };
+
   const filteredCards = cards.filter((card) => {
     const matchesSearch = card.title.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesTag = selectedTag === 'all' || card.tags?.includes(selectedTag);
@@ -85,6 +168,16 @@ export function StudyCards() {
           <p className="text-gray-500 mt-1">Creez et gerez vos fiches d'etude</p>
         </div>
         <div className="flex items-center gap-3">
+          {cards.filter((c) => c.is_ai_generated).length > 1 && (
+            <Link
+              to="/cards/merge"
+              className="flex items-center gap-2 px-4 py-2 border border-purple-600 text-purple-600 rounded-lg hover:bg-purple-50 transition-colors"
+              title="Regrouper les fiches multiples en une seule"
+            >
+              <Combine size={18} />
+              Regrouper les fiches
+            </Link>
+          )}
           {dueCards.length > 0 && (
             <Link
               to="/revision"
@@ -248,6 +341,20 @@ export function StudyCards() {
                 </div>
                 <div className="flex items-center gap-1">
                   <Link
+                    to={`/cards/${card.id}`}
+                    className="p-1.5 hover:bg-blue-100 rounded"
+                    title="Lire la fiche complète"
+                  >
+                    <Eye size={16} className="text-blue-600" />
+                  </Link>
+                  <button
+                    onClick={(e) => handleDownloadCard(card, e)}
+                    className="p-1.5 hover:bg-teal-100 rounded"
+                    title="Télécharger"
+                  >
+                    <FileDown size={16} className="text-teal-600" />
+                  </button>
+                  <Link
                     to={`/cards/${card.id}/study`}
                     className="p-1.5 hover:bg-gray-200 rounded"
                     title="Etudier"
@@ -321,6 +428,20 @@ export function StudyCards() {
                   <td className="px-6 py-4 text-sm text-gray-500">{card.review_count}</td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
+                      <Link
+                        to={`/cards/${card.id}`}
+                        className="p-1.5 hover:bg-blue-50 rounded"
+                        title="Lire la fiche complète"
+                      >
+                        <Eye size={16} className="text-blue-600" />
+                      </Link>
+                      <button
+                        onClick={(e) => handleDownloadCard(card, e)}
+                        className="p-1.5 hover:bg-teal-50 rounded"
+                        title="Télécharger"
+                      >
+                        <FileDown size={16} className="text-teal-600" />
+                      </button>
                       <Link
                         to={`/cards/${card.id}/study`}
                         className="p-1.5 hover:bg-teal-50 rounded"

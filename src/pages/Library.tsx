@@ -574,8 +574,9 @@ export function Library() {
     const loadingToastId = toast.loading(`Upload de ${totalFiles} fichier(s) en cours...`);
 
     try {
-      // Importer le service d'extraction PDF
+      // Importer les services d'extraction
       const { extractPDFFromStorage } = await import('../services/pdfExtractor');
+      const { extractText } = await import('../services/textExtractor');
 
       for (let i = 0; i < totalFiles; i++) {
         const file = Array.from(files)[i];
@@ -702,47 +703,32 @@ export function Library() {
           console.log('✅ Aucune normalisation nécessaire : le path était déjà propre');
         }
 
-        // ✅ OPTION : Extraction locale OU attendre l'Edge Function
-        // L'Edge Function process-pdf va s'en charger automatiquement via Webhook
-        // Si vous souhaitez l'extraction locale immédiate, décommentez ce bloc :
-        /*
-        if (fileType === 'pdf' && insertedDoc) {
-          console.log('🤖 Extraction locale du texte PDF...');
+        // ✅ EXTRACTION LOCALE pour tous les types de fichiers supportés
+        if (['pdf', 'txt'].includes(fileType) && insertedDoc) {
+          console.log(`🤖 Extraction locale du texte (${fileType.toUpperCase()})...`);
           try {
-            const extracted = await extractPDFFromStorage(insertedDoc.storage_path || uploadData.path);
+            const extracted = await extractText(
+              insertedDoc.storage_path || uploadData.path,
+              fileType,
+              insertedDoc.id
+            );
             
-            // Mettre à jour extracted_text immédiatement
-            const { error: updateError } = await supabase
-              .from('documents')
-              .update({
-                extracted_text: extracted.cleanText,
-                page_count: extracted.metadata.pages,
-                processing_status: 'completed'
-              })
-              .eq('id', insertedDoc.id);
-
-            if (updateError) {
-              console.error('⚠️  Erreur mise à jour texte:', updateError);
-            } else {
-              console.log(`✅ Texte extrait: ${extracted.metadata.pages} pages, ${extracted.metadata.words} mots`);
-            }
+            console.log(`✅ Texte extrait: ${extracted.wordCount} mots, ${extracted.characterCount} caractères`);
           } catch (extractError: any) {
             console.error('⚠️  Erreur extraction:', extractError.message);
-            // Marquer comme échoué mais ne pas bloquer l'upload
-            await supabase
-              .from('documents')
-              .update({
-                processing_status: 'failed',
-                processing_error: extractError.message
-              })
-              .eq('id', insertedDoc.id);
+            // L'erreur est déjà marquée en BDD par extractText()
           }
+        } else if (['docx', 'image'].includes(fileType) && insertedDoc) {
+          // Pour DOCX et images, marquer comme nécessitant une implémentation future
+          console.log(`ℹ️  Extraction ${fileType.toUpperCase()} pas encore implémentée`);
+          await supabase
+            .from('documents')
+            .update({
+              processing_status: 'completed',
+              extracted_text: `[${fileType.toUpperCase()}]\n\nL'extraction automatique pour ce type de fichier sera bientôt disponible.`
+            })
+            .eq('id', insertedDoc.id);
         }
-        */
-        
-        // ✅ INFO : L'Edge Function process-pdf va gérer l'extraction automatiquement
-        console.log('📡 En attente de l\'Edge Function process-pdf pour l\'extraction...');
-        console.log('  → Le statut passera de "pending" à "completed" automatiquement');
         
         // Délai entre les uploads pour éviter la surcharge
         if (i < totalFiles - 1) {
@@ -1076,10 +1062,11 @@ export function Library() {
           </button>
           <button
             onClick={() => setShowPdfUploadModal(true)}
-            className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors flex items-center gap-2"
+            className="px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl hover:from-purple-700 hover:to-blue-700 transition-colors flex items-center gap-2"
+            title="PDF, DOCX, TXT, Images"
           >
-            <File size={20} />
-            Upload PDF
+            <Upload size={20} />
+            Ajouter documents
           </button>
           {/* ✅ Bouton Supprimer Tout */}
           {documents.length > 0 && (
@@ -1095,7 +1082,7 @@ export function Library() {
           <input
             ref={pdfInputRef}
             type="file"
-            accept="application/pdf"
+            accept=".pdf,.docx,.doc,.txt,.jpg,.jpeg,.png,.gif,.webp"
             multiple
             onChange={(e) => handlePdfUpload(e.target.files)}
             className="hidden"

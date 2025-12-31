@@ -2,10 +2,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { supabase, Document } from '../lib/supabase';
 import { PDFViewer } from '../components/PDFViewer';
+import { DocumentViewer } from '../components/DocumentViewer';
 import { ChatPanel } from '../components/ChatPanel';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { extractPDFFromStorage } from '../services/pdfExtractor';
+import { extractText } from '../services/textExtractor';
 import { DocumentContext } from '../services/openaiService';
 
 /**
@@ -66,10 +68,11 @@ export function PDFViewerPage() {
         return;
       }
 
-      // Vérifier que c'est bien un PDF
-      if (data.file_type !== 'pdf') {
+      // Vérifier que c'est un type supporté
+      const supportedTypes = ['pdf', 'txt', 'image', 'docx'];
+      if (!supportedTypes.includes(data.file_type)) {
         toast.error('Erreur', {
-          description: 'Ce fichier n\'est pas un PDF'
+          description: 'Type de fichier non supporté'
         });
         navigate('/library');
         return;
@@ -147,12 +150,12 @@ export function PDFViewerPage() {
           storagePath: storagePath
         });
 
-        // Extraire le texte du PDF en arrière-plan pour l'IA
+        // Extraire le texte du document en arrière-plan pour l'IA
         if (storagePath) {
-          extractTextInBackground(storagePath, data.id);
+          extractTextInBackground(storagePath, data.id, data.file_type);
         } else {
           toast.error('Erreur', {
-            description: 'Impossible de localiser le fichier PDF. Chemin manquant.'
+            description: 'Impossible de localiser le fichier. Chemin manquant.'
           });
         }
       }
@@ -168,38 +171,38 @@ export function PDFViewerPage() {
     }
   };
 
-  // Extraire le texte du PDF pour l'IA (en arrière-plan)
-  const extractTextInBackground = async (storagePath: string, documentId: string) => {
+  // Extraire le texte du document pour l'IA (en arrière-plan)
+  const extractTextInBackground = async (storagePath: string, documentId: string, fileType: string) => {
     try {
       setExtractingText(true);
       console.log('🤖 ===== EXTRACTION DU TEXTE =====');
       console.log('  - Storage Path:', storagePath);
       console.log('  - Document ID:', documentId);
+      console.log('  - Type de fichier:', fileType);
 
-      // ✅ Utiliser le storage_path (chemin nettoyé) pour l'extraction
-      // La fonction extractPDFFromStorage va maintenant sauvegarder automatiquement en BDD
-      const extracted = await extractPDFFromStorage(storagePath, documentId);
+      // ✅ Utiliser le service d'extraction universel
+      const extracted = await extractText(storagePath, fileType, documentId);
       
-      console.log('📄 Texte récupéré:', extracted.cleanText ? `${extracted.cleanText.length} caractères` : 'NULL/VIDE');
+      console.log('📄 Texte récupéré:', extracted.text ? `${extracted.text.length} caractères` : 'NULL/VIDE');
 
       // ✅ VÉRIFICATION : Le texte doit exister
-      if (!extracted.cleanText || extracted.cleanText.trim() === '') {
-        throw new Error('Le texte extrait est vide. Le PDF pourrait être scanné ou corrompu.');
+      if (!extracted.text || extracted.text.trim() === '') {
+        throw new Error('Le texte extrait est vide. Le document pourrait être corrompu.');
       }
 
       // Mettre à jour le contexte avec le texte extrait
       setDocumentContext(prev => prev ? {
         ...prev,
-        extractedText: extracted.cleanText
+        extractedText: extracted.text
       } : null);
 
-      console.log('✅ Texte extrait pour l\'IA:', extracted.cleanText.length, 'caractères');
-      console.log('  - Premiers 100 caractères:', extracted.cleanText.slice(0, 100));
-      console.log('💾 Texte déjà sauvegardé en BDD par extractPDFFromStorage()');
+      console.log('✅ Texte extrait pour l\'IA:', extracted.text.length, 'caractères');
+      console.log('  - Premiers 100 caractères:', extracted.text.slice(0, 100));
+      console.log('💾 Texte déjà sauvegardé en BDD par extractText()');
 
       // ✅ RÈGLE 4 : Changer l'état du chat de 'Impossible d'extraire' à 'Prêt pour vos questions'
       toast.success('IA prête pour vos questions ! 🎉', {
-        description: `Document analysé : ${extracted.metadata.pages} pages, ${extracted.metadata.words} mots. Cliquez sur la bulle violette pour discuter !`,
+        description: `Document analysé : ${extracted.wordCount} mots, ${extracted.characterCount} caractères. Cliquez sur la bulle violette pour discuter !`,
         duration: 5000
       });
 
@@ -213,7 +216,7 @@ export function PDFViewerPage() {
       console.error('  - Stack:', error.stack);
       
       toast.error('Impossible d\'extraire le texte', {
-        description: 'Le PDF ne peut pas être analysé. L\'IA ne sera pas disponible pour ce document.'
+        description: `Le ${fileType.toUpperCase()} ne peut pas être analysé. L\'IA ne sera pas disponible pour ce document.`
       });
 
       // Mettre à jour le statut en BDD
@@ -262,12 +265,22 @@ export function PDFViewerPage() {
 
   return (
     <>
-      <PDFViewer
-        documentId={document.id}
-        documentName={document.name}
-        storagePath={document.storage_path}
-        onClose={handleClose}
-      />
+      {document.file_type === 'pdf' ? (
+        <PDFViewer
+          documentId={document.id}
+          documentName={document.name}
+          storagePath={document.storage_path}
+          onClose={handleClose}
+        />
+      ) : (
+        <DocumentViewer
+          documentId={document.id}
+          documentName={document.name}
+          storagePath={document.storage_path}
+          fileType={document.file_type}
+          onClose={handleClose}
+        />
+      )}
       <ChatPanel
         documentContext={documentContext}
         isOpen={isChatOpen}

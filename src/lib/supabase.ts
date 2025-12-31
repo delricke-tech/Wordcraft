@@ -9,7 +9,25 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.error('❌ ERREUR: Les variables VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY doivent être définies dans le fichier .env');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// ✅ Configuration du client Supabase avec options pour éviter les erreurs CORS
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+  },
+  global: {
+    headers: {
+      'x-client-info': 'supabase-js-web',
+    },
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
+  },
+});
 
 export type Profile = {
   id: string;

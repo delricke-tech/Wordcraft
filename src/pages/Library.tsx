@@ -21,6 +21,9 @@ import {
   Edit3,
   FolderInput,
   Star,
+  Sparkles,
+  BookOpen,
+  Loader2,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Document, Folder as FolderType, uploadFile } from '../lib/supabase';
@@ -35,6 +38,11 @@ import { RenameModal } from '../components/modals/RenameModal';
 import { MoveDocumentModal } from '../components/modals/MoveDocumentModal';
 import { updateFileFolder } from '../utils/moveFileFolder';
 import { toggleFavorite } from '../utils/toggleFavorite';
+import { QuizPlayer } from '../components/quiz/QuizPlayer';
+import { FlashcardPlayer } from '../components/flashcards/FlashcardPlayer';
+import { generateQuizFromText, GeneratedQuiz } from '../services/quizGenerator';
+import { generateFlashcardsFromText, GeneratedFlashcards } from '../services/flashcardGenerator';
+import { extractText } from '../services/textExtractor';
 
 export function Library() {
   const { user } = useAuth();
@@ -94,6 +102,14 @@ export function Library() {
   // État pour la modale de suppression totale
   const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
+
+  // États pour Quiz et Flashcards
+  const [generatingQuizForDoc, setGeneratingQuizForDoc] = useState<string | null>(null);
+  const [generatingFlashcardsForDoc, setGeneratingFlashcardsForDoc] = useState<string | null>(null);
+  const [generatedQuiz, setGeneratedQuiz] = useState<GeneratedQuiz | null>(null);
+  const [generatedFlashcards, setGeneratedFlashcards] = useState<GeneratedFlashcards | null>(null);
+  const [showQuizModal, setShowQuizModal] = useState(false);
+  const [showFlashcardsModal, setShowFlashcardsModal] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -966,6 +982,120 @@ export function Library() {
     }
   };
 
+  // ✅ Fonction pour générer un quiz à partir d'un PDF
+  const handleGenerateQuiz = async (doc: Document) => {
+    if (doc.file_type !== 'pdf') {
+      toast.error('Format non supporté', {
+        description: 'La génération de quiz n\'est disponible que pour les fichiers PDF'
+      });
+      return;
+    }
+
+    setGeneratingQuizForDoc(doc.id);
+    const loadingToast = toast.loading('Génération du quiz en cours...');
+
+    try {
+      console.log('🎯 Génération de quiz pour:', doc.name);
+
+      // Récupérer ou extraire le texte du document
+      let extractedText = doc.extracted_text;
+
+      if (!extractedText || extractedText.trim() === '') {
+        console.log('📄 Extraction du texte nécessaire...');
+        toast.loading('Extraction du texte en cours...', { id: loadingToast });
+
+        const extracted = await extractText(doc.storage_path, doc.file_type, doc.id);
+        extractedText = extracted.text;
+
+        if (!extractedText || extractedText.trim() === '') {
+          throw new Error('Impossible d\'extraire le texte du document');
+        }
+
+        console.log('✅ Texte extrait:', extractedText.length, 'caractères');
+      } else {
+        console.log('✅ Texte déjà disponible:', extractedText.length, 'caractères');
+      }
+
+      // Générer le quiz avec OpenAI
+      toast.loading('Génération du quiz avec l\'IA...', { id: loadingToast });
+      const quiz = await generateQuizFromText(extractedText, doc.name, doc.id);
+
+      console.log('✅ Quiz généré:', quiz);
+      setGeneratedQuiz(quiz);
+      setShowQuizModal(true);
+
+      toast.success('Quiz généré !', {
+        id: loadingToast,
+        description: `${quiz.questions.length} questions créées avec succès`
+      });
+    } catch (error: any) {
+      console.error('❌ Erreur lors de la génération du quiz:', error);
+      toast.error('Erreur', {
+        id: loadingToast,
+        description: error.message || 'Impossible de générer le quiz'
+      });
+    } finally {
+      setGeneratingQuizForDoc(null);
+    }
+  };
+
+  // ✅ Fonction pour générer des flashcards à partir d'un PDF
+  const handleGenerateFlashcards = async (doc: Document) => {
+    if (doc.file_type !== 'pdf') {
+      toast.error('Format non supporté', {
+        description: 'La génération de fiches n\'est disponible que pour les fichiers PDF'
+      });
+      return;
+    }
+
+    setGeneratingFlashcardsForDoc(doc.id);
+    const loadingToast = toast.loading('Génération des fiches en cours...');
+
+    try {
+      console.log('🃏 Génération de flashcards pour:', doc.name);
+
+      // Récupérer ou extraire le texte du document
+      let extractedText = doc.extracted_text;
+
+      if (!extractedText || extractedText.trim() === '') {
+        console.log('📄 Extraction du texte nécessaire...');
+        toast.loading('Extraction du texte en cours...', { id: loadingToast });
+
+        const extracted = await extractText(doc.storage_path, doc.file_type, doc.id);
+        extractedText = extracted.text;
+
+        if (!extractedText || extractedText.trim() === '') {
+          throw new Error('Impossible d\'extraire le texte du document');
+        }
+
+        console.log('✅ Texte extrait:', extractedText.length, 'caractères');
+      } else {
+        console.log('✅ Texte déjà disponible:', extractedText.length, 'caractères');
+      }
+
+      // Générer les flashcards avec OpenAI
+      toast.loading('Génération des fiches avec l\'IA...', { id: loadingToast });
+      const flashcards = await generateFlashcardsFromText(extractedText, doc.name, doc.id);
+
+      console.log('✅ Flashcards générées:', flashcards);
+      setGeneratedFlashcards(flashcards);
+      setShowFlashcardsModal(true);
+
+      toast.success('Fiches générées !', {
+        id: loadingToast,
+        description: `${flashcards.cards.length} cartes créées avec succès`
+      });
+    } catch (error: any) {
+      console.error('❌ Erreur lors de la génération des flashcards:', error);
+      toast.error('Erreur', {
+        id: loadingToast,
+        description: error.message || 'Impossible de générer les fiches'
+      });
+    } finally {
+      setGeneratingFlashcardsForDoc(null);
+    }
+  };
+
   const filteredDocuments = documents.filter((doc) => {
     // Protection : vérifier que doc.name existe
     const matchesSearch = doc.name 
@@ -1443,6 +1573,57 @@ export function Library() {
                       )}
                     </div>
                   </div>
+                  
+                  {/* ✅ BOUTONS QUIZ ET FLASHCARDS (pour les PDF uniquement) */}
+                  {doc.file_type === 'pdf' && (
+                    <div className="mt-3 space-y-2">
+                      {/* Bouton Générer un Quiz */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleGenerateQuiz(doc);
+                        }}
+                        disabled={generatingQuizForDoc === doc.id}
+                        className="w-full px-3 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all flex items-center justify-center gap-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Générer un quiz de 5 questions"
+                      >
+                        {generatingQuizForDoc === doc.id ? (
+                          <>
+                            <Loader2 size={16} className="animate-spin" />
+                            Génération...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles size={16} />
+                            Générer un Quiz
+                          </>
+                        )}
+                      </button>
+
+                      {/* Bouton Générer des Fiches */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleGenerateFlashcards(doc);
+                        }}
+                        disabled={generatingFlashcardsForDoc === doc.id}
+                        className="w-full px-3 py-2 bg-gradient-to-r from-teal-600 to-blue-600 text-white rounded-lg hover:from-teal-700 hover:to-blue-700 transition-all flex items-center justify-center gap-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Générer des flashcards"
+                      >
+                        {generatingFlashcardsForDoc === doc.id ? (
+                          <>
+                            <Loader2 size={16} className="animate-spin" />
+                            Génération...
+                          </>
+                        ) : (
+                          <>
+                            <BookOpen size={16} />
+                            Générer des Fiches
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -1807,6 +1988,66 @@ export function Library() {
         currentFolderId={showMoveModal.currentFolderId}
         documentName={showMoveModal.documentName}
       />
+
+      {/* ✅ Modale Quiz */}
+      {showQuizModal && generatedQuiz && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-full max-w-3xl shadow-2xl my-8">
+            <div className="sticky top-0 bg-white border-b border-gray-200 p-6 rounded-t-2xl z-10">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">{generatedQuiz.title}</h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {generatedQuiz.questions.length} questions générées par l'IA
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowQuizModal(false);
+                    setGeneratedQuiz(null);
+                  }}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+            </div>
+            <div className="p-6 max-h-[calc(100vh-200px)] overflow-y-auto">
+              <QuizPlayer quiz={generatedQuiz} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ Modale Flashcards */}
+      {showFlashcardsModal && generatedFlashcards && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-full max-w-4xl shadow-2xl my-8">
+            <div className="sticky top-0 bg-white border-b border-gray-200 p-6 rounded-t-2xl z-10">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">{generatedFlashcards.title}</h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {generatedFlashcards.cards.length} cartes générées par l'IA
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowFlashcardsModal(false);
+                    setGeneratedFlashcards(null);
+                  }}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+            </div>
+            <div className="p-6 max-h-[calc(100vh-200px)] overflow-y-auto">
+              <FlashcardPlayer flashcards={generatedFlashcards} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

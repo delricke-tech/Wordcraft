@@ -690,15 +690,20 @@ export function Library() {
   };
 
   // ✏️ Fonction pour modifier une fiche directement dans le volet
-  const handleEditCard = async (cardId: string) => {
-    if (!cardId || !user) return;
+  const handleEditCard = async () => {
+    if (!savedCardId || !user) {
+      toast.error('Erreur', {
+        description: 'Fiche non disponible'
+      });
+      return;
+    }
     
     try {
       // Récupérer la fiche depuis la BDD
       const { data: card, error } = await supabase
         .from('study_cards')
         .select('*')
-        .eq('id', cardId)
+        .eq('id', savedCardId)
         .eq('user_id', user.id)
         .single();
 
@@ -706,13 +711,19 @@ export function Library() {
         throw new Error('Fiche introuvable');
       }
 
+      console.log('📝 Chargement fiche pour édition:', card);
+      
       // Activer le mode édition et charger le contenu
       setEditedCardContent(card.content);
       setIsEditingCard(true);
+      
+      toast.success('Mode édition activé !', {
+        description: 'Modifiez les termes et définitions'
+      });
     } catch (error: any) {
       console.error('❌ Erreur chargement fiche:', error);
       toast.error('Erreur', {
-        description: 'Impossible de charger la fiche'
+        description: 'Impossible de charger la fiche pour édition'
       });
     }
   };
@@ -2433,7 +2444,7 @@ export function Library() {
                         Télécharger
                       </button>
                       <button
-                        onClick={() => handleEditCard(savedCardId)}
+                        onClick={handleEditCard}
                         className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors font-medium"
                       >
                         <Edit3 size={18} />

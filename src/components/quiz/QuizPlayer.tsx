@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { Check, X, ChevronRight, Trophy, RotateCcw } from 'lucide-react';
+import { Check, X, ChevronRight, Trophy, RotateCcw, XCircle } from 'lucide-react';
 import { GeneratedQuiz, QuizQuestion, calculateQuizScore } from '../../services/quizGenerator';
 
 interface QuizPlayerProps {
   quiz: GeneratedQuiz;
+  onClose?: () => void;
 }
 
-export function QuizPlayer({ quiz }: QuizPlayerProps) {
+export function QuizPlayer({ quiz, onClose }: QuizPlayerProps) {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<string, number>>({});
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
@@ -149,24 +150,36 @@ export function QuizPlayer({ quiz }: QuizPlayerProps) {
   // Affichage de la question
   return (
     <div className="space-y-6">
-      {/* Progression */}
+      {/* Progression et Bouton Quitter */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-gray-600">
           Question {currentQuestionIndex + 1} sur {quiz.questions.length}
         </div>
-        <div className="flex gap-1">
-          {quiz.questions.map((_, index) => (
-            <div
-              key={index}
-              className={`h-2 w-8 rounded-full transition-colors ${
-                index === currentQuestionIndex
-                  ? 'bg-teal-600'
-                  : index < currentQuestionIndex
-                  ? 'bg-teal-300'
-                  : 'bg-gray-200'
-              }`}
-            />
-          ))}
+        <div className="flex items-center gap-3">
+          <div className="flex gap-1">
+            {quiz.questions.map((_, index) => (
+              <div
+                key={index}
+                className={`h-2 w-8 rounded-full transition-colors ${
+                  index === currentQuestionIndex
+                    ? 'bg-teal-600'
+                    : index < currentQuestionIndex
+                    ? 'bg-teal-300'
+                    : 'bg-gray-200'
+                }`}
+              />
+            ))}
+          </div>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
+              title="Quitter le quiz"
+            >
+              <XCircle size={16} />
+              Quitter
+            </button>
+          )}
         </div>
       </div>
 

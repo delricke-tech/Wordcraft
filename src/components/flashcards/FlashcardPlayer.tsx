@@ -187,16 +187,13 @@ export function FlashcardPlayer({ flashcards }: FlashcardPlayerProps) {
       </div>
 
       {/* Carte recto-verso */}
-      <div className="relative">
-        <div 
-          onClick={handleFlip}
-          className={`cursor-pointer transition-all duration-500 transform ${isFlipped ? 'rotate-y-180' : ''}`}
-          style={{ transformStyle: 'preserve-3d', minHeight: '400px' }}
-        >
-          {/* Recto */}
+      <div className="relative" style={{ minHeight: '400px' }}>
+        {/* Recto */}
+        {!isFlipped && (
           <div
-            className={`absolute inset-0 backface-hidden ${getTypeBgColor(currentCard.type)} border-2 rounded-2xl p-8 flex flex-col items-center justify-center ${isFlipped ? 'opacity-0' : 'opacity-100'}`}
-            style={{ backfaceVisibility: 'hidden' }}
+            onClick={handleFlip}
+            className={`cursor-pointer ${getTypeBgColor(currentCard.type)} border-2 rounded-2xl p-8 flex flex-col items-center justify-center transition-all duration-300 hover:shadow-xl`}
+            style={{ minHeight: '400px' }}
           >
             <div className="flex items-center gap-2 mb-6">
               {getTypeIcon(currentCard.type)}
@@ -228,15 +225,14 @@ export function FlashcardPlayer({ flashcards }: FlashcardPlayerProps) {
               </div>
             )}
           </div>
+        )}
 
-          {/* Verso */}
+        {/* Verso */}
+        {isFlipped && (
           <div
-            className={`absolute inset-0 backface-hidden bg-gradient-to-br from-teal-600 to-blue-600 text-white border-2 border-teal-700 rounded-2xl p-8 flex flex-col items-center justify-center ${isFlipped ? 'opacity-100' : 'opacity-0'}`}
-            style={{ 
-              backfaceVisibility: 'hidden',
-              transform: 'rotateY(180deg)',
-              minHeight: '400px'
-            }}
+            onClick={handleFlip}
+            className="cursor-pointer bg-gradient-to-br from-teal-600 to-blue-600 text-white border-2 border-teal-700 rounded-2xl p-8 flex flex-col items-center justify-center transition-all duration-300 hover:shadow-xl"
+            style={{ minHeight: '400px' }}
           >
             <div className="flex items-center gap-2 mb-6 opacity-90">
               {getTypeIcon(currentCard.type)}
@@ -260,8 +256,14 @@ export function FlashcardPlayer({ flashcards }: FlashcardPlayerProps) {
             <div className="mt-8 text-center opacity-90">
               <p className="text-sm">Cliquez pour revenir</p>
             </div>
+
+            {reviewedCards.has(currentCard.id) && (
+              <div className="absolute top-4 right-4">
+                <CheckCircle size={24} className="text-green-600" />
+              </div>
+            )}
           </div>
-        </div>
+        )}
       </div>
 
       {/* Navigation */}

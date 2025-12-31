@@ -984,6 +984,13 @@ export function Library() {
 
   // ✅ Fonction pour générer un quiz à partir d'un PDF
   const handleGenerateQuiz = async (doc: Document) => {
+    if (!user) {
+      toast.error('Connexion requise', {
+        description: 'Vous devez être connecté pour générer un quiz'
+      });
+      return;
+    }
+
     if (doc.file_type !== 'pdf') {
       toast.error('Format non supporté', {
         description: 'La génération de quiz n\'est disponible que pour les fichiers PDF'
@@ -1021,10 +1028,39 @@ export function Library() {
       const quiz = await generateQuizFromText(extractedText, doc.name, doc.id);
 
       console.log('✅ Quiz généré:', quiz);
+
+      // ✅ SAUVEGARDE AUTOMATIQUE EN BDD
+      toast.loading('Enregistrement du quiz...', { id: loadingToast });
+      const { data: savedQuiz, error: saveError } = await supabase
+        .from('quizzes')
+        .insert({
+          user_id: user.id,
+          title: quiz.title,
+          description: `Quiz généré automatiquement à partir de "${doc.name}"`,
+          question_count: quiz.questions.length,
+          is_ai_generated: true,
+          settings: {
+            passing_score: 60,
+            show_correct_answers: true,
+            shuffle_questions: false,
+            shuffle_answers: false,
+          },
+          questions: quiz.questions, // Sauvegarder les questions dans la colonne JSON
+        })
+        .select()
+        .single();
+
+      if (saveError) {
+        console.warn('⚠️ Avertissement: Quiz non sauvegardé en BDD:', saveError);
+        // On continue quand même pour afficher le quiz
+      } else {
+        console.log('✅ Quiz sauvegardé en BDD:', savedQuiz);
+      }
+
       setGeneratedQuiz(quiz);
       setShowQuizModal(true);
 
-      toast.success('Quiz généré !', {
+      toast.success('Quiz généré et sauvegardé !', {
         id: loadingToast,
         description: `${quiz.questions.length} questions créées avec succès`
       });
@@ -1041,6 +1077,13 @@ export function Library() {
 
   // ✅ Fonction pour générer des flashcards à partir d'un PDF
   const handleGenerateFlashcards = async (doc: Document) => {
+    if (!user) {
+      toast.error('Connexion requise', {
+        description: 'Vous devez être connecté pour générer des fiches'
+      });
+      return;
+    }
+
     if (doc.file_type !== 'pdf') {
       toast.error('Format non supporté', {
         description: 'La génération de fiches n\'est disponible que pour les fichiers PDF'
@@ -1078,10 +1121,45 @@ export function Library() {
       const flashcards = await generateFlashcardsFromText(extractedText, doc.name, doc.id);
 
       console.log('✅ Flashcards générées:', flashcards);
+
+      // ✅ SAUVEGARDE AUTOMATIQUE EN BDD
+      toast.loading('Enregistrement des fiches...', { id: loadingToast });
+      
+      // Sauvegarder chaque carte individuellement dans la table study_cards
+      let savedCount = 0;
+      for (const card of flashcards.cards) {
+        const { error: saveError } = await supabase
+          .from('study_cards')
+          .insert({
+            user_id: user.id,
+            title: card.front,
+            content: {
+              key_points: [card.back],
+              definitions: card.type === 'definition' ? [{ term: card.front, definition: card.back }] : [],
+              signs: [],
+              diagnostics: [],
+              treatments: [],
+              custom_sections: [],
+            },
+            tags: card.category ? [card.category, card.type] : [card.type],
+            is_ai_generated: true,
+            mastery_level: 0,
+            review_count: 0,
+          });
+
+        if (saveError) {
+          console.warn('⚠️ Avertissement: Carte non sauvegardée:', card.front, saveError);
+        } else {
+          savedCount++;
+        }
+      }
+
+      console.log(`✅ ${savedCount}/${flashcards.cards.length} fiches sauvegardées en BDD`);
+
       setGeneratedFlashcards(flashcards);
       setShowFlashcardsModal(true);
 
-      toast.success('Fiches générées !', {
+      toast.success('Fiches générées et sauvegardées !', {
         id: loadingToast,
         description: `${flashcards.cards.length} cartes créées avec succès`
       });
@@ -2013,7 +2091,13 @@ export function Library() {
               </div>
             </div>
             <div className="p-6 max-h-[calc(100vh-200px)] overflow-y-auto">
-              <QuizPlayer quiz={generatedQuiz} />
+              <QuizPlayer 
+                quiz={generatedQuiz} 
+                onClose={() => {
+                  setShowQuizModal(false);
+                  setGeneratedQuiz(null);
+                }}
+              />
             </div>
           </div>
         </div>

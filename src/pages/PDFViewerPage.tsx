@@ -69,7 +69,7 @@ export function PDFViewerPage() {
       }
 
       // Vérifier que c'est un type supporté
-      const supportedTypes = ['pdf', 'txt', 'image', 'docx'];
+      const supportedTypes = ['pdf', 'txt', 'image', 'docx', 'video', 'audio'];
       if (!supportedTypes.includes(data.file_type)) {
         toast.error('Erreur', {
           description: 'Type de fichier non supporté'

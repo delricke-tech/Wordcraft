@@ -139,31 +139,125 @@ async function extractTextFromTXT(storagePath: string | File): Promise<string> {
 }
 
 /**
- * Extrait le texte d'un fichier DOCX
- * Note: Nécessite l'installation de 'mammoth' ou une alternative
+ * Extrait le texte d'un fichier DOCX avec mammoth
  */
 async function extractTextFromDOCX(storagePath: string | File): Promise<string> {
   console.log('📄 Extraction depuis fichier DOCX...');
   
-  // Pour l'instant, retourner un placeholder
-  // TODO: Installer et utiliser la bibliothèque 'mammoth' ou 'docx-parser'
-  console.warn('⚠️ Extraction DOCX pas encore implémentée');
-  
-  return `[Contenu DOCX]\n\nL'extraction automatique des fichiers DOCX sera bientôt disponible.\n\nEn attendant, vous pouvez :\n1. Convertir votre DOCX en PDF\n2. Ou copier-coller le contenu dans un fichier TXT`;
+  try {
+    // Importer dynamiquement mammoth
+    const mammoth = await import('mammoth');
+    
+    let arrayBuffer: ArrayBuffer;
+
+    if (storagePath instanceof File) {
+      arrayBuffer = await storagePath.arrayBuffer();
+    } else {
+      // Télécharger depuis Supabase Storage
+      const { data: publicUrlData } = supabase.storage
+        .from('documents')
+        .getPublicUrl(storagePath);
+
+      if (!publicUrlData?.publicUrl) {
+        throw new Error('Impossible de générer l\'URL publique du fichier DOCX');
+      }
+
+      const response = await fetch(publicUrlData.publicUrl);
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP ${response.status}`);
+      }
+
+      arrayBuffer = await response.arrayBuffer();
+    }
+
+    // Extraire le texte avec mammoth
+    const result = await mammoth.extractRawText({ arrayBuffer });
+    
+    console.log('✅ Texte DOCX extrait:', result.value.length, 'caractères');
+    
+    if (result.messages.length > 0) {
+      console.log('ℹ️  Messages mammoth:', result.messages);
+    }
+    
+    return result.value.trim();
+  } catch (error: any) {
+    console.error('❌ Erreur extraction DOCX:', error);
+    
+    // Fallback si mammoth n'est pas installé ou échoue
+    if (error.message?.includes('Cannot find module')) {
+      console.warn('⚠️ Module mammoth non installé');
+      return `[Document Word]\n\nPour activer l'extraction automatique des fichiers DOCX, exécutez :\n\nnpm install mammoth\n\nEn attendant, vous pouvez convertir votre document en PDF ou TXT.`;
+    }
+    
+    throw error;
+  }
 }
 
 /**
- * Extrait le texte d'une image via OCR
- * Note: Nécessite l'installation de 'tesseract.js'
+ * Extrait le texte d'une image via OCR avec Tesseract.js
  */
 async function extractTextFromImage(storagePath: string | File): Promise<string> {
   console.log('🖼️  Extraction depuis image (OCR)...');
   
-  // Pour l'instant, retourner un placeholder
-  // TODO: Installer et utiliser Tesseract.js pour l'OCR
-  console.warn('⚠️ Extraction via OCR pas encore implémentée');
-  
-  return `[Image]\n\nL'extraction automatique du texte des images (OCR) sera bientôt disponible.\n\nEn attendant, pour les documents scannés :\n1. Utilisez un service OCR en ligne\n2. Ou retapez le texte dans un fichier TXT`;
+  try {
+    // Importer dynamiquement Tesseract.js
+    const Tesseract = await import('tesseract.js');
+    
+    let imageSource: string | File;
+
+    if (storagePath instanceof File) {
+      imageSource = storagePath;
+    } else {
+      // Utiliser l'URL publique directement
+      const { data: publicUrlData } = supabase.storage
+        .from('documents')
+        .getPublicUrl(storagePath);
+
+      if (!publicUrlData?.publicUrl) {
+        throw new Error('Impossible de générer l\'URL publique de l\'image');
+      }
+
+      imageSource = publicUrlData.publicUrl;
+    }
+
+    console.log('🔍 Lancement de l\'OCR (peut prendre 10-30 secondes)...');
+    
+    // Effectuer l'OCR avec Tesseract
+    // Support multilingue : français + anglais
+    const { data } = await Tesseract.recognize(
+      imageSource,
+      'fra+eng', // Français et anglais
+      {
+        logger: (m: any) => {
+          // Logger la progression
+          if (m.status === 'recognizing text') {
+            console.log(`OCR en cours: ${Math.round(m.progress * 100)}%`);
+          }
+        }
+      }
+    );
+    
+    const extractedText = data.text.trim();
+    
+    console.log('✅ OCR terminé:', extractedText.length, 'caractères extraits');
+    console.log('  - Confiance:', Math.round(data.confidence) + '%');
+    
+    if (extractedText.length === 0) {
+      return `[Image]\n\nAucun texte détecté dans cette image.\n\nSi l'image contient du texte :\n- Assurez-vous que le texte est lisible\n- Essayez avec une image de meilleure qualité\n- Le texte doit être en français ou anglais`;
+    }
+    
+    return `[Texte extrait par OCR - Confiance: ${Math.round(data.confidence)}%]\n\n${extractedText}`;
+  } catch (error: any) {
+    console.error('❌ Erreur extraction OCR:', error);
+    
+    // Fallback si Tesseract n'est pas installé ou échoue
+    if (error.message?.includes('Cannot find module')) {
+      console.warn('⚠️ Module tesseract.js non installé');
+      return `[Image]\n\nPour activer l'extraction automatique du texte des images (OCR), exécutez :\n\nnpm install tesseract.js\n\nEn attendant, vous pouvez retaper le texte manuellement.`;
+    }
+    
+    throw error;
+  }
 }
 
 /**

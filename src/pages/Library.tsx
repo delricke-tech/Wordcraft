@@ -704,7 +704,7 @@ export function Library() {
         }
 
         // ✅ EXTRACTION LOCALE pour tous les types de fichiers supportés
-        if (['pdf', 'txt'].includes(fileType) && insertedDoc) {
+        if (['pdf', 'txt', 'docx', 'image'].includes(fileType) && insertedDoc) {
           console.log(`🤖 Extraction locale du texte (${fileType.toUpperCase()})...`);
           try {
             const extracted = await extractText(
@@ -718,14 +718,14 @@ export function Library() {
             console.error('⚠️  Erreur extraction:', extractError.message);
             // L'erreur est déjà marquée en BDD par extractText()
           }
-        } else if (['docx', 'image'].includes(fileType) && insertedDoc) {
-          // Pour DOCX et images, marquer comme nécessitant une implémentation future
-          console.log(`ℹ️  Extraction ${fileType.toUpperCase()} pas encore implémentée`);
+        } else if (['video', 'audio'].includes(fileType) && insertedDoc) {
+          // Pour audio/vidéo, marquer comme prêt mais sans extraction
+          console.log(`ℹ️  Fichier ${fileType.toUpperCase()} - pas d'extraction automatique`);
           await supabase
             .from('documents')
             .update({
               processing_status: 'completed',
-              extracted_text: `[${fileType.toUpperCase()}]\n\nL'extraction automatique pour ce type de fichier sera bientôt disponible.`
+              extracted_text: `[${fileType === 'video' ? 'Vidéo' : 'Audio'}]\n\nLa transcription automatique sera bientôt disponible avec Whisper AI.\n\nVous pouvez quand même uploader et visualiser ce fichier !`
             })
             .eq('id', insertedDoc.id);
         }
@@ -1063,7 +1063,7 @@ export function Library() {
           <button
             onClick={() => setShowPdfUploadModal(true)}
             className="px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl hover:from-purple-700 hover:to-blue-700 transition-colors flex items-center gap-2"
-            title="PDF, DOCX, TXT, Images"
+            title="PDF, DOCX, TXT, Images, Audio, Vidéo"
           >
             <Upload size={20} />
             Ajouter documents
@@ -1082,7 +1082,7 @@ export function Library() {
           <input
             ref={pdfInputRef}
             type="file"
-            accept=".pdf,.docx,.doc,.txt,.jpg,.jpeg,.png,.gif,.webp"
+            accept=".pdf,.docx,.doc,.txt,.jpg,.jpeg,.png,.gif,.webp,.mp4,.avi,.mov,.webm,.mp3,.wav,.ogg"
             multiple
             onChange={(e) => handlePdfUpload(e.target.files)}
             className="hidden"

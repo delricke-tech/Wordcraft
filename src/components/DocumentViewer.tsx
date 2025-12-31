@@ -5,7 +5,7 @@
  * Date: 31 décembre 2024
  */
 
-import { X, Download, FileText, Image as ImageIcon } from 'lucide-react';
+import { X, Download, FileText, Image as ImageIcon, Video as VideoIcon, Music } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
@@ -135,6 +135,41 @@ export function DocumentViewer({
           </div>
         );
 
+      case 'video':
+        return (
+          <div className="w-full h-full flex items-center justify-center bg-black p-4">
+            <video
+              src={publicUrl}
+              controls
+              className="max-w-full max-h-full"
+              controlsList="nodownload"
+            >
+              Votre navigateur ne supporte pas la lecture vidéo.
+            </video>
+          </div>
+        );
+
+      case 'audio':
+        return (
+          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-900 to-blue-900 p-8">
+            <Music size={64} className="text-white mb-6 animate-pulse" />
+            <h2 className="text-2xl font-bold text-white mb-4">{documentName}</h2>
+            <div className="w-full max-w-2xl bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+              <audio
+                src={publicUrl}
+                controls
+                className="w-full"
+                controlsList="nodownload"
+              >
+                Votre navigateur ne supporte pas la lecture audio.
+              </audio>
+            </div>
+            <p className="text-white/70 mt-4 text-sm text-center max-w-md">
+              💡 La transcription automatique avec Whisper AI sera bientôt disponible
+            </p>
+          </div>
+        );
+
       default:
         return (
           <div className="w-full h-full flex items-center justify-center">
@@ -152,6 +187,9 @@ export function DocumentViewer({
           {fileType === 'image' && <ImageIcon className="text-white" size={24} />}
           {fileType === 'txt' && <FileText className="text-white" size={24} />}
           {fileType === 'pdf' && <FileText className="text-white" size={24} />}
+          {fileType === 'docx' && <FileText className="text-white" size={24} />}
+          {fileType === 'video' && <VideoIcon className="text-white" size={24} />}
+          {fileType === 'audio' && <Music className="text-white" size={24} />}
           <h1 className="text-lg font-semibold text-white truncate max-w-md">
             {documentName}
           </h1>

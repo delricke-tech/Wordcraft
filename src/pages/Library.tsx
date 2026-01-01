@@ -27,6 +27,7 @@ import {
   FileDown,
   CheckSquare,
   Square,
+  Type,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Document, Folder as FolderType, uploadFile } from '../lib/supabase';
@@ -2528,7 +2529,7 @@ function ContextMenu({
         }}
         className="w-full flex items-center gap-3 px-4 py-2 text-sm hover:bg-gray-50 text-gray-700"
       >
-        <Edit3 size={16} /> Renommer
+        <Type size={16} /> Renommer
       </button>
 
       {/* Move (documents uniquement) */}

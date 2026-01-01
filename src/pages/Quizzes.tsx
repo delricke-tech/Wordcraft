@@ -5,7 +5,6 @@ import {
   Plus,
   Search,
   Play,
-  Pencil,
   Trash2,
   Clock,
   Target,
@@ -13,6 +12,7 @@ import {
   X,
   Award,
   BarChart2,
+  Loader2,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Quiz } from '../lib/supabase';
@@ -203,13 +203,6 @@ export function Quizzes() {
                   >
                     <Play size={16} className="text-teal-600" />
                   </Link>
-                  <Link
-                    to={`/quizzes/${quiz.id}/edit`}
-                    className="p-1.5 hover:bg-gray-200 rounded"
-                    title="Modifier"
-                  >
-                    <Pencil size={16} className="text-gray-500" />
-                  </Link>
                   <button
                     onClick={() => handleDeleteQuiz(quiz.id)}
                     className="p-1.5 hover:bg-red-50 rounded"
@@ -242,30 +235,161 @@ function NewQuizModal({
   onCreated: () => void;
 }) {
   const { user } = useAuth();
+  const [mode, setMode] = useState<'manual' | 'ai'>('ai'); // Par défaut IA
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [topic, setTopic] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleCreate = async () => {
+  const handleCreateManual = async () => {
     if (!user || !title) return;
 
     setLoading(true);
-    const { error } = await supabase.from('quizzes').insert({
+    setError('');
+    
+    const { error: insertError } = await supabase.from('quizzes').insert({
       user_id: user.id,
       title,
       description,
+      is_ai_generated: false,
     });
 
-    if (!error) {
+    if (!insertError) {
       onCreated();
       onClose();
+    } else {
+      setError('Erreur lors de la création du quiz');
     }
     setLoading(false);
   };
 
+  const handleCreateWithAI = async () => {
+    if (!user || !topic) return;
+
+    setLoading(true);
+    setError('');
+
+    try {
+      console.log('🤖 Génération de quiz par IA sur le sujet:', topic);
+
+      // Créer un prompt détaillé pour générer du contenu pédagogique
+      const prompt = `Génère un cours détaillé et complet sur le sujet suivant : "${topic}". 
+Le contenu doit être pédagogique, structuré, et contenir au minimum 1500 mots avec :
+- Une introduction claire
+- Les concepts clés bien expliqués
+- Des exemples concrets
+- Des définitions précises
+- Des détails importants
+
+Ce contenu servira à générer des questions de quiz de qualité.`;
+
+      const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+      
+      if (!apiKey) {
+        throw new Error('Clé API OpenAI non configurée');
+      }
+
+      // Étape 1 : Générer du contenu pédagogique sur le sujet
+      const contentResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            {
+              role: 'system',
+              content: 'Tu es un professeur expert qui crée du contenu pédagogique de qualité.'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0.7,
+          max_tokens: 2500,
+        }),
+      });
+
+      if (!contentResponse.ok) {
+        throw new Error('Erreur lors de la génération du contenu');
+      }
+
+      const contentData = await contentResponse.json();
+      const generatedContent = contentData.choices[0]?.message?.content;
+
+      if (!generatedContent) {
+        throw new Error('Aucun contenu généré');
+      }
+
+      console.log('✅ Contenu généré:', generatedContent.substring(0, 200) + '...');
+
+      // Étape 2 : Générer les questions à partir du contenu
+      const { generateQuizFromText } = await import('../services/quizGenerator');
+      const quiz = await generateQuizFromText(
+        generatedContent,
+        topic,
+        'ai-generated'
+      );
+
+      console.log('✅ Quiz généré:', quiz);
+
+      // Étape 3 : Créer le quiz dans Supabase
+      const { data: quizData, error: quizError } = await supabase
+        .from('quizzes')
+        .insert({
+          user_id: user.id,
+          title: title || quiz.title,
+          description: description || `Quiz généré par IA sur : ${topic}`,
+          is_ai_generated: true,
+          question_count: quiz.questions.length,
+          settings: {
+            time_limit_minutes: 15,
+            passing_score: 70,
+            show_correct_answers: true,
+            randomize_questions: true,
+            randomize_options: true,
+          }
+        })
+        .select()
+        .single();
+
+      if (quizError) throw quizError;
+
+      // Étape 4 : Ajouter les questions
+      const questionsToInsert = quiz.questions.map(q => ({
+        quiz_id: quizData.id,
+        question: q.question,
+        options: q.options,
+        correct_answer: q.correctAnswer,
+        explanation: q.explanation,
+        order_index: quiz.questions.indexOf(q),
+      }));
+
+      const { error: questionsError } = await supabase
+        .from('quiz_questions')
+        .insert(questionsToInsert);
+
+      if (questionsError) throw questionsError;
+
+      console.log('✅ Quiz créé avec succès dans la base de données');
+      
+      onCreated();
+      onClose();
+    } catch (err: any) {
+      console.error('❌ Erreur:', err);
+      setError(err.message || 'Erreur lors de la génération du quiz');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl w-full max-w-md p-6">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-lg p-6">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-gray-900">Nouveau quiz</h2>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
@@ -273,45 +397,177 @@ function NewQuizModal({
           </button>
         </div>
 
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Titre du quiz</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="ex: Quiz Systeme Cardiovasculaire"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-              autoFocus
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Description (optionnel)
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Breve description du quiz"
-              rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
-            />
-          </div>
+        {/* Sélecteur de mode */}
+        <div className="flex gap-2 mb-6 p-1 bg-gray-100 rounded-lg">
+          <button
+            onClick={() => setMode('ai')}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md font-medium transition-all ${
+              mode === 'ai'
+                ? 'bg-white text-teal-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Sparkles size={18} />
+            Générer avec IA
+          </button>
+          <button
+            onClick={() => setMode('manual')}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md font-medium transition-all ${
+              mode === 'manual'
+                ? 'bg-white text-teal-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Plus size={18} />
+            Créer manuellement
+          </button>
         </div>
 
+        {/* Formulaire IA */}
+        {mode === 'ai' && (
+          <div className="space-y-4">
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+              <div className="flex items-start gap-3">
+                <Sparkles className="text-purple-600 mt-0.5" size={20} />
+                <div className="text-sm text-purple-900">
+                  <p className="font-medium mb-1">Génération automatique</p>
+                  <p className="text-purple-700">
+                    L'IA va créer un cours complet sur votre sujet puis générer 5 questions de qualité.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Sujet du quiz <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                placeholder="ex: Le système cardiovasculaire, La photosynthèse..."
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                autoFocus
+              />
+              <p className="mt-1.5 text-xs text-gray-500">
+                Entrez un sujet précis pour obtenir des questions pertinentes
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Titre personnalisé (optionnel)
+              </label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Laissez vide pour un titre automatique"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Description (optionnel)
+              </label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Description personnalisée du quiz"
+                rows={2}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+              />
+            </div>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Formulaire Manuel */}
+        {mode === 'manual' && (
+          <div className="space-y-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <div className="flex items-start gap-3">
+                <Plus className="text-blue-600 mt-0.5" size={20} />
+                <div className="text-sm text-blue-900">
+                  <p className="font-medium mb-1">Création manuelle</p>
+                  <p className="text-blue-700">
+                    Créez un quiz vide et ajoutez vos questions personnalisées.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Titre du quiz <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="ex: Quiz Système Cardiovasculaire"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                autoFocus={mode === 'manual'}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Description (optionnel)
+              </label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Brève description du quiz"
+                rows={3}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+              />
+            </div>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Boutons d'action */}
         <div className="flex justify-end gap-3 mt-6">
           <button
             onClick={onClose}
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+            disabled={loading}
+            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
           >
             Annuler
           </button>
           <button
-            onClick={handleCreate}
-            disabled={!title || loading}
-            className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50"
+            onClick={mode === 'ai' ? handleCreateWithAI : handleCreateManual}
+            disabled={
+              loading || 
+              (mode === 'ai' && !topic) || 
+              (mode === 'manual' && !title)
+            }
+            className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? 'Creation...' : 'Creer le quiz'}
+            {loading ? (
+              <>
+                <Loader2 size={18} className="animate-spin" />
+                {mode === 'ai' ? 'Génération en cours...' : 'Création...'}
+              </>
+            ) : (
+              <>
+                {mode === 'ai' ? <Sparkles size={18} /> : <Plus size={18} />}
+                {mode === 'ai' ? 'Générer avec IA' : 'Créer le quiz'}
+              </>
+            )}
           </button>
         </div>
       </div>

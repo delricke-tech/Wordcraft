@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   ClipboardList,
   Plus,
@@ -236,6 +236,7 @@ function NewQuizModal({
   onCreated: () => void;
 }) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [mode, setMode] = useState<'manual' | 'ai-topic' | 'ai-document'>('ai-document');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -400,6 +401,9 @@ function NewQuizModal({
       
       onCreated();
       onClose();
+      
+      // ✅ NAVIGATION vers le quiz créé
+      navigate(`/quizzes/${quizData.id}`);
     } catch (err: any) {
       console.error('❌ Erreur:', err);
       setError(err.message || 'Erreur lors de la génération du quiz');
@@ -522,6 +526,9 @@ Ce contenu servira à générer des questions de quiz de qualité.`;
       
       onCreated();
       onClose();
+      
+      // ✅ NAVIGATION vers le quiz créé
+      navigate(`/quizzes/${quizData.id}`);
     } catch (err: any) {
       console.error('❌ Erreur:', err);
       setError(err.message || 'Erreur lors de la génération du quiz');
@@ -609,8 +616,12 @@ Ce contenu servira à générer des questions de quiz de qualité.`;
               </label>
               <select
                 value={selectedDocument}
-                onChange={(e) => setSelectedDocument(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                onChange={(e) => {
+                  setSelectedDocument(e.target.value);
+                  if (e.target.value) setUploadedFile(null); // Clear upload
+                }}
+                disabled={!!uploadedFile}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
               >
                 <option value="">Choisir un document...</option>
                 {documents.map((doc) => (
@@ -619,8 +630,59 @@ Ce contenu servira à générer des questions de quiz de qualité.`;
                   </option>
                 ))}
               </select>
+            </div>
+
+            {/* Séparateur OU */}
+            <div className="relative flex items-center justify-center py-2">
+              <div className="absolute inset-x-0 flex items-center">
+                <div className="w-full border-t border-gray-300"></div>
+              </div>
+              <span className="relative bg-white px-3 text-sm font-medium text-gray-500">OU</span>
+            </div>
+
+            {/* NOUVEAU : Zone d'upload direct */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Uploader un nouveau document
+              </label>
+              <div className="flex items-center gap-2">
+                <label className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
+                  uploadedFile 
+                    ? 'border-purple-500 bg-purple-50' 
+                    : selectedDocument
+                    ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
+                    : 'border-gray-300 hover:border-purple-400 hover:bg-purple-50/50'
+                }`}>
+                  <input
+                    type="file"
+                    accept=".pdf,.docx,.txt,image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setUploadedFile(file);
+                        setSelectedDocument(''); // Clear selected
+                      }
+                    }}
+                    disabled={!!selectedDocument}
+                    className="hidden"
+                  />
+                  <Upload size={20} className={uploadedFile ? 'text-purple-600' : 'text-gray-400'} />
+                  <span className={`text-sm ${uploadedFile ? 'text-purple-700 font-medium' : 'text-gray-600'}`}>
+                    {uploadedFile ? uploadedFile.name : 'Choisir un fichier...'}
+                  </span>
+                </label>
+                {uploadedFile && (
+                  <button
+                    onClick={() => setUploadedFile(null)}
+                    className="p-2 hover:bg-red-50 rounded-lg"
+                    title="Retirer le fichier"
+                  >
+                    <X size={18} className="text-red-500" />
+                  </button>
+                )}
+              </div>
               <p className="text-xs text-gray-500 mt-1">
-                L'IA analysera le contenu et créera automatiquement des questions
+                Formats acceptés : PDF, DOCX, TXT, Images (JPG, PNG)
               </p>
             </div>
 
@@ -684,7 +746,7 @@ Ce contenu servira à générer des questions de quiz de qualité.`;
             {!selectedDocument && !uploadedFile && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
                 <p className="text-sm text-amber-800">
-                  Sélectionnez un document existant ou uploadez un nouveau fichier.
+                  ⚠️ Sélectionnez un document existant ou uploadez un nouveau fichier.
                 </p>
               </div>
             )}
@@ -808,7 +870,7 @@ Ce contenu servira à générer des questions de quiz de qualité.`;
             }
             disabled={
               loading || 
-              (mode === 'ai-document' && !selectedDocument) ||
+              (mode === 'ai-document' && !selectedDocument && !uploadedFile) ||
               (mode === 'ai-topic' && !topic) || 
               (mode === 'manual' && !title)
             }

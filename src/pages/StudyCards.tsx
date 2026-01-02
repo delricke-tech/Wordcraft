@@ -17,6 +17,7 @@ import {
   FileDown,
   Eye,
   Loader2,
+  Upload,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, StudyCard } from '../lib/supabase';
@@ -484,7 +485,8 @@ function NewCardModal({
   const [title, setTitle] = useState('');
   const [selectedDocument, setSelectedDocument] = useState<string>('');
   const [documents, setDocuments] = useState<any[]>([]);
-  const [flashcardCount, setFlashcardCount] = useState(15); // Nombre de flashcards par défaut : 15
+  const [flashcardCount, setFlashcardCount] = useState(15);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null); // Fichier uploadé
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
 
@@ -539,28 +541,53 @@ function NewCardModal({
   };
 
   const handleGenerateFromDocument = async () => {
-    if (!user || !selectedDocument) return;
+    if (!user || (!selectedDocument && !uploadedFile)) return;
 
     setGenerating(true);
     const loadingToast = toast.loading('Génération des flashcards par IA...');
 
     try {
-      // 1. Récupérer le document
-      const { data: doc, error: docError } = await supabase
-        .from('documents')
-        .select('*')
-        .eq('id', selectedDocument)
-        .single();
+      let doc: any;
+      let extractedText: string;
 
-      if (docError || !doc) {
-        throw new Error('Document introuvable');
+      // Si un fichier a été uploadé, l'utiliser directement
+      if (uploadedFile) {
+        console.log('📤 Upload et extraction depuis fichier uploadé:', uploadedFile.name);
+        
+        // Extraire le texte directement du fichier
+        toast.loading('Extraction du texte...', { id: loadingToast });
+        const { extractText } = await import('../services/textExtractor');
+        const { getFileType } = await import('../utils/fileUtils');
+        
+        const fileType = getFileType(uploadedFile.name);
+        const extractResult = await extractText(uploadedFile, fileType);
+        extractedText = typeof extractResult === 'string' ? extractResult : extractResult.text;
+
+        // Créer un objet document temporaire
+        doc = {
+          name: uploadedFile.name,
+          id: 'temp-' + Date.now(),
+        };
+      } else {
+        // Sinon, récupérer le document existant
+        const { data: docData, error: docError } = await supabase
+          .from('documents')
+          .select('*')
+          .eq('id', selectedDocument)
+          .single();
+
+        if (docError || !docData) {
+          throw new Error('Document introuvable');
+        }
+
+        doc = docData;
+
+        // 2. Extraire le texte
+        toast.loading('Extraction du texte...', { id: loadingToast });
+        const { extractText } = await import('../services/textExtractor');
+        const extractResult = await extractText(doc.storage_path, doc.file_type);
+        extractedText = typeof extractResult === 'string' ? extractResult : extractResult.text;
       }
-
-      // 2. Extraire le texte
-      toast.loading('Extraction du texte...', { id: loadingToast });
-      const { extractText } = await import('../services/textExtractor');
-      const extractResult = await extractText(doc.storage_path, doc.file_type);
-      const extractedText = typeof extractResult === 'string' ? extractResult : extractResult.text;
 
       if (!extractedText || extractedText.trim() === '') {
         throw new Error('Impossible d\'extraire le texte du document');
@@ -702,8 +729,12 @@ function NewCardModal({
               </label>
               <select
                 value={selectedDocument}
-                onChange={(e) => setSelectedDocument(e.target.value)}
+                onChange={(e) => {
+                  setSelectedDocument(e.target.value);
+                  if (e.target.value) setUploadedFile(null);
+                }}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                disabled={!!uploadedFile}
               >
                 <option value="">Choisir un document...</option>
                 {documents.map((doc) => (
@@ -715,6 +746,58 @@ function NewCardModal({
               <p className="text-xs text-gray-500 mt-1">
                 L'IA va analyser le document et créer automatiquement des flashcards
               </p>
+            </div>
+
+            {/* NOUVEAU : Upload de fichier */}
+            <div className="relative">
+              <div className="flex items-center gap-2">
+                <div className="flex-1 h-px bg-gray-200"></div>
+                <span className="text-xs text-gray-500 font-medium">OU</span>
+                <div className="flex-1 h-px bg-gray-200"></div>
+              </div>
+              
+              <div className="mt-3">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Uploader un nouveau document
+                </label>
+                <div className="flex gap-2">
+                  <label className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed rounded-lg cursor-pointer transition-all ${
+                    uploadedFile 
+                      ? 'border-purple-500 bg-purple-50' 
+                      : 'border-gray-300 hover:border-purple-400 hover:bg-purple-50/50'
+                  } ${selectedDocument ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                    <input
+                      type="file"
+                      accept=".pdf,.docx,.txt,image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setUploadedFile(file);
+                          setSelectedDocument('');
+                        }
+                      }}
+                      disabled={!!selectedDocument}
+                      className="hidden"
+                    />
+                    <Upload size={20} className={uploadedFile ? 'text-purple-600' : 'text-gray-400'} />
+                    <span className={`text-sm ${uploadedFile ? 'text-purple-700 font-medium' : 'text-gray-600'}`}>
+                      {uploadedFile ? uploadedFile.name : 'Choisir un fichier (PDF, DOCX, TXT, Image)'}
+                    </span>
+                  </label>
+                  {uploadedFile && (
+                    <button
+                      onClick={() => setUploadedFile(null)}
+                      className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Supprimer"
+                    >
+                      <X size={20} />
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Formats acceptés : PDF, DOCX, TXT, Images (JPG, PNG)
+                </p>
+              </div>
             </div>
 
             {/* NOUVEAU : Nombre de flashcards */}
@@ -748,10 +831,10 @@ function NewCardModal({
               </p>
             </div>
 
-            {documents.length === 0 && (
+            {!selectedDocument && !uploadedFile && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
                 <p className="text-sm text-amber-800">
-                  Aucun document disponible. Uploadez d'abord un document dans la bibliothèque.
+                  Sélectionnez un document existant ou uploadez un nouveau fichier.
                 </p>
               </div>
             )}
@@ -765,7 +848,7 @@ function NewCardModal({
               </button>
               <button
                 onClick={handleGenerateFromDocument}
-                disabled={!selectedDocument || generating}
+                disabled={(!selectedDocument && !uploadedFile) || generating}
                 className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
               >
                 {generating ? (

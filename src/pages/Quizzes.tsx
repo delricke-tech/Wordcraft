@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ClipboardList,
@@ -13,6 +13,7 @@ import {
   Award,
   BarChart2,
   Loader2,
+  Upload,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Quiz } from '../lib/supabase';
@@ -241,7 +242,8 @@ function NewQuizModal({
   const [topic, setTopic] = useState('');
   const [selectedDocument, setSelectedDocument] = useState<string>('');
   const [documents, setDocuments] = useState<any[]>([]);
-  const [questionCount, setQuestionCount] = useState(10); // Nombre de questions par défaut : 10
+  const [questionCount, setQuestionCount] = useState(10);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null); // Fichier uploadé
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -291,7 +293,7 @@ function NewQuizModal({
   };
 
   const handleCreateFromDocument = async () => {
-    if (!user || !selectedDocument) return;
+    if (!user || (!selectedDocument && !uploadedFile)) return;
 
     setLoading(true);
     setError('');
@@ -299,21 +301,45 @@ function NewQuizModal({
     try {
       console.log('🤖 Génération de quiz depuis document...');
 
-      // 1. Récupérer le document
-      const { data: doc, error: docError } = await supabase
-        .from('documents')
-        .select('*')
-        .eq('id', selectedDocument)
-        .single();
+      let doc: any;
+      let extractedText: string;
 
-      if (docError || !doc) {
-        throw new Error('Document introuvable');
+      // Si un fichier a été uploadé, l'utiliser directement
+      if (uploadedFile) {
+        console.log('📤 Upload et extraction depuis fichier uploadé:', uploadedFile.name);
+        
+        // Extraire le texte directement du fichier
+        const { extractText } = await import('../services/textExtractor');
+        const { getFileType } = await import('../utils/fileUtils');
+        
+        const fileType = getFileType(uploadedFile.name);
+        const extractResult = await extractText(uploadedFile, fileType);
+        extractedText = typeof extractResult === 'string' ? extractResult : extractResult.text;
+
+        // Créer un objet document temporaire
+        doc = {
+          name: uploadedFile.name,
+          id: 'temp-' + Date.now(),
+        };
+      } else {
+        // Sinon, récupérer le document existant
+        const { data: docData, error: docError } = await supabase
+          .from('documents')
+          .select('*')
+          .eq('id', selectedDocument)
+          .single();
+
+        if (docError || !docData) {
+          throw new Error('Document introuvable');
+        }
+
+        doc = docData;
+
+        // 2. Extraire le texte
+        const { extractText } = await import('../services/textExtractor');
+        const extractResult = await extractText(doc.storage_path, doc.file_type);
+        extractedText = typeof extractResult === 'string' ? extractResult : extractResult.text;
       }
-
-      // 2. Extraire le texte
-      const { extractText } = await import('../services/textExtractor');
-      const extractResult = await extractText(doc.storage_path, doc.file_type);
-      const extractedText = typeof extractResult === 'string' ? extractResult : extractResult.text;
 
       if (!extractedText || extractedText.trim() === '') {
         throw new Error('Impossible d\'extraire le texte du document');
@@ -357,11 +383,11 @@ function NewQuizModal({
       // 5. Ajouter les questions
       const questionsToInsert = quiz.questions.map(q => ({
         quiz_id: quizData.id,
-        question: q.question,
+        question_type: 'qcm',
+        question_text: q.question,
         options: q.options,
         correct_answer: q.correctAnswer,
         explanation: q.explanation,
-        order_index: quiz.questions.indexOf(q),
       }));
 
       const { error: questionsError } = await supabase
@@ -479,11 +505,11 @@ Ce contenu servira à générer des questions de quiz de qualité.`;
       // Étape 4 : Ajouter les questions
       const questionsToInsert = quiz.questions.map(q => ({
         quiz_id: quizData.id,
-        question: q.question,
+        question_type: 'qcm',
+        question_text: q.question,
         options: q.options,
         correct_answer: q.correctAnswer,
         explanation: q.explanation,
-        order_index: quiz.questions.indexOf(q),
       }));
 
       const { error: questionsError } = await supabase
@@ -655,10 +681,10 @@ Ce contenu servira à générer des questions de quiz de qualité.`;
               />
             </div>
 
-            {documents.length === 0 && (
+            {!selectedDocument && !uploadedFile && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
                 <p className="text-sm text-amber-800">
-                  Aucun document disponible. Uploadez d'abord un document dans la bibliothèque.
+                  Sélectionnez un document existant ou uploadez un nouveau fichier.
                 </p>
               </div>
             )}

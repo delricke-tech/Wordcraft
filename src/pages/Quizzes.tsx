@@ -399,11 +399,14 @@ function NewQuizModal({
 
       console.log('✅ Quiz créé avec succès');
       
-      onCreated();
+      // ✅ Fermer la modale immédiatement pour un meilleur UX
       onClose();
       
-      // ✅ NAVIGATION vers le quiz créé
-      navigate(`/quizzes/${quizData.id}`);
+      // ✅ NAVIGATION vers le quiz créé (après fermeture modale)
+      setTimeout(() => {
+        navigate(`/quizzes/${quizData.id}`);
+        onCreated(); // Rafraîchir la liste après navigation
+      }, 100);
     } catch (err: any) {
       console.error('❌ Erreur:', err);
       setError(err.message || 'Erreur lors de la génération du quiz');
@@ -524,11 +527,14 @@ Ce contenu servira à générer des questions de quiz de qualité.`;
 
       console.log('✅ Quiz créé avec succès dans la base de données');
       
-      onCreated();
+      // ✅ Fermer la modale immédiatement pour un meilleur UX
       onClose();
       
-      // ✅ NAVIGATION vers le quiz créé
-      navigate(`/quizzes/${quizData.id}`);
+      // ✅ NAVIGATION vers le quiz créé (après fermeture modale)
+      setTimeout(() => {
+        navigate(`/quizzes/${quizData.id}`);
+        onCreated(); // Rafraîchir la liste après navigation
+      }, 100);
     } catch (err: any) {
       console.error('❌ Erreur:', err);
       setError(err.message || 'Erreur lors de la génération du quiz');

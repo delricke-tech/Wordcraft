@@ -621,13 +621,20 @@ function NewCardModal({
           })),
       };
 
-      const { error: insertError } = await supabase.from('study_cards').insert({
+      // ✅ Préparer les données : ne pas inclure document_id si temporaire
+      const cardData: any = {
         user_id: user.id,
         title: `Fiche IA - ${doc.name}`,
         content: flashcardContent,
-        document_id: doc.id,
         is_ai_generated: true,
-      });
+      };
+
+      // ✅ Ajouter document_id SEULEMENT si c'est un vrai UUID (pas temp-xxx)
+      if (doc.id && !doc.id.startsWith('temp-')) {
+        cardData.document_id = doc.id;
+      }
+
+      const { error: insertError } = await supabase.from('study_cards').insert(cardData);
 
       if (insertError) throw insertError;
 

@@ -154,7 +154,7 @@ export function Quizzes() {
                       <ClipboardList size={20} className="text-amber-600" />
                     </div>
                     <div>
-                      <Link to={`/quizzes/${quiz.id}`}>
+                      <Link to={`/quizzes/${quiz.id}/take`}>
                         <h3 className="font-semibold text-gray-900 hover:text-teal-600">
                           {quiz.title}
                         </h3>

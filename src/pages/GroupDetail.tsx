@@ -431,7 +431,7 @@ export function GroupDetail() {
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
             placeholder="Ecrivez un message..."
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-gray-900 placeholder-gray-400"
           />
           <button
             onClick={handleSendMessage}
@@ -680,7 +680,7 @@ function SettingsModal({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none text-gray-900 placeholder-gray-400"
             />
           </div>
         </div>
@@ -692,6 +692,12 @@ function SettingsModal({
             className="w-full px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 transition-colors"
           >
             {loading ? 'Enregistrement...' : 'Enregistrer'}
+          </button>
+          <button
+            onClick={onClose}
+            className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Annuler
           </button>
           <button
             onClick={onLeave}

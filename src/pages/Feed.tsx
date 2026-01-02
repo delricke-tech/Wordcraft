@@ -222,6 +222,45 @@ export function Feed() {
     }
   };
 
+  const handleSharePost = async (originalPost: PostWithProfile) => {
+    if (!user) return;
+
+    try {
+      // Créer une nouvelle publication de type "share"
+      const shareContent = `${originalPost.profiles?.full_name || 'Un utilisateur'} a partagé : "${originalPost.content.substring(0, 100)}${originalPost.content.length > 100 ? '...' : ''}"`;
+      
+      const { error } = await supabase.from('posts').insert({
+        user_id: user.id,
+        content: shareContent,
+        post_type: 'share',
+        visibility: 'public',
+        shared_resource_id: originalPost.id,
+        shared_resource_type: 'post',
+      });
+
+      if (error) throw error;
+
+      // Incrémenter le compteur de partages du post original
+      await supabase
+        .from('posts')
+        .update({ share_count: originalPost.share_count + 1 })
+        .eq('id', originalPost.id);
+
+      // Mettre à jour localement
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === originalPost.id ? { ...p, share_count: p.share_count + 1 } : p
+        )
+      );
+
+      toast.success('Publication partagée !');
+      fetchPosts(); // Rafraîchir pour voir le nouveau post
+    } catch (error) {
+      console.error('Error sharing post:', error);
+      toast.error('Impossible de partager');
+    }
+  };
+
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       {/* Create Post Card */}
@@ -245,7 +284,7 @@ export function Feed() {
               onChange={(e) => setNewPostContent(e.target.value)}
               placeholder="Quoi de neuf ?"
               rows={3}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none text-gray-900 placeholder-gray-400"
             />
             <div className="flex items-center justify-between mt-3">
               <div className="flex gap-2">
@@ -351,10 +390,11 @@ export function Feed() {
               {post.user_id === user?.id && (
                 <button
                   onClick={() => handleDeletePost(post.id)}
-                  className="p-2 hover:bg-red-50 rounded-lg transition-colors text-gray-400 hover:text-red-600"
-                  title="Supprimer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
+                  title="Supprimer cette publication"
                 >
-                  <X size={18} />
+                  <X size={16} />
+                  <span>Supprimer</span>
                 </button>
               )}
             </div>
@@ -380,7 +420,11 @@ export function Feed() {
                   <span className="font-medium">{post.comment_count}</span>
                 </button>
 
-                <button className="flex items-center gap-2 text-gray-500 hover:text-teal-600 transition-colors">
+                <button
+                  onClick={() => handleSharePost(post)}
+                  className="flex items-center gap-2 text-gray-500 hover:text-teal-600 transition-colors"
+                  title="Partager cette publication"
+                >
                   <Share2 size={20} />
                   <span className="font-medium">{post.share_count}</span>
                 </button>

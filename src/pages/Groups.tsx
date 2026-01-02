@@ -6,21 +6,30 @@ import {
   Search,
   Globe,
   Lock,
-  MessageSquare,
   X,
+  ChevronDown,
+  Star,
+  MoreVertical,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Group } from '../lib/supabase';
 import { toast } from 'sonner';
+import { formatDistanceToNow } from 'date-fns';
+import { fr } from 'date-fns/locale';
+
+type GroupWithMembers = Group & {
+  members?: Array<{ profiles: { avatar_url?: string; full_name?: string; email: string } }>;
+};
 
 export function Groups() {
   const { user } = useAuth();
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [myGroups, setMyGroups] = useState<Group[]>([]);
+  const [groups, setGroups] = useState<GroupWithMembers[]>([]);
+  const [myGroups, setMyGroups] = useState<GroupWithMembers[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewGroupModal, setShowNewGroupModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'my' | 'discover'>('my');
+  const [sortBy, setSortBy] = useState<'name' | 'created' | 'updated'>('updated');
 
   useEffect(() => {
     fetchGroups();
@@ -37,25 +46,47 @@ export function Groups() {
 
       const myGroupIds = myMemberships?.map((m) => m.group_id) || [];
 
-      // Récupérer mes groupes (où je suis membre)
-      let myGroupsQuery = supabase.from('groups').select('*');
+      // Récupérer mes groupes avec les membres
+      let myGroupsQuery = supabase
+        .from('groups')
+        .select(`
+          *,
+          members:group_members!inner(
+            profiles:user_id (
+              avatar_url,
+              full_name,
+              email
+            )
+          )
+        `);
       
       if (myGroupIds.length > 0) {
         myGroupsQuery = myGroupsQuery.in('id', myGroupIds);
       } else {
-        // Si pas de groupes, retourner un tableau vide
-        myGroupsQuery = myGroupsQuery.eq('id', '00000000-0000-0000-0000-000000000000'); // ID impossible
+        myGroupsQuery = myGroupsQuery.eq('id', '00000000-0000-0000-0000-000000000000');
       }
+
+      // Récupérer les groupes publics avec les membres
+      const publicQuery = supabase
+        .from('groups')
+        .select(`
+          *,
+          members:group_members!inner(
+            profiles:user_id (
+              avatar_url,
+              full_name,
+              email
+            )
+          )
+        `)
+        .eq('is_public', true)
+        .eq('is_discoverable', true)
+        .not('id', 'in', `(${myGroupIds.join(',')})`)
+        .limit(20);
 
       const [myResult, publicResult] = await Promise.all([
         myGroupsQuery,
-        supabase
-          .from('groups')
-          .select('*')
-          .eq('is_public', true)
-          .eq('is_discoverable', true)
-          .not('id', 'in', `(${myGroupIds.join(',')})`) // Exclure mes groupes
-          .limit(20),
+        publicQuery,
       ]);
 
       setMyGroups(myResult.data || []);
@@ -111,163 +142,233 @@ export function Groups() {
     group.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Tri des groupes
+  const sortedGroups = [...filteredGroups].sort((a, b) => {
+    if (sortBy === 'name') return a.name.localeCompare(b.name);
+    if (sortBy === 'created') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    return new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime();
+  });
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Groupes d'etude</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Groupes de travail et projets</h1>
           <p className="text-gray-500 mt-1">Collaborez avec vos pairs et partagez des ressources</p>
         </div>
         <button
           onClick={() => setShowNewGroupModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+          className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors shadow-sm font-medium"
         >
           <Plus size={18} />
-          Creer un groupe
+          Créer
         </button>
       </div>
 
-      <div className="flex items-center gap-4 border-b border-gray-200">
-        <button
-          onClick={() => setActiveTab('my')}
-          className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors ${
-            activeTab === 'my'
-              ? 'border-teal-600 text-teal-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Mes groupes
-        </button>
-        <button
-          onClick={() => setActiveTab('discover')}
-          className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors ${
-            activeTab === 'discover'
-              ? 'border-teal-600 text-teal-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Decouvrir
-        </button>
-      </div>
+      {/* Filtres et Recherche */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div className="flex items-center gap-4">
+          {/* Onglets */}
+          <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setActiveTab('my')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'my'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Mes groupes
+            </button>
+            <button
+              onClick={() => setActiveTab('discover')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'discover'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Découvrir
+            </button>
+          </div>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-        <input
-          type="text"
-          placeholder="Rechercher des groupes..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-        />
+          {/* Barre de recherche */}
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="+ recherche"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+            />
+          </div>
+        </div>
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center h-64">
+        <div className="flex items-center justify-center h-64 bg-white rounded-lg shadow-sm border border-gray-200">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600" />
         </div>
       ) : filteredGroups.length === 0 ? (
-        <div className="text-center py-16">
+        <div className="text-center py-16 bg-white rounded-lg shadow-sm border border-gray-200">
           <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">
-            {activeTab === 'my' ? 'Aucun groupe pour le moment' : 'Aucun groupe trouve'}
+            {activeTab === 'my' ? 'Aucun groupe pour le moment' : 'Aucun groupe trouvé'}
           </h3>
           <p className="text-gray-500 mb-6">
             {activeTab === 'my'
-              ? 'Creez votre premier groupe d\'etude ou rejoignez-en un existant'
+              ? 'Créez votre premier groupe d\'étude ou rejoignez-en un existant'
               : 'Essayez un autre terme de recherche'}
           </p>
           {activeTab === 'my' && (
             <button
               onClick={() => setShowNewGroupModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700"
             >
               <Plus size={18} />
-              Creer un groupe
+              Créer un groupe
             </button>
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredGroups.map((group) => (
-            <div
-              key={group.id}
-              className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg transition-all"
-            >
-              <div className="h-24 bg-gradient-to-br from-teal-500 to-teal-700 relative">
-                {group.cover_url && (
-                  <img
-                    src={group.cover_url}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
-                )}
-                <div className="absolute top-3 right-3">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          {/* En-tête du tableau */}
+          <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-600 uppercase tracking-wider">
+            <div className="col-span-1 flex items-center">
+              <input type="checkbox" className="w-4 h-4 text-teal-600 border-gray-300 rounded" />
+            </div>
+            <div className="col-span-3 flex items-center gap-1 cursor-pointer hover:text-gray-900" onClick={() => setSortBy('name')}>
+              Dénomination
+              <ChevronDown size={14} className={sortBy === 'name' ? 'text-teal-600' : ''} />
+            </div>
+            <div className="col-span-2 flex items-center gap-1 cursor-pointer hover:text-gray-900" onClick={() => setSortBy('created')}>
+              Date de création
+              <ChevronDown size={14} className={sortBy === 'created' ? 'text-teal-600' : ''} />
+            </div>
+            <div className="col-span-2">Confidentialité</div>
+            <div className="col-span-2 flex items-center gap-1 cursor-pointer hover:text-gray-900" onClick={() => setSortBy('updated')}>
+              Mise à jour
+              <ChevronDown size={14} className={sortBy === 'updated' ? 'text-teal-600' : ''} />
+            </div>
+            <div className="col-span-2">Membres</div>
+          </div>
+
+          {/* Lignes du tableau */}
+          <div className="divide-y divide-gray-200">
+            {sortedGroups.map((group) => (
+              <div
+                key={group.id}
+                className="grid grid-cols-12 gap-4 px-4 py-4 hover:bg-gray-50 transition-colors items-center"
+              >
+                {/* Checkbox + Icône */}
+                <div className="col-span-1 flex items-center gap-2">
+                  <input type="checkbox" className="w-4 h-4 text-teal-600 border-gray-300 rounded" />
+                  <Star size={16} className="text-gray-400 hover:text-yellow-500 cursor-pointer" />
+                </div>
+
+                {/* Nom du groupe */}
+                <div className="col-span-3">
+                  <Link
+                    to={`/groups/${group.id}`}
+                    className="flex items-center gap-3 group"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-500 to-teal-700 flex items-center justify-center flex-shrink-0">
+                      <Users size={18} className="text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-900 group-hover:text-teal-600 truncate">
+                        {group.name}
+                      </p>
+                      {group.description && (
+                        <p className="text-xs text-gray-500 truncate">{group.description}</p>
+                      )}
+                    </div>
+                  </Link>
+                </div>
+
+                {/* Date de création */}
+                <div className="col-span-2 text-sm text-gray-600">
+                  {new Date(group.created_at).toLocaleDateString('fr-FR', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                  })}
+                  <br />
+                  <span className="text-xs text-gray-400">
+                    {new Date(group.created_at).toLocaleTimeString('fr-FR', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                </div>
+
+                {/* Confidentialité */}
+                <div className="col-span-2">
                   {group.is_public ? (
-                    <span className="px-2 py-1 bg-white/90 rounded text-xs font-medium text-gray-700 flex items-center gap-1">
-                      <Globe size={12} /> Public
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-md text-sm font-medium">
+                      <Globe size={14} />
+                      Public
                     </span>
                   ) : (
-                    <span className="px-2 py-1 bg-white/90 rounded text-xs font-medium text-gray-700 flex items-center gap-1">
-                      <Lock size={12} /> Prive
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 text-gray-700 rounded-md text-sm font-medium">
+                      <Lock size={14} />
+                      Privé
                     </span>
                   )}
                 </div>
-              </div>
 
-              <div className="p-5">
-                <Link to={`/groups/${group.id}`}>
-                  <h3 className="font-semibold text-gray-900 hover:text-teal-600">
-                    {group.name}
-                  </h3>
-                </Link>
-                {group.description && (
-                  <p className="text-sm text-gray-500 mt-1 line-clamp-2">{group.description}</p>
-                )}
-
-                <div className="flex flex-wrap gap-2 mt-3">
-                  {group.tags?.slice(0, 3).map((tag) => (
-                    <span
-                      key={tag}
-                      className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600 rounded"
-                    >
-                      {tag}
-                    </span>
-                  ))}
+                {/* Date de mise à jour */}
+                <div className="col-span-2 text-sm text-gray-600">
+                  {formatDistanceToNow(new Date(group.updated_at || group.created_at), {
+                    addSuffix: true,
+                    locale: fr,
+                  })}
                 </div>
 
-                <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
-                  <div className="flex items-center gap-4 text-sm text-gray-500">
-                    <span className="flex items-center gap-1">
-                      <Users size={14} />
-                      {group.member_count}
-                    </span>
-                    {group.settings.enable_chat && (
-                      <span className="flex items-center gap-1">
-                        <MessageSquare size={14} />
-                        Discussion
-                      </span>
+                {/* Membres (avatars) */}
+                <div className="col-span-2 flex items-center justify-between">
+                  <div className="flex -space-x-2">
+                    {group.members?.slice(0, 3).map((member, idx) => (
+                      <div
+                        key={idx}
+                        className="w-8 h-8 rounded-full border-2 border-white bg-gradient-to-br from-teal-500 to-blue-500 flex items-center justify-center text-white text-xs font-medium"
+                        title={member.profiles?.full_name || member.profiles?.email}
+                      >
+                        {member.profiles?.avatar_url ? (
+                          <img
+                            src={member.profiles.avatar_url}
+                            alt=""
+                            className="w-full h-full rounded-full object-cover"
+                          />
+                        ) : (
+                          (member.profiles?.full_name || member.profiles?.email)?.[0]?.toUpperCase()
+                        )}
+                      </div>
+                    ))}
+                    {group.member_count > 3 && (
+                      <div className="w-8 h-8 rounded-full border-2 border-white bg-gray-200 flex items-center justify-center text-gray-600 text-xs font-medium">
+                        +{group.member_count - 3}
+                      </div>
                     )}
                   </div>
-                  {activeTab === 'discover' && (
-                    <button 
+                  {activeTab === 'discover' ? (
+                    <button
                       onClick={() => handleJoinGroup(group.id)}
-                      className="px-3 py-1.5 text-sm font-medium bg-teal-600 text-white rounded-lg hover:bg-teal-700"
+                      className="p-1.5 text-sm font-medium text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
                     >
                       Rejoindre
                     </button>
-                  )}
-                  {activeTab === 'my' && (
-                    <Link
-                      to={`/groups/${group.id}`}
-                      className="px-3 py-1.5 text-sm font-medium text-teal-600 hover:bg-teal-50 rounded-lg"
-                    >
-                      Ouvrir
-                    </Link>
+                  ) : (
+                    <button className="p-1.5 hover:bg-gray-200 rounded-md transition-colors">
+                      <MoreVertical size={16} className="text-gray-400" />
+                    </button>
                   )}
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
 
@@ -343,7 +444,7 @@ function NewGroupModal({
               onChange={(e) => setDescription(e.target.value)}
               placeholder="De quoi parle ce groupe ?"
               rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none text-gray-900 placeholder-gray-400"
             />
           </div>
           <div className="flex items-center gap-4">

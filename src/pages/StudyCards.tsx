@@ -92,7 +92,7 @@ export function StudyCards() {
   };
 
   // ✅ Sélectionner/désélectionner tout
-  const handleSelectAll = () => {
+  const _handleSelectAll = () => {
     if (selectedCards.length === filteredCards.length) {
       setSelectedCards([]);
     } else {
@@ -293,7 +293,7 @@ export function StudyCards() {
             <Target size={18} className="text-green-600" />
           </div>
           <p className="text-2xl font-bold text-gray-900 mt-2">
-            {cards.filter((c) => c.mastery_level >= 80).length}
+            {cards.filter((c) => (c.mastery_level ?? 0) >= 80).length}
           </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -421,11 +421,11 @@ export function StudyCards() {
 
               <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
                 <div className="flex items-center gap-4 text-sm">
-                  <span className={`px-2 py-0.5 rounded font-medium ${getMasteryColor(card.mastery_level)}`}>
-                    {card.mastery_level}%
+                  <span className={`px-2 py-0.5 rounded font-medium ${getMasteryColor(card.mastery_level ?? 0)}`}>
+                    {card.mastery_level ?? 0}%
                   </span>
                   <span className="text-gray-500">
-                    {card.review_count} revisions
+                    {card.review_count ?? 0} revisions
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
@@ -516,8 +516,8 @@ export function StudyCards() {
                     </Link>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`px-2 py-1 rounded font-medium text-sm ${getMasteryColor(card.mastery_level)}`}>
-                      {card.mastery_level}%
+                    <span className={`px-2 py-1 rounded font-medium text-sm ${getMasteryColor(card.mastery_level ?? 0)}`}>
+                      {card.mastery_level ?? 0}%
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500">

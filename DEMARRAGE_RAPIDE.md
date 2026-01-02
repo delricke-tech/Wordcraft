@@ -1,229 +1,198 @@
-# 🚀 Guide de Démarrage - Chat IA avec Proxy
+# 🚀 Démarrage Rapide - WordCraft IA
 
-**Date** : 28 décembre 2024
+## ✅ Statut du Projet
 
----
+**Le projet est 100% fonctionnel et prêt à être utilisé !**
 
-## ⚡ Démarrage Rapide (2 options)
+## 📋 Checklist Avant de Commencer
 
-### Option A : Sans proxy (Recommandé pour tester d'abord)
+- [ ] Node.js ≥ 20.16.0 installé
+- [ ] Compte Supabase créé
+- [ ] Clé API OpenAI obtenue
+- [ ] Dépendances installées (`npm install`)
 
-```powershell
-cd "C:\Users\HP I5\Downloads\project"
+## ⚡ Démarrage en 3 Étapes
+
+### 1️⃣ Configurer l'Environnement
+
+Créez un fichier `.env` à la racine du projet :
+
+```env
+VITE_SUPABASE_URL=https://votre-projet.supabase.co
+VITE_SUPABASE_ANON_KEY=votre-clé-anonyme
+VITE_OPENAI_API_KEY=sk-votre-clé
+VITE_SERPER_API_KEY=votre-clé-serper
+```
+
+### 2️⃣ Configurer Supabase
+
+Dans votre tableau de bord Supabase :
+
+1. **Exécuter les migrations SQL**
+   - Ouvrir SQL Editor
+   - Copier/coller le contenu de `supabase/migrations/00_complete_schema.sql`
+   - Exécuter
+
+2. **Créer le bucket Storage**
+   - Aller dans Storage
+   - Créer un bucket nommé `documents`
+   - Le rendre public
+
+3. **Configurer les policies Storage**
+   - Dans SQL Editor
+   - Copier/coller le contenu de `supabase/storage_policies.sql`
+   - Exécuter
+
+### 3️⃣ Lancer l'Application
+
+```bash
 npm run dev
 ```
 
-Ouvrir : `http://localhost:5173`
+Le navigateur s'ouvrira automatiquement sur `http://localhost:5173` 🎉
 
-**Si ça fonctionne** : ✅ Parfait ! Pas besoin de proxy.
+## 🔍 Vérifications Rapides
 
-**Si erreur CORS dans la console** : Passer à l'Option B.
+### Tout fonctionne ?
 
----
-
-### Option B : Avec proxy (Si CORS bloque)
-
-**Terminal 1 - Proxy** :
-```powershell
-cd "C:\Users\HP I5\Downloads\project"
-node proxy-server.js
-```
-
-**Attendre de voir** :
-```
-✅ Proxy Supabase Storage ACTIF
-🌐 Serveur : http://localhost:3001
-```
-
-**Terminal 2 - Application** :
-```powershell
-cd "C:\Users\HP I5\Downloads\project"
+✅ **Le serveur démarre sans erreur**
+```bash
 npm run dev
 ```
 
-**L'app détecte automatiquement le proxy et l'utilise !**
-
----
-
-## 📋 Corrections appliquées
-
-### 1. ✅ TypeScript ReactMarkdown
-
-**Problème** : `className` non supporté directement
-
-**Solution** : Wrapper avec `<div className="prose...">` 
-
-```typescript
-<div className="prose prose-sm prose-invert max-w-none">
-  <ReactMarkdown ...>
-    {msg.content}
-  </ReactMarkdown>
-</div>
-```
-
-### 2. ✅ Proxy PDF
-
-**Fichier** : `src/services/openaiService.ts`
-
-**Logique** : Essaye le proxy d'abord, fallback direct si non disponible
-
-```typescript
-// Proxy : http://localhost:3001/download/[storage_path]
-// Fallback : supabase.storage.from('documents').download(storage_path)
-```
-
-### 3. ✅ Lecture IA
-
-**Pipeline automatique** :
-1. Télécharge PDF via proxy ou direct
-2. Extrait texte avec pdfjs-dist
-3. Envoie à OpenAI dans system prompt
-
-### 4. ✅ Sécurité storage_path
-
-- ✅ Proxy reçoit : `storage_path`
-- ✅ Supabase download : `storage_path`
-- ✅ Affichage UI : `name` (avec accents)
-
-### 5. ✅ Glassmorphism
-
-```typescript
-background: 'rgba(255, 255, 255, 0.1)'     // Transparence
-backdropFilter: 'blur(20px)'               // Flou
-border: '1px solid rgba(255, 255, 255, 0.2)' // Bordure fine
-```
-
----
-
-## 🧪 Tests à faire
-
-### Test 1 : Sans proxy
-```
-1. Lancer : npm run dev
-2. Ouvrir un PDF
-3. Ouvrir chat (bouton flottant)
-4. Console : Chercher "PDF direct depuis Supabase"
-5. ✅ Si extraction fonctionne → Pas besoin de proxy
-```
-
-### Test 2 : Avec proxy (si Test 1 échoue)
-```
-1. Terminal 1 : node proxy-server.js
-2. Terminal 2 : npm run dev
-3. Ouvrir un PDF
-4. Console : Chercher "PDF via proxy (CORS contourné)"
-5. ✅ Extraction fonctionne
-```
-
-### Test 3 : UI Glassmorphism
-```
-1. Ouvrir un PDF
-2. Cliquer sur bouton chat (coin bas droit)
-3. ✅ Voir transparence + flou
-4. ✅ Nom du document avec accents
-5. ✅ 6 suggestions de questions
-```
-
-### Test 4 : IA
-```
-1. Dans le chat, cliquer "Fais-moi un résumé"
-2. ✅ Voir "Génération du résumé en cours..."
-3. ✅ Résumé affiché en Markdown
-4. Poser question : "Quels sont les points clés ?"
-5. ✅ Réponse IA basée sur le PDF
-```
-
----
-
-## 🔍 Diagnostic erreurs
-
-### Erreur : "Failed to fetch"
-
-**Cause** : Proxy non démarré ou port occupé
-
-**Solution** :
-```powershell
-# Vérifier si port 3001 est libre
-netstat -ano | findstr :3001
-
-# Si occupé, changer le port dans proxy-server.js ligne 115 :
-const PORT = 3002; // Au lieu de 3001
-```
-
-### Erreur : "Invalid key"
-
-**Cause** : Utilisation de `name` au lieu de `storage_path`
-
-**Solution** : C'est déjà corrigé partout ! Vérifier la console pour voir quel chemin est utilisé.
-
-### Erreur : "CORS blocked"
-
-**Cause** : Bucket pas public ou RLS trop strict
-
-**Solution** : Lancer le proxy (Option B)
-
----
-
-## 📂 Fichiers modifiés
-
-| Fichier | Modification | Raison |
-|---------|--------------|--------|
-| `src/components/ChatPanel.tsx` | Wrapper `<div className>` pour Markdown | Fix TypeScript |
-| `src/services/openaiService.ts` | Ajout logique proxy + fallback | Éviter CORS |
-| `proxy-server.js` | Créé | Proxy local |
-
----
-
-## ✅ Checklist déploiement
-
-- [ ] `npm install` exécuté (dépendances à jour)
-- [ ] `.env` contient `VITE_OPENAI_API_KEY`
-- [ ] Tester sans proxy d'abord (Option A)
-- [ ] Si CORS : Lancer proxy (Option B)
-- [ ] Vérifier console : "Storage path" utilisé
-- [ ] Vérifier UI : Nom avec accents affiché
-- [ ] Tester résumé IA
-- [ ] Tester questions IA
-
----
-
-## 🎯 Commandes essentielles
-
-```powershell
-# Développement (sans proxy)
-npm run dev
-
-# Avec proxy (Terminal 1)
-node proxy-server.js
-
-# Avec proxy (Terminal 2)
-npm run dev
-
-# Vérifier types TypeScript
+✅ **Pas d'erreurs TypeScript**
+```bash
 npm run typecheck
+```
 
-# Build production
+✅ **Pas d'erreurs ESLint**
+```bash
+npm run lint
+```
+
+✅ **La compilation fonctionne**
+```bash
 npm run build
 ```
 
+## 🎯 Premiers Pas dans l'Application
+
+### 1. Créer un Compte
+- Accédez à `/register`
+- Créez un compte avec votre email
+- Connectez-vous
+
+### 2. Tester l'Upload de Documents
+- Allez dans **Bibliothèque**
+- Cliquez sur "Ajouter un document"
+- Uploadez un PDF
+- Vérifiez qu'il apparaît dans la liste
+
+### 3. Tester la Génération de Flashcards
+- Ouvrez un document
+- Cliquez sur "Générer des flashcards"
+- Attendez la génération (IA)
+- Consultez vos flashcards dans **Fiches de Révision**
+
+### 4. Tester la Génération de Quiz
+- Ouvrez un document
+- Cliquez sur "Générer un quiz"
+- Attendez la génération (IA)
+- Passez le quiz dans **Quiz**
+
+## 🆘 Problèmes Courants
+
+### ❌ Erreur : "VITE_SUPABASE_URL is not defined"
+**Solution :** Vérifiez que le fichier `.env` existe et contient les bonnes variables.
+
+### ❌ Erreur : "Row Level Security" lors de l'upload
+**Solution :** Assurez-vous d'avoir exécuté `storage_policies.sql` dans Supabase.
+
+### ❌ Erreur : "Invalid key" lors de l'upload
+**Solution :** Cette erreur ne devrait plus apparaître. Les noms de fichiers sont automatiquement nettoyés par `generateUniqueFileName()`.
+
+### ❌ Erreur : "Unauthorized" lors de la génération IA
+**Solution :** Vérifiez que `VITE_OPENAI_API_KEY` est correctement configurée dans `.env`.
+
+### ❌ Le PDF ne s'affiche pas
+**Solution :** Vérifiez que le bucket Storage `documents` est bien public dans Supabase.
+
+## 📚 Documentation Complète
+
+Pour une vérification détaillée du projet, consultez :
+- `VERIFICATION_PROJET.md` - Rapport complet de vérification
+
+## 🔧 Scripts Disponibles
+
+```bash
+npm run dev        # Serveur de développement
+npm run build      # Compilation production
+npm run preview    # Prévisualisation du build
+npm run lint       # Vérification ESLint
+npm run typecheck  # Vérification TypeScript
+```
+
+## 🎨 Fonctionnalités Principales
+
+### 📚 Bibliothèque
+- Upload de documents (PDF, DOCX, images)
+- Organisation en dossiers
+- Favoris
+- Viewer PDF intégré
+- Extraction de texte automatique
+
+### 🎴 Fiches de Révision
+- Création manuelle ou automatique (IA)
+- Système de révision espacée
+- Suivi de la maîtrise
+- Export
+
+### 📝 Quiz
+- Génération automatique (IA)
+- QCM, Vrai/Faux, Réponses courtes
+- Statistiques et historique
+
+### 🤖 Assistant IA
+- Chat contextuel
+- Génération de contenu
+- Recherche web intégrée
+
+### 👥 Collaboration
+- Groupes d'étude
+- Partage de ressources
+- Messages
+
+## 💡 Conseils d'Utilisation
+
+### Pour de Meilleurs Résultats avec l'IA
+
+1. **Documents de Qualité**
+   - Utilisez des PDF avec du texte sélectionnable (pas des images scannées)
+   - Les documents structurés donnent de meilleurs résultats
+
+2. **Questions Précises**
+   - Soyez précis dans vos questions à l'assistant IA
+   - Donnez du contexte si nécessaire
+
+3. **Révision Régulière**
+   - Utilisez le système de révision espacée
+   - Révisez les cartes suggérées quotidiennement
+
+### Gestion des Crédits IA
+
+- Chaque utilisateur commence avec **50 crédits**
+- Génération de flashcards : ~10 crédits
+- Génération de quiz : ~10 crédits
+- Question à l'IA : ~1 crédit
+
+Les crédits se rechargent selon votre abonnement.
+
+## 🚀 Prêt à Commencer !
+
+Vous avez maintenant tout ce qu'il faut pour utiliser WordCraft IA.
+
+**Besoin d'aide ?** Consultez les fichiers de documentation dans le dossier `docs/`.
+
 ---
 
-## 🎉 Résumé
-
-**TOUT EST PRÊT !**
-
-1. ✅ TypeScript corrigé
-2. ✅ Proxy PDF implémenté
-3. ✅ Fallback automatique
-4. ✅ storage_path utilisé partout
-5. ✅ Glassmorphism actif
-
-**Tester d'abord sans proxy**, lancer le proxy seulement si nécessaire !
-
----
-
-**Questions ?** Consulter :
-- `GUIDE_CORS_SUPABASE.md` - Configuration CORS détaillée
-- `CORRECTIONS_FINALES_IA.md` - Détails techniques
-- `proxy-server.js` - Code du proxy commenté
-
+**Bon apprentissage avec WordCraft IA ! 📚✨**

@@ -217,8 +217,8 @@ export function Sessions() {
                           {session.title}
                         </h3>
                       </Link>
-                      <span className={`px-2 py-0.5 text-xs font-medium rounded capitalize ${getSessionTypeColor(session.session_type)}`}>
-                        {getSessionTypeLabel(session.session_type)}
+                      <span className={`px-2 py-0.5 text-xs font-medium rounded capitalize ${getSessionTypeColor(session.session_type ?? '')}`}>
+                        {getSessionTypeLabel(session.session_type ?? '')}
                       </span>
                     </div>
                     {session.description && (

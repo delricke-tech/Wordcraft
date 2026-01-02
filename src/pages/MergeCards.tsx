@@ -58,7 +58,7 @@ export function MergeCards() {
         }
 
         // Extraire le nom du document depuis les tags
-        const docTag = card.tags?.find((tag: string) => 
+        const _docTag = card.tags?.find((tag: string) => 
           tag === 'pdf' || tag === 'docx' || tag.includes('.')
         );
         
@@ -169,7 +169,7 @@ export function MergeCards() {
       };
 
       // Insérer la fiche fusionnée
-      const { data: newCard, error: insertError } = await supabase
+      const { error: insertError } = await supabase
         .from('study_cards')
         .insert(mergedCard)
         .select()

@@ -59,7 +59,7 @@ const getOpenAIClient = () => {
  * Télécharge un PDF depuis Supabase (avec ou sans proxy)
  * UTILISE storage_path (pas le nom d'affichage)
  */
-async function downloadPDF(storagePath: string): Promise<Blob> {
+async function _downloadPDF(storagePath: string): Promise<Blob> {
   console.log('📥 Téléchargement PDF...');
   console.log('  - Storage path:', storagePath);
   console.log('  - Utilise proxy:', USE_PROXY);

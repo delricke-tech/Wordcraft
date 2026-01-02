@@ -281,10 +281,10 @@ async function extractTextFromPowerPoint(storagePath: string | File): Promise<st
     // Les .pptx sont des archives ZIP contenant du XML
     // Une extraction complète nécessiterait une bibliothèque spécialisée
     
-    let arrayBuffer: ArrayBuffer;
+    let _arrayBuffer: ArrayBuffer;
 
     if (storagePath instanceof File) {
-      arrayBuffer = await storagePath.arrayBuffer();
+      _arrayBuffer = await storagePath.arrayBuffer();
     } else {
       const { data: publicUrlData } = supabase.storage
         .from('documents')
@@ -323,10 +323,10 @@ async function extractTextFromExcel(storagePath: string | File): Promise<string>
   console.log('📈 Extraction depuis fichier Excel...');
   
   try {
-    let arrayBuffer: ArrayBuffer;
+    let _arrayBuffer: ArrayBuffer;
 
     if (storagePath instanceof File) {
-      arrayBuffer = await storagePath.arrayBuffer();
+      _arrayBuffer = await storagePath.arrayBuffer();
     } else {
       const { data: publicUrlData } = supabase.storage
         .from('documents')

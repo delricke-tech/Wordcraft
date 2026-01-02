@@ -36,7 +36,7 @@ export type Profile = {
   avatar_url?: string;
   role: 'student' | 'teacher' | 'admin';
   ai_credits: number;
-  subscription_tier?: 'free' | 'pro' | 'premium';
+  subscription_tier?: 'free' | 'pro' | 'premium' | 'student_pro';
   institution?: string;
   study_field?: string;
   bio?: string;
@@ -44,6 +44,9 @@ export type Profile = {
     email_notifications?: boolean;
     push_notifications?: boolean;
     weekly_digest?: boolean;
+    email?: boolean;
+    push?: boolean;
+    revision_reminders?: boolean;
   };
 };
 
@@ -91,12 +94,21 @@ export type Quiz = {
   updated_at: string;
 };
 
+export type StudyCardContent = {
+  definitions?: Array<{ term: string; definition: string }>;
+  key_points?: string[];
+  signs?: string[];
+  diagnostics?: string[];
+  treatments?: string[];
+  custom_sections?: Array<{ title: string; content: string }>;
+};
+
 export type StudyCard = {
   id: string;
   user_id: string;
   document_id?: string;
   title: string;
-  content: string;
+  content: StudyCardContent;
   tags?: string[];
   is_favorite?: boolean;
   is_ai_generated?: boolean;
@@ -127,7 +139,7 @@ export type StudySession = {
   document_id?: string;
   duration_minutes: number;
   score?: number;
-  status?: 'scheduled' | 'ongoing' | 'completed';
+  status?: 'scheduled' | 'ongoing' | 'completed' | 'ended' | 'active';
   title?: string;
   description?: string;
   session_type?: string;

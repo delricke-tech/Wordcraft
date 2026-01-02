@@ -63,10 +63,12 @@ export function Revision() {
 
   const handleAnswer = async (quality: number) => {
     const card = dueCards[currentCardIndex];
+    const currentMastery = card.mastery_level ?? 0;
+    const currentReviewCount = card.review_count ?? 0;
 
-    const newEaseFactor = Math.max(1.3, card.mastery_level / 100 * 2.5 + (quality - 3) * 0.1);
+    const newEaseFactor = Math.max(1.3, currentMastery / 100 * 2.5 + (quality - 3) * 0.1);
     const newInterval = quality >= 3 ? Math.max(1, Math.round(1 * newEaseFactor)) : 1;
-    const newMastery = Math.min(100, Math.max(0, card.mastery_level + (quality - 3) * 10));
+    const newMastery = Math.min(100, Math.max(0, currentMastery + (quality - 3) * 10));
 
     await supabase
       .from('study_cards')
@@ -74,7 +76,7 @@ export function Revision() {
         mastery_level: newMastery,
         last_reviewed_at: new Date().toISOString(),
         next_review_at: new Date(Date.now() + newInterval * 24 * 60 * 60 * 1000).toISOString(),
-        review_count: card.review_count + 1,
+        review_count: currentReviewCount + 1,
       })
       .eq('id', card.id);
 
@@ -138,11 +140,11 @@ export function Revision() {
                   {currentCard.tags?.[0] || 'General'}
                 </span>
                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  currentCard.mastery_level >= 80 ? 'bg-green-100 text-green-700' :
-                  currentCard.mastery_level >= 50 ? 'bg-amber-100 text-amber-700' :
+                  (currentCard.mastery_level ?? 0) >= 80 ? 'bg-green-100 text-green-700' :
+                  (currentCard.mastery_level ?? 0) >= 50 ? 'bg-amber-100 text-amber-700' :
                   'bg-red-100 text-red-700'
                 }`}>
-                  Maitrise : {currentCard.mastery_level}%
+                  Maitrise : {currentCard.mastery_level ?? 0}%
                 </span>
               </div>
 
@@ -388,17 +390,17 @@ export function Revision() {
                   <div>
                     <p className="font-medium text-gray-900">{card.title}</p>
                     <p className="text-sm text-gray-500">
-                      Maitrise : {card.mastery_level}% | Revisions : {card.review_count}
+                      Maitrise : {card.mastery_level ?? 0}% | Revisions : {card.review_count ?? 0}
                     </p>
                   </div>
                 </div>
                 <span className={`px-2 py-1 text-xs font-medium rounded ${
-                  card.mastery_level < 30 ? 'bg-red-100 text-red-700' :
-                  card.mastery_level < 70 ? 'bg-amber-100 text-amber-700' :
+                  (card.mastery_level ?? 0) < 30 ? 'bg-red-100 text-red-700' :
+                  (card.mastery_level ?? 0) < 70 ? 'bg-amber-100 text-amber-700' :
                   'bg-green-100 text-green-700'
                 }`}>
-                  {card.mastery_level < 30 ? 'A reviser' :
-                   card.mastery_level < 70 ? 'En cours' : 'Presque maitrise'}
+                  {(card.mastery_level ?? 0) < 30 ? 'A reviser' :
+                   (card.mastery_level ?? 0) < 70 ? 'En cours' : 'Presque maitrise'}
                 </span>
               </div>
             ))}

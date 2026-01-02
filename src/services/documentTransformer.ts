@@ -32,7 +32,7 @@ export interface ExtractedDocument {
  */
 export async function extractAndTransformPDF(
   pdfUrl: string,
-  documentId?: string
+  _documentId?: string
 ): Promise<ExtractedDocument> {
   try {
     console.log('📄 Démarrage de l\'extraction PDF depuis:', pdfUrl);

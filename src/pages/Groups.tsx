@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Group } from '../lib/supabase';
+import { toast } from 'sonner';
 
 export function Groups() {
   const { user } = useAuth();
@@ -27,16 +28,33 @@ export function Groups() {
 
   const fetchGroups = async () => {
     try {
+      // Récupérer les groupes dont je suis membre
+      const { data: myMemberships } = await supabase
+        .from('group_members')
+        .select('group_id')
+        .eq('user_id', user?.id)
+        .eq('status', 'active');
+
+      const myGroupIds = myMemberships?.map((m) => m.group_id) || [];
+
+      // Récupérer mes groupes (où je suis membre)
+      let myGroupsQuery = supabase.from('groups').select('*');
+      
+      if (myGroupIds.length > 0) {
+        myGroupsQuery = myGroupsQuery.in('id', myGroupIds);
+      } else {
+        // Si pas de groupes, retourner un tableau vide
+        myGroupsQuery = myGroupsQuery.eq('id', '00000000-0000-0000-0000-000000000000'); // ID impossible
+      }
+
       const [myResult, publicResult] = await Promise.all([
-        supabase
-          .from('groups')
-          .select('*')
-          .or(`owner_id.eq.${user?.id}`),
+        myGroupsQuery,
         supabase
           .from('groups')
           .select('*')
           .eq('is_public', true)
           .eq('is_discoverable', true)
+          .not('id', 'in', `(${myGroupIds.join(',')})`) // Exclure mes groupes
           .limit(20),
       ]);
 
@@ -44,8 +62,47 @@ export function Groups() {
       setGroups(publicResult.data || []);
     } catch (error) {
       console.error('Error fetching groups:', error);
+      toast.error('Erreur lors du chargement des groupes');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleJoinGroup = async (groupId: string) => {
+    if (!user) return;
+
+    try {
+      // Vérifier si l'utilisateur est déjà membre
+      const { data: existingMember } = await supabase
+        .from('group_members')
+        .select('id')
+        .eq('group_id', groupId)
+        .eq('user_id', user.id)
+        .single();
+
+      if (existingMember) {
+        toast.info('Vous êtes déjà membre de ce groupe');
+        return;
+      }
+
+      // Ajouter l'utilisateur au groupe
+      const { error } = await supabase.from('group_members').insert({
+        group_id: groupId,
+        user_id: user.id,
+        role: 'member',
+        status: 'active',
+      });
+
+      if (error) throw error;
+
+      // Incrémenter le compteur de membres
+      await supabase.rpc('increment_group_members', { group_id: groupId });
+
+      toast.success('Vous avez rejoint le groupe !');
+      fetchGroups();
+    } catch (error: any) {
+      console.error('Error joining group:', error);
+      toast.error('Impossible de rejoindre le groupe');
     }
   };
 
@@ -192,7 +249,10 @@ export function Groups() {
                     )}
                   </div>
                   {activeTab === 'discover' && (
-                    <button className="px-3 py-1.5 text-sm font-medium bg-teal-600 text-white rounded-lg hover:bg-teal-700">
+                    <button 
+                      onClick={() => handleJoinGroup(group.id)}
+                      className="px-3 py-1.5 text-sm font-medium bg-teal-600 text-white rounded-lg hover:bg-teal-700"
+                    >
                       Rejoindre
                     </button>
                   )}

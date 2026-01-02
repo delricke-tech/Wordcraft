@@ -14,6 +14,7 @@ import { MergeCards } from './pages/MergeCards';
 import { Quizzes } from './pages/Quizzes';
 import { TakeQuiz } from './pages/TakeQuiz';
 import { Groups } from './pages/Groups';
+import { GroupDetail } from './pages/GroupDetail';
 import { Messages } from './pages/Messages';
 import { Sessions } from './pages/Sessions';
 import { AIAssistant } from './pages/AIAssistant';
@@ -108,7 +109,7 @@ function AppRoutes() {
         <Route path="quizzes/:id/edit" element={<Quizzes />} />
         <Route path="groups" element={<Groups />} />
         <Route path="groups/new" element={<Groups />} />
-        <Route path="groups/:id" element={<Groups />} />
+        <Route path="groups/:id" element={<GroupDetail />} />
         <Route path="messages" element={<Messages />} />
         <Route path="sessions" element={<Sessions />} />
         <Route path="sessions/new" element={<Sessions />} />

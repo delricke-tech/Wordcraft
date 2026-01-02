@@ -124,11 +124,20 @@ export type Group = {
   name: string;
   description?: string;
   owner_id: string;
-  tags?: string[];
+  avatar_url?: string;
   cover_url?: string;
-  is_public?: boolean;
-  member_count?: number;
-  settings?: any;
+  is_public: boolean;
+  is_discoverable?: boolean;
+  category?: string;
+  tags?: string[];
+  settings: {
+    allow_member_posts?: boolean;
+    allow_member_invites?: boolean;
+    require_approval?: boolean;
+    enable_chat?: boolean;
+    enable_resources?: boolean;
+  };
+  member_count: number;
   created_at: string;
   updated_at: string;
 };

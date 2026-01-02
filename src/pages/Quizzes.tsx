@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Quiz } from '../lib/supabase';
+import { toast } from 'sonner';
 
 export function Quizzes() {
   useAuth();
@@ -24,6 +25,8 @@ export function Quizzes() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewQuizModal, setShowNewQuizModal] = useState(false);
+  const [selectedQuizzes, setSelectedQuizzes] = useState<string[]>([]); // ✅ Sélection multiple
+  const [selectionMode, setSelectionMode] = useState(false); // ✅ Mode sélection
 
   useEffect(() => {
     fetchQuizzes();
@@ -49,6 +52,38 @@ export function Quizzes() {
     const { error } = await supabase.from('quizzes').delete().eq('id', id);
     if (!error) {
       setQuizzes(quizzes.filter((q) => q.id !== id));
+      toast.success('Quiz supprimé !');
+    }
+  };
+
+  // ✅ Suppression multiple
+  const handleDeleteSelected = async () => {
+    if (selectedQuizzes.length === 0) return;
+    
+    const confirmed = confirm(`Supprimer ${selectedQuizzes.length} quiz sélectionné(s) ?`);
+    if (!confirmed) return;
+
+    const { error } = await supabase
+      .from('quizzes')
+      .delete()
+      .in('id', selectedQuizzes);
+
+    if (!error) {
+      setQuizzes(quizzes.filter((q) => !selectedQuizzes.includes(q.id)));
+      setSelectedQuizzes([]);
+      setSelectionMode(false);
+      toast.success(`${selectedQuizzes.length} quiz supprimé(s) !`);
+    } else {
+      toast.error('Erreur lors de la suppression');
+    }
+  };
+
+  // ✅ Toggle sélection d'un quiz
+  const handleToggleQuiz = (id: string) => {
+    if (selectedQuizzes.includes(id)) {
+      setSelectedQuizzes(selectedQuizzes.filter(qId => qId !== id));
+    } else {
+      setSelectedQuizzes([...selectedQuizzes, id]);
     }
   };
 
@@ -68,13 +103,56 @@ export function Quizzes() {
           <h1 className="text-2xl font-bold text-gray-900">Quiz</h1>
           <p className="text-gray-500 mt-1">Testez vos connaissances avec des quiz adaptatifs</p>
         </div>
-        <button
-          onClick={() => setShowNewQuizModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
-        >
-          <Plus size={18} />
-          Nouveau quiz
-        </button>
+        <div className="flex items-center gap-3">
+          {/* ✅ Boutons sélection multiple */}
+          {selectionMode ? (
+            <>
+              <button
+                onClick={() => {
+                  setSelectionMode(false);
+                  setSelectedQuizzes([]);
+                }}
+                className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <X size={18} />
+                Annuler
+              </button>
+              {selectedQuizzes.length > 0 && (
+                <>
+                  <span className="text-sm text-gray-600">
+                    {selectedQuizzes.length} sélectionné(s)
+                  </span>
+                  <button
+                    onClick={handleDeleteSelected}
+                    className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                  >
+                    <Trash2 size={18} />
+                    Supprimer ({selectedQuizzes.length})
+                  </button>
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              {quizzes.length > 0 && (
+                <button
+                  onClick={() => setSelectionMode(true)}
+                  className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <Trash2 size={18} />
+                  Sélectionner
+                </button>
+              )}
+              <button
+                onClick={() => setShowNewQuizModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+              >
+                <Plus size={18} />
+                Nouveau quiz
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -145,9 +223,23 @@ export function Quizzes() {
           {filteredQuizzes.map((quiz) => (
             <div
               key={quiz.id}
-              className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg transition-all"
+              className={`bg-white border-2 rounded-xl overflow-hidden hover:shadow-lg transition-all relative ${
+                selectedQuizzes.includes(quiz.id) ? 'border-teal-500' : 'border-gray-200'
+              }`}
             >
-              <div className="p-5">
+              {/* ✅ Checkbox en mode sélection */}
+              {selectionMode && (
+                <div className="absolute top-3 left-3 z-10">
+                  <input
+                    type="checkbox"
+                    checked={selectedQuizzes.includes(quiz.id)}
+                    onChange={() => handleToggleQuiz(quiz.id)}
+                    className="w-5 h-5 text-teal-600 rounded border-gray-300 focus:ring-teal-500"
+                  />
+                </div>
+              )}
+
+              <div className={`p-5 ${selectionMode ? 'pt-10' : ''}`}>
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
@@ -196,22 +288,24 @@ export function Quizzes() {
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-1">
-                  <Link
-                    to={`/quizzes/${quiz.id}/take`}
-                    className="p-1.5 hover:bg-teal-100 rounded"
-                    title="Passer le quiz"
-                  >
-                    <Play size={16} className="text-teal-600" />
-                  </Link>
-                  <button
-                    onClick={() => handleDeleteQuiz(quiz.id)}
-                    className="p-1.5 hover:bg-red-50 rounded"
-                    title="Supprimer"
-                  >
-                    <Trash2 size={16} className="text-red-500" />
-                  </button>
-                </div>
+                {!selectionMode && (
+                  <div className="flex items-center gap-1">
+                    <Link
+                      to={`/quizzes/${quiz.id}/take`}
+                      className="p-1.5 hover:bg-teal-100 rounded"
+                      title="Passer le quiz"
+                    >
+                      <Play size={16} className="text-teal-600" />
+                    </Link>
+                    <button
+                      onClick={() => handleDeleteQuiz(quiz.id)}
+                      className="p-1.5 hover:bg-red-50 rounded"
+                      title="Supprimer"
+                    >
+                      <Trash2 size={16} className="text-red-500" />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           ))}

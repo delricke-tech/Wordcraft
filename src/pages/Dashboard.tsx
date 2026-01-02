@@ -109,11 +109,11 @@ export function Dashboard() {
           <p className="text-slate-400 mt-2 text-lg">Voici ce qui se passe avec vos études</p>
         </div>
         <Link
-          to="/revision"
+          to="/cards"
           className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-teal-500 to-cyan-600 text-white rounded-xl shadow-lg font-semibold text-lg hover:scale-105 hover:from-teal-600 hover:to-cyan-700 transition duration-200"
         >
           <Play size={22} />
-          Commencer une session
+          Voir mes fiches
         </Link>
       </div>
 
@@ -166,8 +166,8 @@ export function Dashboard() {
             <span className="text-3xl font-extrabold text-white">{stats.dueReviews}</span>
           </div>
           <p className="mt-6 text-slate-300 font-semibold text-lg">Révisions dues</p>
-          <Link to="/revision" className="mt-3 text-base text-teal-300 hover:text-teal-200 flex items-center gap-1 transition">
-            Commencer la révision <ArrowRight size={16} />
+          <Link to="/cards" className="mt-3 text-base text-teal-300 hover:text-teal-200 flex items-center gap-1 transition">
+            Voir les fiches <ArrowRight size={16} />
           </Link>
         </div>
       </div>
@@ -260,11 +260,11 @@ export function Dashboard() {
             {dueCards.length > 0 && (
               <div className="p-4 bg-white/5 border-t border-slate-800">
                 <Link
-                  to="/revision"
+                  to="/cards"
                   className="flex items-center justify-center gap-2 w-full py-2 bg-gradient-to-r from-teal-500 to-cyan-600 text-white rounded-lg font-medium text-base shadow-md hover:scale-105 transition"
                 >
                   <Play size={18} />
-                  Commencer la révision
+                  Voir les fiches
                 </Link>
               </div>
             )}

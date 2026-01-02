@@ -57,10 +57,10 @@ export function MergeCards() {
           return;
         }
 
-        // Extraire le nom du document depuis les tags
-        const _docTag = card.tags?.find((tag: string) => 
-          tag === 'pdf' || tag === 'docx' || tag.includes('.')
-        );
+        // Extraire le nom du document depuis les tags (pour référence future)
+        // const docTag = card.tags?.find((tag: string) => 
+        //   tag === 'pdf' || tag === 'docx' || tag.includes('.')
+        // );
         
         // Utiliser le premier tag comme clé de regroupement
         const groupKey = card.tags?.[0] || 'Sans tag';

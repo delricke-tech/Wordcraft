@@ -281,10 +281,9 @@ async function extractTextFromPowerPoint(storagePath: string | File): Promise<st
     // Les .pptx sont des archives ZIP contenant du XML
     // Une extraction complète nécessiterait une bibliothèque spécialisée
     
-    let _arrayBuffer: ArrayBuffer;
-
+    // Note: arrayBuffer sera utilisé quand l'extraction sera implémentée
     if (storagePath instanceof File) {
-      _arrayBuffer = await storagePath.arrayBuffer();
+      void await storagePath.arrayBuffer();
     } else {
       const { data: publicUrlData } = supabase.storage
         .from('documents')
@@ -299,7 +298,7 @@ async function extractTextFromPowerPoint(storagePath: string | File): Promise<st
         throw new Error(`Erreur HTTP ${response.status}`);
       }
 
-      arrayBuffer = await response.arrayBuffer();
+      void await response.arrayBuffer();
     }
 
     // Extraire le nom du fichier pour info
@@ -323,10 +322,9 @@ async function extractTextFromExcel(storagePath: string | File): Promise<string>
   console.log('📈 Extraction depuis fichier Excel...');
   
   try {
-    let _arrayBuffer: ArrayBuffer;
-
+    // Note: arrayBuffer sera utilisé quand l'extraction sera implémentée
     if (storagePath instanceof File) {
-      _arrayBuffer = await storagePath.arrayBuffer();
+      void await storagePath.arrayBuffer();
     } else {
       const { data: publicUrlData } = supabase.storage
         .from('documents')
@@ -341,7 +339,7 @@ async function extractTextFromExcel(storagePath: string | File): Promise<string>
         throw new Error(`Erreur HTTP ${response.status}`);
       }
 
-      arrayBuffer = await response.arrayBuffer();
+      void await response.arrayBuffer();
     }
 
     const fileName = storagePath instanceof File ? storagePath.name : storagePath.split('/').pop();

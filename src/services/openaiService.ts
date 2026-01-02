@@ -20,12 +20,12 @@
  */
 
 import OpenAI from 'openai';
-import { supabase } from '../lib/supabase';
+// import { supabase } from '../lib/supabase';
 import { searchWeb } from './webSearch';
 
-// Configuration du proxy (activer si CORS bloque)
-const USE_PROXY = false; // Mettre à true si CORS bloque
-const PROXY_URL = 'http://localhost:3001';
+// Configuration du proxy (activer si CORS bloque) - Désactivé
+// const USE_PROXY = false;
+// const PROXY_URL = 'http://localhost:3001';
 
 // Types
 export interface ChatMessage {
@@ -55,61 +55,8 @@ const getOpenAIClient = () => {
   });
 };
 
-/**
- * Télécharge un PDF depuis Supabase (avec ou sans proxy)
- * UTILISE storage_path (pas le nom d'affichage)
- */
-async function _downloadPDF(storagePath: string): Promise<Blob> {
-  console.log('📥 Téléchargement PDF...');
-  console.log('  - Storage path:', storagePath);
-  console.log('  - Utilise proxy:', USE_PROXY);
-
-  if (USE_PROXY) {
-    // Option 1 : Via proxy (évite CORS)
-    console.log('🔄 Téléchargement via proxy...');
-    const response = await fetch(`${PROXY_URL}/download/${storagePath}`);
-    
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(`Erreur proxy: ${error.error || response.statusText}`);
-    }
-
-    const blob = await response.blob();
-    console.log('✅ PDF téléchargé via proxy:', blob.size, 'bytes');
-    return blob;
-
-  } else {
-    // Option 2 : Direct depuis Supabase (peut avoir CORS)
-    console.log('📦 Téléchargement direct depuis Supabase...');
-    
-    // RÈGLE : Utiliser storage_path pour récupérer le fichier
-    const { data, error } = await supabase.storage
-      .from('documents')
-      .download(storagePath);
-
-    if (error) {
-      console.error('❌ Erreur lors du téléchargement:', error);
-      
-      // Si erreur CORS, suggérer le proxy
-      if (error.message.includes('CORS') || error.message.includes('blocked')) {
-        throw new Error(
-          'Erreur CORS détectée. ' +
-          'Solution : Activez le proxy en mettant USE_PROXY = true dans openaiService.ts, ' +
-          'puis lancez "node proxy-server.js" dans un terminal.'
-        );
-      }
-      
-      throw new Error(`Impossible de télécharger le PDF: ${error.message}`);
-    }
-
-    if (!data) {
-      throw new Error('Aucune donnée retournée par Supabase');
-    }
-
-    console.log('✅ PDF téléchargé:', data.size, 'bytes');
-    return data;
-  }
-}
+// Note: La fonction downloadPDF a été supprimée car elle n'est pas utilisée.
+// Une fonction similaire existe dans pdfExtractor.ts si nécessaire.
 
 /**
  * Extrait le texte d'un PDF depuis Supabase Storage

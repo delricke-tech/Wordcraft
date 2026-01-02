@@ -91,14 +91,14 @@ export function StudyCards() {
     }
   };
 
-  // ✅ Sélectionner/désélectionner tout
-  const _handleSelectAll = () => {
-    if (selectedCards.length === filteredCards.length) {
-      setSelectedCards([]);
-    } else {
-      setSelectedCards(filteredCards.map(c => c.id));
-    }
-  };
+  // ✅ Sélectionner/désélectionner tout (fonction désactivée temporairement)
+  // const handleSelectAll = () => {
+  //   if (selectedCards.length === filteredCards.length) {
+  //     setSelectedCards([]);
+  //   } else {
+  //     setSelectedCards(filteredCards.map(c => c.id));
+  //   }
+  // };
 
   // ✅ Toggle sélection d'une carte
   const handleToggleCard = (id: string) => {
@@ -252,13 +252,12 @@ export function StudyCards() {
                 </button>
               )}
               {dueCards.length > 0 && (
-                <Link
-                  to="/revision"
-                  className="flex items-center gap-2 px-4 py-2 border border-teal-600 text-teal-600 rounded-lg hover:bg-teal-50 transition-colors"
-                >
-                  <Play size={18} />
-                  Reviser {dueCards.length} en attente
-                </Link>
+                <div className="px-4 py-2 border border-teal-600 text-teal-600 rounded-lg bg-teal-50">
+                  <div className="flex items-center gap-2">
+                    <Play size={18} />
+                    {dueCards.length} fiche{dueCards.length > 1 ? 's' : ''} à réviser
+                  </div>
+                </div>
               )}
               <button
                 onClick={() => setShowNewCardModal(true)}

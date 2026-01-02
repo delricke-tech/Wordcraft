@@ -1,4 +1,4 @@
-import { Folder, ChevronRight } from 'lucide-react';
+import { Folder } from 'lucide-react';
 import { Folder as FolderType } from '../../lib/supabase';
 
 interface FolderSelectorProps {

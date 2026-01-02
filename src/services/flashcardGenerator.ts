@@ -26,11 +26,16 @@ export type GeneratedFlashcards = {
 
 /**
  * Génère des flashcards à partir du texte d'un document
+ * @param text - Texte source
+ * @param documentTitle - Titre du document
+ * @param documentId - ID du document
+ * @param flashcardCount - Nombre de flashcards à générer (par défaut 15)
  */
 export async function generateFlashcardsFromText(
   text: string,
   documentTitle: string,
-  documentId: string
+  documentId: string,
+  flashcardCount: number = 15
 ): Promise<GeneratedFlashcards> {
   try {
     const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
@@ -39,7 +44,7 @@ export async function generateFlashcardsFromText(
       throw new Error('Clé API OpenAI non configurée dans le fichier .env');
     }
 
-    console.log('🤖 Génération de flashcards avec OpenAI...');
+    console.log(`🤖 Génération de ${flashcardCount} flashcards avec OpenAI...`);
     console.log(`📄 Document: ${documentTitle}`);
     console.log(`📝 Longueur texte: ${text.length} caractères`);
 
@@ -63,26 +68,40 @@ export async function generateFlashcardsFromText(
           {
             role: 'system',
             content: `Tu es un expert en création de fiches de révision complètes et détaillées.
-Extrais les informations essentielles du document et crée 20-30 flashcards de qualité.
 
-Types de cartes :
-- definition : Définitions clés avec explications détaillées
-- date : Dates importantes avec contexte complet
-- concept : Concepts principaux avec exemples
-- formula : Formules avec explications d'application
+RÈGLES STRICTES :
+1. Base-toi UNIQUEMENT sur le contenu fourni - N'invente RIEN
+2. Génère EXACTEMENT ${flashcardCount} flashcards de haute qualité
+3. Toutes les flashcards doivent provenir directement du document
+
+Types de cartes à créer :
+- definition : Définitions clés avec explications détaillées (3-5 phrases)
+- date : Dates importantes avec contexte complet et signification
+- concept : Concepts principaux avec exemples concrets du document
+- formula : Formules avec explications d'utilisation
+
+Pour chaque flashcard :
+- FRONT : Question claire et précise
+- BACK : Réponse complète et détaillée (3-5 phrases minimum)
+- TYPE : definition/date/concept/formula
+- CATEGORY : Thème du document
 
 Format JSON strict :
-{"cards":[{"front":"Question détaillée ?","back":"Réponse complète et détaillée","type":"definition","category":"Catégorie"}]}
+{"cards":[{"front":"Qu'est-ce que X ?","back":"Explication complète et détaillée provenant du document...","type":"definition","category":"Catégorie"}]}
 
-IMPORTANT : Réponses complètes et détaillées (3-5 phrases). Couvrir tous les points importants du document. Français.`
+IMPORTANT : 
+- Réponses COMPLÈTES et DÉTAILLÉES basées sur le document
+- Couvrir TOUS les points importants du document
+- ${flashcardCount} flashcards exactement
+- Tout en français`
           },
           {
             role: 'user',
-            content: `Génère 20-30 flashcards détaillées basées sur ce contenu :\n\n${truncatedText}`
+            content: `Génère ${flashcardCount} flashcards détaillées basées UNIQUEMENT sur ce contenu :\n\n${truncatedText}\n\nRAPPEL : ${flashcardCount} flashcards exactement, basées sur le document uniquement.`
           }
         ],
-        temperature: 0.7,
-        max_tokens: 2500, // Augmenté pour des réponses plus complètes et détaillées
+        temperature: 0.5, // Réduit pour plus de précision
+        max_tokens: 4000, // Augmenté pour ${flashcardCount} flashcards complètes
         response_format: { type: 'json_object' }
       }),
     });

@@ -492,10 +492,10 @@ N'hésitez pas à me poser des questions !`,
                           p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
                           ul: ({ children }) => <ul className="list-disc ml-4 mb-2">{children}</ul>,
                           ol: ({ children }) => <ol className="list-decimal ml-4 mb-2">{children}</ol>,
-                          code: ({ node, inline, className, children, ...props }) => {
-                            // Correction du bug: typage correct pour éviter les erreurs className
-                            const match = /language-(\w+)/.exec(className || '');
-                            return !inline ? (
+                          code: ({ className, children, ...props }) => {
+                            // Vérifier si c'est un code block ou inline
+                            const isCodeBlock = className?.includes('language-');
+                            return isCodeBlock ? (
                               <code className={className || ''} {...props}>
                                 {children}
                               </code>

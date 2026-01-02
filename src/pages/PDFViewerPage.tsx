@@ -6,7 +6,6 @@ import { DocumentViewer } from '../components/DocumentViewer';
 import { ChatPanel } from '../components/ChatPanel';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { extractPDFFromStorage } from '../services/pdfExtractor';
 import { extractText } from '../services/textExtractor';
 import { DocumentContext } from '../services/openaiService';
 

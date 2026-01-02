@@ -17,16 +17,18 @@ export type GeneratedQuiz = {
 };
 
 /**
- * Génère un quiz de 5 questions QCM basé sur le texte fourni
+ * Génère un quiz QCM basé sur le texte fourni
  * @param text - Texte source pour générer le quiz
  * @param documentTitle - Titre du document source
  * @param documentId - ID du document dans Supabase
- * @returns Quiz généré avec 5 questions
+ * @param questionCount - Nombre de questions à générer (par défaut 10)
+ * @returns Quiz généré avec le nombre de questions demandé
  */
 export async function generateQuizFromText(
   text: string,
   documentTitle: string,
-  documentId: string
+  documentId: string,
+  questionCount: number = 10
 ): Promise<GeneratedQuiz> {
   try {
     const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
@@ -35,11 +37,11 @@ export async function generateQuizFromText(
       throw new Error('Clé API OpenAI non configurée. Ajoutez VITE_OPENAI_API_KEY dans votre fichier .env');
     }
 
-    console.log('🤖 Génération de quiz avec OpenAI...');
+    console.log(`🤖 Génération de ${questionCount} questions depuis le document...`);
     console.log('📝 Longueur texte source:', text.length, 'caractères');
 
     // ✅ QUALITÉ OPTIMALE : Texte plus long pour des questions de qualité
-    const maxTextLength = 8000; // Augmenté pour garantir la qualité des questions
+    const maxTextLength = 15000; // Augmenté pour plus de contenu
     const truncatedText = text.length > maxTextLength 
       ? text.substring(0, maxTextLength) + '...' 
       : text;
@@ -57,27 +59,38 @@ export async function generateQuizFromText(
         messages: [
           {
             role: 'system',
-            content: `Tu es un professeur expert qui crée des quiz pédagogiques de qualité.
-Génère 5 questions à choix multiples (QCM) basées sur le contenu fourni.
+            content: `Tu es un professeur expert qui crée des quiz pédagogiques de haute qualité.
+
+RÈGLES STRICTES :
+1. Base-toi UNIQUEMENT sur le contenu fourni - N'invente RIEN
+2. Génère EXACTEMENT ${questionCount} questions à choix multiples (QCM)
+3. Toutes les questions doivent provenir directement du document
 
 Pour chaque question :
-- Pose une question claire et précise
+- Pose une question claire et précise basée sur une information PRÉSENTE dans le texte
 - Fournis 4 options de réponse pertinentes (A, B, C, D)
+- UNE SEULE option correcte, les autres doivent être plausibles mais fausses
 - Indique l'option correcte (0 pour A, 1 pour B, 2 pour C, 3 pour D)
-- Fournis une explication détaillée et pédagogique
+- Fournis une explication détaillée avec référence au document
+
+Variété des questions :
+- Définitions et concepts clés
+- Compréhension et mémorisation
+- Application pratique
+- Analyse et synthèse
 
 Format JSON strict :
-{"questions":[{"question":"Question détaillée ?","options":["Option A","Option B","Option C","Option D"],"correctAnswer":0,"explanation":"Explication complète"}]}
+{"questions":[{"question":"Question basée sur le document ?","options":["Option A","Option B","Option C","Option D"],"correctAnswer":0,"explanation":"Explication avec citation du document"}]}
 
-Questions variées : définitions, compréhension, application, analyse. Réponses en français.`
+IMPORTANT : Toutes les réponses doivent être en français et basées sur le contenu réel du document.`
           },
           {
             role: 'user',
-            content: `Génère 5 questions QCM de qualité basées sur ce cours :\n\n${truncatedText}`
+            content: `Génère ${questionCount} questions QCM de haute qualité basées UNIQUEMENT sur le contenu suivant :\n\n${truncatedText}\n\nRAPPEL : ${questionCount} questions exactement, basées sur le document uniquement.`
           }
         ],
-        temperature: 0.7,
-        max_tokens: 1500, // Augmenté pour des explications plus détaillées
+        temperature: 0.5, // Réduit pour plus de précision
+        max_tokens: 3000, // Augmenté pour ${questionCount} questions
         response_format: { type: 'json_object' }
       }),
     });

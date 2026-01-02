@@ -19,7 +19,6 @@ interface DocumentViewerProps {
 }
 
 export function DocumentViewer({ 
-  documentId, 
   documentName, 
   storagePath, 
   fileType,

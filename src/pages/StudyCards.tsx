@@ -16,7 +16,7 @@ import {
   X,
   FileDown,
   Eye,
-  Combine,
+  Loader2,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, StudyCard } from '../lib/supabase';
@@ -168,16 +168,6 @@ export function StudyCards() {
           <p className="text-gray-500 mt-1">Creez et gerez vos fiches d'etude</p>
         </div>
         <div className="flex items-center gap-3">
-          {cards.filter((c) => c.is_ai_generated).length > 1 && (
-            <Link
-              to="/cards/merge"
-              className="flex items-center gap-2 px-4 py-2 border border-purple-600 text-purple-600 rounded-lg hover:bg-purple-50 transition-colors"
-              title="Regrouper les fiches multiples en une seule"
-            >
-              <Combine size={18} />
-              Regrouper les fiches
-            </Link>
-          )}
           {dueCards.length > 0 && (
             <Link
               to="/revision"
@@ -490,8 +480,36 @@ function NewCardModal({
   onCreated: () => void;
 }) {
   const { user } = useAuth();
+  const [mode, setMode] = useState<'manual' | 'ai'>('manual');
   const [title, setTitle] = useState('');
+  const [selectedDocument, setSelectedDocument] = useState<string>('');
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [flashcardCount, setFlashcardCount] = useState(15); // Nombre de flashcards par défaut : 15
   const [loading, setLoading] = useState(false);
+  const [generating, setGenerating] = useState(false);
+
+  useEffect(() => {
+    if (mode === 'ai') {
+      fetchDocuments();
+    }
+  }, [mode]);
+
+  const fetchDocuments = async () => {
+    if (!user) return;
+    try {
+      const { data, error } = await supabase
+        .from('documents')
+        .select('id, name, file_type, storage_path')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      
+      if (!error && data) {
+        setDocuments(data);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des documents:', error);
+    }
+  };
 
   const handleCreate = async () => {
     if (!user || !title) return;
@@ -511,15 +529,95 @@ function NewCardModal({
     });
 
     if (!error) {
+      toast.success('Fiche créée avec succès !');
       onCreated();
       onClose();
+    } else {
+      toast.error('Erreur lors de la création de la fiche');
     }
     setLoading(false);
   };
 
+  const handleGenerateFromDocument = async () => {
+    if (!user || !selectedDocument) return;
+
+    setGenerating(true);
+    const loadingToast = toast.loading('Génération des flashcards par IA...');
+
+    try {
+      // 1. Récupérer le document
+      const { data: doc, error: docError } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('id', selectedDocument)
+        .single();
+
+      if (docError || !doc) {
+        throw new Error('Document introuvable');
+      }
+
+      // 2. Extraire le texte
+      toast.loading('Extraction du texte...', { id: loadingToast });
+      const { extractText } = await import('../services/textExtractor');
+      const extractResult = await extractText(doc.storage_path, doc.file_type);
+      const extractedText = typeof extractResult === 'string' ? extractResult : extractResult.text;
+
+      if (!extractedText || extractedText.trim() === '') {
+        throw new Error('Impossible d\'extraire le texte du document');
+      }
+
+      // 3. Générer les flashcards avec le nombre choisi
+      toast.loading(`Génération de ${flashcardCount} flashcards...`, { id: loadingToast });
+      const { generateFlashcardsFromText } = await import('../services/flashcardGenerator');
+      const result = await generateFlashcardsFromText(extractedText, doc.name, doc.id, flashcardCount);
+
+      if (!result.cards || result.cards.length === 0) {
+        throw new Error('Aucune flashcard générée');
+      }
+
+      // 4. Créer la fiche avec le contenu généré
+      const flashcardContent = {
+        definitions: result.cards
+          .filter(c => c.type === 'definition')
+          .map(c => ({ term: c.front, definition: c.back })),
+        key_points: result.cards
+          .filter(c => c.type === 'concept')
+          .map(c => `${c.front}: ${c.back}`),
+        signs: [],
+        diagnostics: [],
+        treatments: [],
+        custom_sections: result.cards
+          .filter(c => c.type === 'date' || c.type === 'formula')
+          .map(c => ({
+            title: c.type === 'date' ? '📅 Dates importantes' : '📐 Formules',
+            content: `${c.front}: ${c.back}`
+          })),
+      };
+
+      const { error: insertError } = await supabase.from('study_cards').insert({
+        user_id: user.id,
+        title: `Fiche IA - ${doc.name}`,
+        content: flashcardContent,
+        document_id: doc.id,
+        is_ai_generated: true,
+      });
+
+      if (insertError) throw insertError;
+
+      toast.success(`${result.cards.length} flashcards générées avec succès !`, { id: loadingToast });
+      onCreated();
+      onClose();
+    } catch (error: any) {
+      console.error('Erreur génération flashcards:', error);
+      toast.error(error.message || 'Erreur lors de la génération', { id: loadingToast });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl w-full max-w-md p-6">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-lg p-6">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-gray-900">Nouvelle fiche</h2>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
@@ -527,33 +625,164 @@ function NewCardModal({
           </button>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Titre de la fiche</label>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="ex: Anatomie du coeur"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-            autoFocus
-          />
+        {/* Choix du mode */}
+        <div className="flex gap-3 mb-6">
+          <button
+            onClick={() => setMode('manual')}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all ${
+              mode === 'manual'
+                ? 'border-teal-600 bg-teal-50 text-teal-700'
+                : 'border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            <Pencil size={20} />
+            <span className="font-medium">Manuelle</span>
+          </button>
+          <button
+            onClick={() => setMode('ai')}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all ${
+              mode === 'ai'
+                ? 'border-purple-600 bg-purple-50 text-purple-700'
+                : 'border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            <Sparkles size={20} />
+            <span className="font-medium">IA depuis document</span>
+          </button>
         </div>
 
-        <div className="flex justify-end gap-3 mt-6">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-          >
-            Annuler
-          </button>
-          <button
-            onClick={handleCreate}
-            disabled={!title || loading}
-            className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50"
-          >
-            {loading ? 'Creation...' : 'Creer la fiche'}
-          </button>
-        </div>
+        {/* Mode manuel */}
+        {mode === 'manual' && (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Titre de la fiche
+              </label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="ex: Anatomie du coeur"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleCreate}
+                disabled={!title || loading}
+                className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    Création...
+                  </>
+                ) : (
+                  'Créer la fiche'
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Mode IA */}
+        {mode === 'ai' && (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Sélectionner un document
+              </label>
+              <select
+                value={selectedDocument}
+                onChange={(e) => setSelectedDocument(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+              >
+                <option value="">Choisir un document...</option>
+                {documents.map((doc) => (
+                  <option key={doc.id} value={doc.id}>
+                    {doc.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                L'IA va analyser le document et créer automatiquement des flashcards
+              </p>
+            </div>
+
+            {/* NOUVEAU : Nombre de flashcards */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Nombre de flashcards
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min="10"
+                  max="30"
+                  value={flashcardCount}
+                  onChange={(e) => setFlashcardCount(Math.max(10, Math.min(30, parseInt(e.target.value) || 15)))}
+                  className="w-24 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+                <div className="flex-1 flex items-center gap-2">
+                  <input
+                    type="range"
+                    min="10"
+                    max="30"
+                    value={flashcardCount}
+                    onChange={(e) => setFlashcardCount(parseInt(e.target.value))}
+                    className="flex-1"
+                  />
+                  <span className="text-sm text-gray-600 w-20">{flashcardCount} cards</span>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Recommandé : 15 flashcards (Léger : 10-12 | Moyen : 15-20 | Complet : 20-30)
+              </p>
+            </div>
+
+            {documents.length === 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <p className="text-sm text-amber-800">
+                  Aucun document disponible. Uploadez d'abord un document dans la bibliothèque.
+                </p>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleGenerateFromDocument}
+                disabled={!selectedDocument || generating}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {generating ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    Génération...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={18} />
+                    Générer par IA
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

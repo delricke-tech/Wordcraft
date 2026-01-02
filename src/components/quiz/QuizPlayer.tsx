@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Check, X, ChevronRight, Trophy, RotateCcw, XCircle } from 'lucide-react';
-import { GeneratedQuiz, QuizQuestion, calculateQuizScore } from '../../services/quizGenerator';
+import { GeneratedQuiz, calculateQuizScore } from '../../services/quizGenerator';
 
 interface QuizPlayerProps {
   quiz: GeneratedQuiz;

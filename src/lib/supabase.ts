@@ -35,7 +35,16 @@ export type Profile = {
   full_name?: string;
   avatar_url?: string;
   role: 'student' | 'teacher' | 'admin';
-  ai_credits: number; 
+  ai_credits: number;
+  subscription_tier?: 'free' | 'pro' | 'premium';
+  institution?: string;
+  study_field?: string;
+  bio?: string;
+  notification_preferences?: {
+    email_notifications?: boolean;
+    push_notifications?: boolean;
+    weekly_digest?: boolean;
+  };
 };
 
 export type Folder = {
@@ -57,6 +66,8 @@ export type Document = {
   folder_id?: string | null;
   file_type: 'pdf' | 'docx' | 'txt' | 'image' | 'url' | 'video' | 'audio';
   is_favorite?: boolean; // Indique si le document est marqué comme favori
+  file_size?: number;
+  extracted_text?: string;
   created_at?: string;
 };
 
@@ -78,6 +89,53 @@ export type Quiz = {
   };
   created_at: string;
   updated_at: string;
+};
+
+export type StudyCard = {
+  id: string;
+  user_id: string;
+  document_id?: string;
+  title: string;
+  content: string;
+  tags?: string[];
+  is_favorite?: boolean;
+  is_ai_generated?: boolean;
+  mastery_level?: number;
+  review_count?: number;
+  next_review_at?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Group = {
+  id: string;
+  name: string;
+  description?: string;
+  owner_id: string;
+  tags?: string[];
+  cover_url?: string;
+  is_public?: boolean;
+  member_count?: number;
+  settings?: any;
+  created_at: string;
+  updated_at: string;
+};
+
+export type StudySession = {
+  id: string;
+  user_id: string;
+  document_id?: string;
+  duration_minutes: number;
+  score?: number;
+  status?: 'scheduled' | 'ongoing' | 'completed';
+  title?: string;
+  description?: string;
+  session_type?: string;
+  scheduled_at?: string;
+  participant_count?: number;
+  settings?: any;
+  recording_url?: string;
+  created_at: string;
 };
 
 /**

@@ -235,12 +235,38 @@ function NewQuizModal({
   onCreated: () => void;
 }) {
   const { user } = useAuth();
-  const [mode, setMode] = useState<'manual' | 'ai'>('ai'); // Par défaut IA
+  const [mode, setMode] = useState<'manual' | 'ai-topic' | 'ai-document'>('ai-document');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [topic, setTopic] = useState('');
+  const [selectedDocument, setSelectedDocument] = useState<string>('');
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [questionCount, setQuestionCount] = useState(10); // Nombre de questions par défaut : 10
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (mode === 'ai-document') {
+      fetchDocuments();
+    }
+  }, [mode]);
+
+  const fetchDocuments = async () => {
+    if (!user) return;
+    try {
+      const { data, error } = await supabase
+        .from('documents')
+        .select('id, name, file_type, storage_path')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      
+      if (!error && data) {
+        setDocuments(data);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des documents:', error);
+    }
+  };
 
   const handleCreateManual = async () => {
     if (!user || !title) return;
@@ -264,6 +290,98 @@ function NewQuizModal({
     setLoading(false);
   };
 
+  const handleCreateFromDocument = async () => {
+    if (!user || !selectedDocument) return;
+
+    setLoading(true);
+    setError('');
+
+    try {
+      console.log('🤖 Génération de quiz depuis document...');
+
+      // 1. Récupérer le document
+      const { data: doc, error: docError } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('id', selectedDocument)
+        .single();
+
+      if (docError || !doc) {
+        throw new Error('Document introuvable');
+      }
+
+      // 2. Extraire le texte
+      const { extractText } = await import('../services/textExtractor');
+      const extractResult = await extractText(doc.storage_path, doc.file_type);
+      const extractedText = typeof extractResult === 'string' ? extractResult : extractResult.text;
+
+      if (!extractedText || extractedText.trim() === '') {
+        throw new Error('Impossible d\'extraire le texte du document');
+      }
+
+      console.log('✅ Texte extrait:', extractedText.substring(0, 200) + '...');
+
+      // 3. Générer le quiz avec le nombre de questions choisi
+      const { generateQuizFromText } = await import('../services/quizGenerator');
+      const quiz = await generateQuizFromText(
+        extractedText,
+        doc.name,
+        doc.id,
+        questionCount // Passer le nombre de questions
+      );
+
+      console.log('✅ Quiz généré:', quiz);
+
+      // 4. Créer le quiz dans Supabase
+      const { data: quizData, error: quizError } = await supabase
+        .from('quizzes')
+        .insert({
+          user_id: user.id,
+          title: title || `Quiz - ${doc.name}`,
+          description: description || `Quiz généré depuis le document : ${doc.name}`,
+          is_ai_generated: true,
+          question_count: quiz.questions.length,
+          settings: {
+            time_limit_minutes: 15,
+            passing_score: 70,
+            show_correct_answers: true,
+            randomize_questions: true,
+            randomize_options: true,
+          }
+        })
+        .select()
+        .single();
+
+      if (quizError) throw quizError;
+
+      // 5. Ajouter les questions
+      const questionsToInsert = quiz.questions.map(q => ({
+        quiz_id: quizData.id,
+        question: q.question,
+        options: q.options,
+        correct_answer: q.correctAnswer,
+        explanation: q.explanation,
+        order_index: quiz.questions.indexOf(q),
+      }));
+
+      const { error: questionsError } = await supabase
+        .from('quiz_questions')
+        .insert(questionsToInsert);
+
+      if (questionsError) throw questionsError;
+
+      console.log('✅ Quiz créé avec succès');
+      
+      onCreated();
+      onClose();
+    } catch (err: any) {
+      console.error('❌ Erreur:', err);
+      setError(err.message || 'Erreur lors de la génération du quiz');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleCreateWithAI = async () => {
     if (!user || !topic) return;
 
@@ -273,7 +391,6 @@ function NewQuizModal({
     try {
       console.log('🤖 Génération de quiz par IA sur le sujet:', topic);
 
-      // Créer un prompt détaillé pour générer du contenu pédagogique
       const prompt = `Génère un cours détaillé et complet sur le sujet suivant : "${topic}". 
 Le contenu doit être pédagogique, structuré, et contenir au minimum 1500 mots avec :
 - Une introduction claire
@@ -389,7 +506,7 @@ Ce contenu servira à générer des questions de quiz de qualité.`;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-lg p-6">
+      <div className="bg-white rounded-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-gray-900">Nouveau quiz</h2>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
@@ -397,47 +514,166 @@ Ce contenu servira à générer des questions de quiz de qualité.`;
           </button>
         </div>
 
-        {/* Sélecteur de mode */}
-        <div className="flex gap-2 mb-6 p-1 bg-gray-100 rounded-lg">
+        {/* Sélecteur de mode - 3 options */}
+        <div className="flex flex-col gap-3 mb-6">
           <button
-            onClick={() => setMode('ai')}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md font-medium transition-all ${
-              mode === 'ai'
-                ? 'bg-white text-teal-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
+            onClick={() => setMode('ai-document')}
+            className={`flex items-start gap-3 px-4 py-3 rounded-lg border-2 transition-all text-left ${
+              mode === 'ai-document'
+                ? 'border-purple-600 bg-purple-50'
+                : 'border-gray-200 hover:border-gray-300'
             }`}
           >
-            <Sparkles size={18} />
-            Générer avec IA
+            <Sparkles size={20} className={mode === 'ai-document' ? 'text-purple-600' : 'text-gray-400'} />
+            <div className="flex-1">
+              <p className={`font-medium ${mode === 'ai-document' ? 'text-purple-700' : 'text-gray-700'}`}>
+                IA depuis un document
+              </p>
+              <p className="text-sm text-gray-500 mt-0.5">
+                Générer un quiz depuis vos documents existants
+              </p>
+            </div>
           </button>
+
+          <button
+            onClick={() => setMode('ai-topic')}
+            className={`flex items-start gap-3 px-4 py-3 rounded-lg border-2 transition-all text-left ${
+              mode === 'ai-topic'
+                ? 'border-teal-600 bg-teal-50'
+                : 'border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            <Sparkles size={20} className={mode === 'ai-topic' ? 'text-teal-600' : 'text-gray-400'} />
+            <div className="flex-1">
+              <p className={`font-medium ${mode === 'ai-topic' ? 'text-teal-700' : 'text-gray-700'}`}>
+                IA sur un sujet
+              </p>
+              <p className="text-sm text-gray-500 mt-0.5">
+                L'IA crée un cours puis génère un quiz
+              </p>
+            </div>
+          </button>
+
           <button
             onClick={() => setMode('manual')}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md font-medium transition-all ${
+            className={`flex items-start gap-3 px-4 py-3 rounded-lg border-2 transition-all text-left ${
               mode === 'manual'
-                ? 'bg-white text-teal-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
+                ? 'border-blue-600 bg-blue-50'
+                : 'border-gray-200 hover:border-gray-300'
             }`}
           >
-            <Plus size={18} />
-            Créer manuellement
+            <Plus size={20} className={mode === 'manual' ? 'text-blue-600' : 'text-gray-400'} />
+            <div className="flex-1">
+              <p className={`font-medium ${mode === 'manual' ? 'text-blue-700' : 'text-gray-700'}`}>
+                Créer manuellement
+              </p>
+              <p className="text-sm text-gray-500 mt-0.5">
+                Créez un quiz vide et ajoutez vos questions
+              </p>
+            </div>
           </button>
         </div>
 
-        {/* Formulaire IA */}
-        {mode === 'ai' && (
+        {/* Mode IA depuis document */}
+        {mode === 'ai-document' && (
           <div className="space-y-4">
-            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
-              <div className="flex items-start gap-3">
-                <Sparkles className="text-purple-600 mt-0.5" size={20} />
-                <div className="text-sm text-purple-900">
-                  <p className="font-medium mb-1">Génération automatique</p>
-                  <p className="text-purple-700">
-                    L'IA va créer un cours complet sur votre sujet puis générer 5 questions de qualité.
-                  </p>
-                </div>
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Sélectionner un document <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={selectedDocument}
+                onChange={(e) => setSelectedDocument(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+              >
+                <option value="">Choisir un document...</option>
+                {documents.map((doc) => (
+                  <option key={doc.id} value={doc.id}>
+                    {doc.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                L'IA analysera le contenu et créera automatiquement des questions
+              </p>
             </div>
 
+            {/* NOUVEAU : Nombre de questions */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Nombre de questions
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min="5"
+                  max="20"
+                  value={questionCount}
+                  onChange={(e) => setQuestionCount(Math.max(5, Math.min(20, parseInt(e.target.value) || 10)))}
+                  className="w-24 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+                <div className="flex-1 flex items-center gap-2">
+                  <input
+                    type="range"
+                    min="5"
+                    max="20"
+                    value={questionCount}
+                    onChange={(e) => setQuestionCount(parseInt(e.target.value))}
+                    className="flex-1"
+                  />
+                  <span className="text-sm text-gray-600 w-16">{questionCount} Q</span>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Recommandé : 10 questions (5 min : 5-8 | 10 min : 10-15 | 20 min : 15-20)
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Titre personnalisé (optionnel)
+              </label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Laissez vide pour un titre automatique"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Description (optionnel)
+              </label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Description personnalisée du quiz"
+                rows={2}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+              />
+            </div>
+
+            {documents.length === 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <p className="text-sm text-amber-800">
+                  Aucun document disponible. Uploadez d'abord un document dans la bibliothèque.
+                </p>
+              </div>
+            )}
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Formulaire IA par sujet */}
+        {mode === 'ai-topic' && (
+          <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 Sujet du quiz <span className="text-red-500">*</span>
@@ -492,18 +728,6 @@ Ce contenu servira à générer des questions de quiz de qualité.`;
         {/* Formulaire Manuel */}
         {mode === 'manual' && (
           <div className="space-y-4">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-              <div className="flex items-start gap-3">
-                <Plus className="text-blue-600 mt-0.5" size={20} />
-                <div className="text-sm text-blue-900">
-                  <p className="font-medium mb-1">Création manuelle</p>
-                  <p className="text-blue-700">
-                    Créez un quiz vide et ajoutez vos questions personnalisées.
-                  </p>
-                </div>
-              </div>
-            </div>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 Titre du quiz <span className="text-red-500">*</span>
@@ -513,7 +737,7 @@ Ce contenu servira à générer des questions de quiz de qualité.`;
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="ex: Quiz Système Cardiovasculaire"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 autoFocus={mode === 'manual'}
               />
             </div>
@@ -527,7 +751,7 @@ Ce contenu servira à générer des questions de quiz de qualité.`;
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Brève description du quiz"
                 rows={3}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
               />
             </div>
 
@@ -549,23 +773,41 @@ Ce contenu servira à générer des questions de quiz de qualité.`;
             Annuler
           </button>
           <button
-            onClick={mode === 'ai' ? handleCreateWithAI : handleCreateManual}
+            onClick={
+              mode === 'ai-document' 
+                ? handleCreateFromDocument 
+                : mode === 'ai-topic' 
+                ? handleCreateWithAI 
+                : handleCreateManual
+            }
             disabled={
               loading || 
-              (mode === 'ai' && !topic) || 
+              (mode === 'ai-document' && !selectedDocument) ||
+              (mode === 'ai-topic' && !topic) || 
               (mode === 'manual' && !title)
             }
-            className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-white disabled:opacity-50 disabled:cursor-not-allowed ${
+              mode === 'ai-document' 
+                ? 'bg-purple-600 hover:bg-purple-700'
+                : mode === 'ai-topic'
+                ? 'bg-teal-600 hover:bg-teal-700'
+                : 'bg-blue-600 hover:bg-blue-700'
+            }`}
           >
             {loading ? (
               <>
                 <Loader2 size={18} className="animate-spin" />
-                {mode === 'ai' ? 'Génération en cours...' : 'Création...'}
+                {mode === 'manual' ? 'Création...' : 'Génération...'}
               </>
             ) : (
               <>
-                {mode === 'ai' ? <Sparkles size={18} /> : <Plus size={18} />}
-                {mode === 'ai' ? 'Générer avec IA' : 'Créer le quiz'}
+                {mode === 'manual' ? <Plus size={18} /> : <Sparkles size={18} />}
+                {mode === 'ai-document' 
+                  ? 'Générer depuis document'
+                  : mode === 'ai-topic'
+                  ? 'Générer avec IA'
+                  : 'Créer le quiz'
+                }
               </>
             )}
           </button>

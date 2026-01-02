@@ -548,13 +548,15 @@ export function PDFViewer({ documentId, documentName, storagePath, onClose }: PD
                           p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
                           ul: ({ children }) => <ul className="list-disc ml-4 mb-2">{children}</ul>,
                           ol: ({ children }) => <ol className="list-decimal ml-4 mb-2">{children}</ol>,
-                          code: ({ node, inline, className, children, ...props }) => {
-                            return inline ? (
-                              <code className="bg-black/30 px-1.5 py-0.5 rounded text-sm" {...props}>
+                          code: ({ className, children, ...props }) => {
+                            // Vérifier si c'est un code block ou inline
+                            const isCodeBlock = className?.includes('language-');
+                            return isCodeBlock ? (
+                              <code className={className || ''} {...props}>
                                 {children}
                               </code>
                             ) : (
-                              <code className={className || ''} {...props}>
+                              <code className="bg-black/30 px-1.5 py-0.5 rounded text-sm" {...props}>
                                 {children}
                               </code>
                             );

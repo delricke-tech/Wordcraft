@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Brain, Mail, Lock, User, Eye, EyeOff, AlertCircle, Check } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'sonner';
-import { supabase } from '../../lib/supabase';
 
 export function RegisterPage() {
   const navigate = useNavigate();

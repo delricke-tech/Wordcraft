@@ -7,7 +7,6 @@ import {
   Loader2, 
   ArrowLeft,
   BookOpen,
-  ClipboardList,
   CheckCircle,
   Info
 } from 'lucide-react';

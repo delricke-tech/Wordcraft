@@ -43,7 +43,6 @@ import { MoveDocumentModal } from '../components/modals/MoveDocumentModal';
 import { updateFileFolder } from '../utils/moveFileFolder';
 import { toggleFavorite } from '../utils/toggleFavorite';
 import { QuizPlayer } from '../components/quiz/QuizPlayer';
-import { FlashcardPlayer } from '../components/flashcards/FlashcardPlayer';
 import { generateQuizFromText, GeneratedQuiz } from '../services/quizGenerator';
 import { generateFlashcardsFromText, GeneratedFlashcards } from '../services/flashcardGenerator';
 import { extractText } from '../services/textExtractor';
@@ -758,7 +757,6 @@ export function Library() {
 
     try {
       // Importer les services d'extraction
-      const { extractPDFFromStorage } = await import('../services/pdfExtractor');
       const { extractText } = await import('../services/textExtractor');
 
       for (let i = 0; i < totalFiles; i++) {

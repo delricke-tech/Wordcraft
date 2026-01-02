@@ -15,6 +15,8 @@ import { Quizzes } from './pages/Quizzes';
 import { TakeQuiz } from './pages/TakeQuiz';
 import { Groups } from './pages/Groups';
 import { GroupDetail } from './pages/GroupDetail';
+import { Feed } from './pages/Feed';
+import { Profile } from './pages/Profile';
 import { Messages } from './pages/Messages';
 import { Sessions } from './pages/Sessions';
 import { AIAssistant } from './pages/AIAssistant';
@@ -93,6 +95,9 @@ function AppRoutes() {
         }
       >
         <Route path="dashboard" element={<Dashboard />} />
+        <Route path="feed" element={<Feed />} />
+        <Route path="profile" element={<Profile />} />
+        <Route path="profile/:id" element={<Profile />} />
         <Route path="library" element={<Library />} />
         <Route path="library/:id" element={<DocumentView />} />
         <Route path="library/:id/view" element={<PDFViewerPage />} />

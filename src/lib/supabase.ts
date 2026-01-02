@@ -159,6 +159,67 @@ export type StudySession = {
   created_at: string;
 };
 
+// Types pour le système social (Profil et Fil d'Actualité)
+export type Post = {
+  id: string;
+  user_id: string;
+  content: string;
+  post_type: 'status' | 'achievement' | 'share' | 'question';
+  media_urls?: string[];
+  shared_resource_id?: string;
+  shared_resource_type?: 'document' | 'card' | 'quiz' | 'group';
+  visibility: 'public' | 'friends' | 'private';
+  like_count: number;
+  comment_count: number;
+  share_count: number;
+  created_at: string;
+  updated_at: string;
+  profiles?: Profile;
+};
+
+export type Like = {
+  id: string;
+  user_id: string;
+  target_type: 'document' | 'card' | 'quiz' | 'post' | 'comment';
+  target_id: string;
+  created_at: string;
+};
+
+export type Comment = {
+  id: string;
+  user_id: string;
+  target_type: 'document' | 'card' | 'quiz' | 'post';
+  target_id: string;
+  content: string;
+  parent_id?: string;
+  is_edited: boolean;
+  is_deleted: boolean;
+  created_at: string;
+  updated_at: string;
+  profiles?: Profile;
+};
+
+export type Follow = {
+  id: string;
+  follower_id: string;
+  following_id: string;
+  created_at: string;
+};
+
+export type ActivityFeed = {
+  id: string;
+  user_id: string;
+  activity_type: 'document_upload' | 'card_created' | 'quiz_created' | 'quiz_completed' | 
+                  'group_joined' | 'resource_shared' | 'followed_user' | 'comment_added' |
+                  'session_started' | 'session_completed' | 'achievement_earned';
+  target_type?: string;
+  target_id?: string;
+  metadata?: any;
+  is_public: boolean;
+  created_at: string;
+  profiles?: Profile;
+};
+
 /**
  * Upload un fichier dans le bucket Supabase 'documents'
  * 

@@ -14,6 +14,8 @@ import {
   Home,
   ChevronLeft,
   ChevronRight,
+  Rss,
+  UserCircle,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -24,10 +26,12 @@ type SidebarProps = {
 
 const navItems = [
   { to: '/dashboard', icon: Home, label: 'Tableau de bord' },
+  { to: '/feed', icon: Rss, label: 'Fil d\'actualité' },
+  { to: '/profile', icon: UserCircle, label: 'Mon profil' },
+  { to: '/groups', icon: Users, label: 'Groupes' },
   { to: '/library', icon: FileText, label: 'Bibliotheque' },
   { to: '/cards', icon: BookOpen, label: 'Fiches' },
   { to: '/quizzes', icon: ClipboardList, label: 'Quiz' },
-  { to: '/groups', icon: Users, label: 'Groupes' },
   { to: '/messages', icon: MessageSquare, label: 'Messages' },
   { to: '/sessions', icon: Video, label: 'Sessions' },
   { to: '/ai-assistant', icon: Sparkles, label: 'Assistant IA' },

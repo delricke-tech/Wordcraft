@@ -34,6 +34,8 @@ export function StudyCards() {
   const [selectedTag, setSelectedTag] = useState<string>('all');
   const [showNewCardModal, setShowNewCardModal] = useState(false);
   const [allTags, setAllTags] = useState<string[]>([]);
+  const [selectedCards, setSelectedCards] = useState<string[]>([]); // ✅ Sélection multiple
+  const [selectionMode, setSelectionMode] = useState(false); // ✅ Mode sélection
 
   useEffect(() => {
     fetchCards();
@@ -63,6 +65,47 @@ export function StudyCards() {
     const { error } = await supabase.from('study_cards').delete().eq('id', id);
     if (!error) {
       setCards(cards.filter((c) => c.id !== id));
+      toast.success('Fiche supprimée !');
+    }
+  };
+
+  // ✅ Suppression multiple
+  const handleDeleteSelected = async () => {
+    if (selectedCards.length === 0) return;
+    
+    const confirmed = confirm(`Supprimer ${selectedCards.length} fiche(s) sélectionnée(s) ?`);
+    if (!confirmed) return;
+
+    const { error } = await supabase
+      .from('study_cards')
+      .delete()
+      .in('id', selectedCards);
+
+    if (!error) {
+      setCards(cards.filter((c) => !selectedCards.includes(c.id)));
+      setSelectedCards([]);
+      setSelectionMode(false);
+      toast.success(`${selectedCards.length} fiche(s) supprimée(s) !`);
+    } else {
+      toast.error('Erreur lors de la suppression');
+    }
+  };
+
+  // ✅ Sélectionner/désélectionner tout
+  const handleSelectAll = () => {
+    if (selectedCards.length === filteredCards.length) {
+      setSelectedCards([]);
+    } else {
+      setSelectedCards(filteredCards.map(c => c.id));
+    }
+  };
+
+  // ✅ Toggle sélection d'une carte
+  const handleToggleCard = (id: string) => {
+    if (selectedCards.includes(id)) {
+      setSelectedCards(selectedCards.filter(cId => cId !== id));
+    } else {
+      setSelectedCards([...selectedCards, id]);
     }
   };
 
@@ -169,22 +212,63 @@ export function StudyCards() {
           <p className="text-gray-500 mt-1">Creez et gerez vos fiches d'etude</p>
         </div>
         <div className="flex items-center gap-3">
-          {dueCards.length > 0 && (
-            <Link
-              to="/revision"
-              className="flex items-center gap-2 px-4 py-2 border border-teal-600 text-teal-600 rounded-lg hover:bg-teal-50 transition-colors"
-            >
-              <Play size={18} />
-              Reviser {dueCards.length} en attente
-            </Link>
+          {/* ✅ Boutons sélection multiple */}
+          {selectionMode ? (
+            <>
+              <button
+                onClick={() => {
+                  setSelectionMode(false);
+                  setSelectedCards([]);
+                }}
+                className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <X size={18} />
+                Annuler
+              </button>
+              {selectedCards.length > 0 && (
+                <>
+                  <span className="text-sm text-gray-600">
+                    {selectedCards.length} sélectionné(s)
+                  </span>
+                  <button
+                    onClick={handleDeleteSelected}
+                    className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                  >
+                    <Trash2 size={18} />
+                    Supprimer ({selectedCards.length})
+                  </button>
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              {cards.length > 0 && (
+                <button
+                  onClick={() => setSelectionMode(true)}
+                  className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <Trash2 size={18} />
+                  Sélectionner
+                </button>
+              )}
+              {dueCards.length > 0 && (
+                <Link
+                  to="/revision"
+                  className="flex items-center gap-2 px-4 py-2 border border-teal-600 text-teal-600 rounded-lg hover:bg-teal-50 transition-colors"
+                >
+                  <Play size={18} />
+                  Reviser {dueCards.length} en attente
+                </Link>
+              )}
+              <button
+                onClick={() => setShowNewCardModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+              >
+                <Plus size={18} />
+                Nouvelle fiche
+              </button>
+            </>
           )}
-          <button
-            onClick={() => setShowNewCardModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
-          >
-            <Plus size={18} />
-            Nouvelle fiche
-          </button>
         </div>
       </div>
 
@@ -284,11 +368,25 @@ export function StudyCards() {
           {filteredCards.map((card) => (
             <div
               key={card.id}
-              className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg transition-all group"
+              className={`bg-white border-2 rounded-xl overflow-hidden hover:shadow-lg transition-all group relative ${
+                selectedCards.includes(card.id) ? 'border-teal-500' : 'border-gray-200'
+              }`}
             >
+              {/* ✅ Checkbox en mode sélection */}
+              {selectionMode && (
+                <div className="absolute top-3 left-3 z-10">
+                  <input
+                    type="checkbox"
+                    checked={selectedCards.includes(card.id)}
+                    onChange={() => handleToggleCard(card.id)}
+                    className="w-5 h-5 text-teal-600 rounded border-gray-300 focus:ring-teal-500"
+                  />
+                </div>
+              )}
+
               <div className="p-5">
                 <div className="flex items-start justify-between">
-                  <Link to={`/cards/${card.id}`}>
+                  <Link to={`/cards/${card.id}`} className={selectionMode ? 'ml-8' : ''}>
                     <h3 className="font-semibold text-gray-900 hover:text-teal-600 line-clamp-2">
                       {card.title}
                     </h3>
@@ -359,6 +457,17 @@ export function StudyCards() {
                   >
                     <Pencil size={16} className="text-gray-500" />
                   </Link>
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleDeleteCard(card.id);
+                    }}
+                    className="p-1.5 hover:bg-red-50 rounded"
+                    title="Supprimer"
+                  >
+                    <Trash2 size={16} className="text-red-500" />
+                  </button>
                 </div>
               </div>
             </div>

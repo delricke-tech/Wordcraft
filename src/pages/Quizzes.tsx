@@ -402,9 +402,9 @@ function NewQuizModal({
       // ✅ Fermer la modale immédiatement pour un meilleur UX
       onClose();
       
-      // ✅ NAVIGATION vers le quiz créé (après fermeture modale)
+      // ✅ NAVIGATION vers la page de passage du quiz (pas de page détail)
       setTimeout(() => {
-        navigate(`/quizzes/${quizData.id}`);
+        navigate(`/quizzes/${quizData.id}/take`);
         onCreated(); // Rafraîchir la liste après navigation
       }, 100);
     } catch (err: any) {
@@ -530,9 +530,9 @@ Ce contenu servira à générer des questions de quiz de qualité.`;
       // ✅ Fermer la modale immédiatement pour un meilleur UX
       onClose();
       
-      // ✅ NAVIGATION vers le quiz créé (après fermeture modale)
+      // ✅ NAVIGATION vers la page de passage du quiz (pas de page détail)
       setTimeout(() => {
-        navigate(`/quizzes/${quizData.id}`);
+        navigate(`/quizzes/${quizData.id}/take`);
         onCreated(); // Rafraîchir la liste après navigation
       }, 100);
     } catch (err: any) {

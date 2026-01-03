@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Rss,
   UserCircle,
+  Compass,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -27,6 +28,7 @@ type SidebarProps = {
 const navItems = [
   { to: '/dashboard', icon: Home, label: 'Tableau de bord' },
   { to: '/feed', icon: Rss, label: 'Fil d\'actualité' },
+  { to: '/discover', icon: Compass, label: 'Découvrir' },
   { to: '/profile', icon: UserCircle, label: 'Mon profil' },
   { to: '/groups', icon: Users, label: 'Groupes' },
   { to: '/library', icon: FileText, label: 'Bibliotheque' },

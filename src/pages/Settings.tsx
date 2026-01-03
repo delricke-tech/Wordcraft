@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   Settings as SettingsIcon,
   User,
@@ -14,8 +14,11 @@ import {
   Save,
   AlertCircle,
   Check,
+  Upload,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase, uploadFile } from '../lib/supabase';
+import { toast } from 'sonner';
 
 type SettingsSection = 'profile' | 'notifications' | 'security' | 'preferences';
 
@@ -24,12 +27,15 @@ export function Settings() {
   const [activeSection, setActiveSection] = useState<SettingsSection>('profile');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     full_name: profile?.full_name || '',
     email: profile?.email || '',
     institution: profile?.institution || '',
     study_field: profile?.study_field || '',
     bio: profile?.bio || '',
+    avatar_url: profile?.avatar_url || '',
   });
   const [notifications, setNotifications] = useState({
     email: profile?.notification_preferences?.email ?? true,
@@ -47,10 +53,62 @@ export function Settings() {
       institution: formData.institution,
       study_field: formData.study_field,
       bio: formData.bio,
+      avatar_url: formData.avatar_url,
     });
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
+  };
+
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleAvatarChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Vérifier le type de fichier
+    if (!file.type.startsWith('image/')) {
+      toast.error('Veuillez sélectionner une image (JPG, PNG, GIF)');
+      return;
+    }
+
+    // Vérifier la taille (5 Mo max)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('L\'image ne doit pas dépasser 5 Mo');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      // Upload vers Supabase Storage
+      const result = await uploadFile(file, profile?.id);
+      
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      const publicUrl = result.data?.publicUrl;
+
+      // Mettre à jour le profil dans la base de données
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl })
+        .eq('id', profile?.id);
+
+      if (updateError) throw updateError;
+
+      // Mettre à jour l'état local
+      setFormData({ ...formData, avatar_url: publicUrl });
+      
+      toast.success('Photo de profil mise à jour !');
+    } catch (error: any) {
+      console.error('Erreur upload avatar:', error);
+      toast.error('Erreur lors du changement de photo : ' + error.message);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const sections = [
@@ -99,12 +157,39 @@ export function Settings() {
               </div>
 
               <div className="flex items-center gap-6">
-                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center text-white text-2xl font-bold">
-                  {formData.full_name?.charAt(0) || 'U'}
+                <div className="relative group">
+                  {formData.avatar_url ? (
+                    <img
+                      src={formData.avatar_url}
+                      alt="Avatar"
+                      className="w-20 h-20 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center text-white text-2xl font-bold">
+                      {formData.full_name?.charAt(0) || 'U'}
+                    </div>
+                  )}
+                  {uploading && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white" />
+                    </div>
+                  )}
                 </div>
                 <div>
-                  <button className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium">
-                    Changer la photo
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarChange}
+                    className="hidden"
+                  />
+                  <button
+                    onClick={handleAvatarClick}
+                    disabled={uploading}
+                    className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Upload size={16} />
+                    {uploading ? 'Upload...' : 'Changer la photo'}
                   </button>
                   <p className="text-xs text-gray-500 mt-1">JPG, PNG jusqu'a 5Mo</p>
                 </div>

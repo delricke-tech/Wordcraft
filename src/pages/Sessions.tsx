@@ -87,6 +87,27 @@ export function Sessions() {
     }
   };
 
+  const handleDeleteSession = async (sessionId: string) => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer cette session ?')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('study_sessions')
+        .delete()
+        .eq('id', sessionId);
+
+      if (error) throw error;
+
+      // Rafraîchir la liste
+      fetchSessions();
+    } catch (error) {
+      console.error('Erreur suppression session:', error);
+      alert('Erreur lors de la suppression de la session');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">

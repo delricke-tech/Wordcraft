@@ -1,7 +1,9 @@
 /**
- * Service de génération de flashcards (cartes recto-verso)
+ * Service de génération de flashcards (cartes recto-verso) via Edge Function Supabase
  * Extrait les définitions clés et dates importantes d'un document
  */
+
+import { supabase } from '../lib/supabase';
 
 export type Flashcard = {
   id: string;
@@ -38,90 +40,50 @@ export async function generateFlashcardsFromText(
   flashcardCount: number = 15
 ): Promise<GeneratedFlashcards> {
   try {
-    const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-    
-    if (!apiKey) {
-      throw new Error('Clé API OpenAI non configurée dans le fichier .env');
-    }
-
-    console.log(`🤖 Génération de ${flashcardCount} flashcards avec OpenAI...`);
+    console.log(`🤖 Génération de ${flashcardCount} flashcards...`);
     console.log(`📄 Document: ${documentTitle}`);
     console.log(`📝 Longueur texte: ${text.length} caractères`);
 
-    // ✅ QUALITÉ MAXIMALE : Texte plus long pour un contenu complet et de qualité
-    const maxLength = 15000; // Augmenté pour garantir la qualité du contenu
+    // Limiter la taille du texte envoyé
+    const maxLength = 15000;
     const truncatedText = text.length > maxLength 
       ? text.substring(0, maxLength) + '...'
       : text;
 
     console.log(`📝 Texte analysé: ${truncatedText.length} caractères`);
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
+    // Récupérer la session actuelle
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
+      throw new Error('Vous devez être connecté pour générer des flashcards');
+    }
+
+    // ✅ Appeler l'Edge Function Supabase pour éviter CORS
+    const { data, error } = await supabase.functions.invoke('generate-flashcards', {
+      body: {
+        text: truncatedText,
+        documentName: documentTitle,
+        cardCount: flashcardCount
       },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: `Tu es un expert en création de fiches de révision complètes et détaillées.
-
-RÈGLES STRICTES :
-1. Base-toi UNIQUEMENT sur le contenu fourni - N'invente RIEN
-2. Génère EXACTEMENT ${flashcardCount} flashcards de haute qualité
-3. Toutes les flashcards doivent provenir directement du document
-
-Types de cartes à créer :
-- definition : Définitions clés avec explications détaillées (3-5 phrases)
-- date : Dates importantes avec contexte complet et signification
-- concept : Concepts principaux avec exemples concrets du document
-- formula : Formules avec explications d'utilisation
-
-Pour chaque flashcard :
-- FRONT : Question claire et précise
-- BACK : Réponse complète et détaillée (3-5 phrases minimum)
-- TYPE : definition/date/concept/formula
-- CATEGORY : Thème du document
-
-Format JSON strict :
-{"cards":[{"front":"Qu'est-ce que X ?","back":"Explication complète et détaillée provenant du document...","type":"definition","category":"Catégorie"}]}
-
-IMPORTANT : 
-- Réponses COMPLÈTES et DÉTAILLÉES basées sur le document
-- Couvrir TOUS les points importants du document
-- ${flashcardCount} flashcards exactement
-- Tout en français`
-          },
-          {
-            role: 'user',
-            content: `Génère ${flashcardCount} flashcards détaillées basées UNIQUEMENT sur ce contenu :\n\n${truncatedText}\n\nRAPPEL : ${flashcardCount} flashcards exactement, basées sur le document uniquement.`
-          }
-        ],
-        temperature: 0.5, // Réduit pour plus de précision
-        max_tokens: 4000, // Augmenté pour ${flashcardCount} flashcards complètes
-        response_format: { type: 'json_object' }
-      }),
     });
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error?.message || 'Erreur lors de l\'appel à l\'API OpenAI');
+    if (error) {
+      console.error('❌ Erreur Edge Function:', error);
+      throw new Error(`Erreur lors de la génération des flashcards: ${error.message}`);
     }
 
-    const data = await response.json();
-    const content = data.choices[0]?.message?.content;
-
-    if (!content) {
-      throw new Error('Aucune réponse générée par OpenAI');
+    if (!data) {
+      throw new Error('Aucune réponse de l\'Edge Function');
     }
 
-    console.log('✅ Flashcards générées par OpenAI:', content);
+    console.log('✅ Flashcards générées par l\'Edge Function:', data);
 
-    // Parser la réponse JSON
-    const parsedCards = JSON.parse(content);
+    const parsedCards = data;
+
+    if (!parsedCards.cards || !Array.isArray(parsedCards.cards)) {
+      throw new Error('Format de réponse invalide');
+    }
 
     // Ajouter des IDs uniques à chaque carte
     const cardsWithIds: Flashcard[] = parsedCards.cards.map((card: any, index: number) => ({

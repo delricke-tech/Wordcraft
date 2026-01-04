@@ -1,5 +1,7 @@
-// Service de génération de quiz avec OpenAI
+// Service de génération de quiz avec OpenAI via Edge Function Supabase
 // Génère des questions QCM basées sur du contenu textuel
+
+import { supabase } from '../lib/supabase';
 
 export type QuizQuestion = {
   id: string;
@@ -31,95 +33,70 @@ export async function generateQuizFromText(
   questionCount: number = 10
 ): Promise<GeneratedQuiz> {
   try {
-    const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-
-    if (!apiKey) {
-      throw new Error('Clé API OpenAI non configurée. Ajoutez VITE_OPENAI_API_KEY dans votre fichier .env');
-    }
-
     console.log(`🤖 Génération de ${questionCount} questions depuis le document...`);
     console.log('📝 Longueur texte source:', text.length, 'caractères');
 
-    // ✅ QUALITÉ OPTIMALE : Texte plus long pour des questions de qualité
-    const maxTextLength = 15000; // Augmenté pour plus de contenu
+    // Limiter la taille du texte envoyé
+    const maxTextLength = 15000;
     const truncatedText = text.length > maxTextLength 
       ? text.substring(0, maxTextLength) + '...' 
       : text;
-    
+
     console.log('📝 Texte analysé:', truncatedText.length, 'caractères');
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
+    // Récupérer le token de session actuel
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
+      throw new Error('Vous devez être connecté pour générer un quiz');
+    }
+
+    // ✅ Appeler l'Edge Function Supabase pour éviter CORS
+    const { data, error } = await supabase.functions.invoke('generate-quiz', {
+      body: {
+        text: truncatedText,
+        documentName: documentTitle,
+        questionCount: questionCount
       },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: `Tu es un professeur expert qui crée des quiz pédagogiques de haute qualité.
-
-RÈGLES STRICTES :
-1. Base-toi UNIQUEMENT sur le contenu fourni - N'invente RIEN
-2. Génère EXACTEMENT ${questionCount} questions à choix multiples (QCM)
-3. Toutes les questions doivent provenir directement du document
-
-Pour chaque question :
-- Pose une question claire et précise basée sur une information PRÉSENTE dans le texte
-- Fournis 4 options de réponse pertinentes (A, B, C, D)
-- UNE SEULE option correcte, les autres doivent être plausibles mais fausses
-- Indique l'option correcte (0 pour A, 1 pour B, 2 pour C, 3 pour D)
-- Fournis une explication détaillée avec référence au document
-
-Variété des questions :
-- Définitions et concepts clés
-- Compréhension et mémorisation
-- Application pratique
-- Analyse et synthèse
-
-Format JSON strict :
-{"questions":[{"question":"Question basée sur le document ?","options":["Option A","Option B","Option C","Option D"],"correctAnswer":0,"explanation":"Explication avec citation du document"}]}
-
-IMPORTANT : Toutes les réponses doivent être en français et basées sur le contenu réel du document.`
-          },
-          {
-            role: 'user',
-            content: `Génère ${questionCount} questions QCM de haute qualité basées UNIQUEMENT sur le contenu suivant :\n\n${truncatedText}\n\nRAPPEL : ${questionCount} questions exactement, basées sur le document uniquement.`
-          }
-        ],
-        temperature: 0.5, // Réduit pour plus de précision
-        max_tokens: 3000, // Augmenté pour ${questionCount} questions
-        response_format: { type: 'json_object' }
-      }),
     });
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error?.message || 'Erreur lors de l\'appel à l\'API OpenAI');
+    if (error) {
+      console.error('❌ Erreur Edge Function:', error);
+      throw new Error(`Erreur lors de la génération du quiz: ${error.message}`);
     }
 
-    const data = await response.json();
-    const content = data.choices[0]?.message?.content;
-
-    if (!content) {
-      throw new Error('Aucune réponse générée par OpenAI');
+    if (!data) {
+      throw new Error('Aucune réponse de l\'Edge Function');
     }
 
-    console.log('✅ Quiz généré par OpenAI:', content);
+    console.log('✅ Quiz généré par l\'Edge Function:', data);
 
-    // Parser la réponse JSON
-    const parsedQuiz = JSON.parse(content);
+    // L'Edge Function retourne les questions avec correctAnswer comme string
+    const parsedQuiz = data;
 
-    // Ajouter des IDs uniques à chaque question
-    const questionsWithIds: QuizQuestion[] = parsedQuiz.questions.map((q: any, index: number) => ({
-      id: `q${Date.now()}-${index}`,
-      question: q.question,
-      options: q.options,
-      correctAnswer: q.correctAnswer,
-      explanation: q.explanation,
-    }));
+    if (!parsedQuiz.questions || !Array.isArray(parsedQuiz.questions)) {
+      throw new Error('Format de réponse invalide');
+    }
+
+    // Ajouter des IDs uniques et convertir correctAnswer en index
+    const questionsWithIds: QuizQuestion[] = parsedQuiz.questions.map((q: any, index: number) => {
+      // Trouver l'index de la bonne réponse
+      let correctAnswerIndex = 0;
+      if (typeof q.correctAnswer === 'string') {
+        correctAnswerIndex = q.options.findIndex((opt: string) => opt === q.correctAnswer);
+        if (correctAnswerIndex === -1) correctAnswerIndex = 0; // Fallback si non trouvé
+      } else if (typeof q.correctAnswer === 'number') {
+        correctAnswerIndex = q.correctAnswer;
+      }
+
+      return {
+        id: `q${Date.now()}-${index}`,
+        question: q.question,
+        options: q.options,
+        correctAnswer: correctAnswerIndex,
+        explanation: q.explanation || '',
+      };
+    });
 
     const quiz: GeneratedQuiz = {
       questions: questionsWithIds,

@@ -530,78 +530,62 @@ function NewQuizModal({
     try {
       console.log('🤖 Génération de quiz par IA sur le sujet:', topic);
 
-      const prompt = `Génère un cours détaillé et complet sur le sujet suivant : "${topic}". 
-Le contenu doit être pédagogique, structuré, et contenir au minimum 1500 mots avec :
+      // ✅ Utiliser l'Edge Function qui génère directement un quiz complet
+      const { data, error } = await supabase.functions.invoke('generate-quiz', {
+        body: {
+          text: `Génère un cours détaillé sur le sujet suivant et des questions de quiz basées dessus : "${topic}". 
+Le contenu doit être pédagogique, structuré, avec :
 - Une introduction claire
 - Les concepts clés bien expliqués
 - Des exemples concrets
 - Des définitions précises
 - Des détails importants
 
-Ce contenu servira à générer des questions de quiz de qualité.`;
-
-      const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-      
-      if (!apiKey) {
-        throw new Error('Clé API OpenAI non configurée');
-      }
-
-      // Étape 1 : Générer du contenu pédagogique sur le sujet
-      const contentResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
+Utilise ce contenu pour créer les questions de quiz.`,
+          documentName: topic,
+          questionCount: 10
         },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            {
-              role: 'system',
-              content: 'Tu es un professeur expert qui crée du contenu pédagogique de qualité.'
-            },
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-          temperature: 0.7,
-          max_tokens: 2500,
-        }),
       });
 
-      if (!contentResponse.ok) {
-        throw new Error('Erreur lors de la génération du contenu');
+      if (error) {
+        console.error('❌ Erreur Edge Function:', error);
+        throw new Error(error.message || 'Erreur lors de la génération du quiz');
       }
 
-      const contentData = await contentResponse.json();
-      const generatedContent = contentData.choices[0]?.message?.content;
-
-      if (!generatedContent) {
-        throw new Error('Aucun contenu généré');
+      if (!data || !data.questions || data.questions.length === 0) {
+        throw new Error('Aucune question générée');
       }
 
-      console.log('✅ Contenu généré:', generatedContent.substring(0, 200) + '...');
+      console.log('✅ Quiz généré:', data);
 
-      // Étape 2 : Générer les questions à partir du contenu
-      const { generateQuizFromText } = await import('../services/quizGenerator');
-      const quiz = await generateQuizFromText(
-        generatedContent,
-        topic,
-        'ai-generated'
-      );
+      // Convertir les réponses string en index si nécessaire
+      const questions = data.questions.map((q: any, index: number) => {
+        let correctAnswerIndex = 0;
+        if (typeof q.correctAnswer === 'string') {
+          correctAnswerIndex = q.options.findIndex((opt: string) => opt === q.correctAnswer);
+          if (correctAnswerIndex === -1) correctAnswerIndex = 0;
+        } else if (typeof q.correctAnswer === 'number') {
+          correctAnswerIndex = q.correctAnswer;
+        }
 
-      console.log('✅ Quiz généré:', quiz);
+        return {
+          id: `q${Date.now()}-${index}`,
+          question: q.question,
+          options: q.options,
+          correctAnswer: correctAnswerIndex,
+          explanation: q.explanation || '',
+        };
+      });
 
-      // Étape 3 : Créer le quiz dans Supabase
+      // Étape 2 : Créer le quiz dans Supabase
       const { data: quizData, error: quizError } = await supabase
         .from('quizzes')
         .insert({
           user_id: user.id,
-          title: title || quiz.title,
+          title: title || `Quiz : ${topic}`,
           description: description || `Quiz généré par IA sur : ${topic}`,
           is_ai_generated: true,
-          question_count: quiz.questions.length,
+          question_count: questions.length,
           settings: {
             time_limit_minutes: 15,
             passing_score: 70,
@@ -615,8 +599,8 @@ Ce contenu servira à générer des questions de quiz de qualité.`;
 
       if (quizError) throw quizError;
 
-      // Étape 4 : Ajouter les questions
-      const questionsToInsert = quiz.questions.map(q => ({
+      // Étape 3 : Ajouter les questions
+      const questionsToInsert = questions.map((q: any) => ({
         quiz_id: quizData.id,
         question_type: 'qcm',
         question_text: q.question,
@@ -636,7 +620,7 @@ Ce contenu servira à générer des questions de quiz de qualité.`;
       // ✅ Fermer la modale immédiatement pour un meilleur UX
       onClose();
       
-      // ✅ NAVIGATION vers la page de passage du quiz (pas de page détail)
+      // ✅ NAVIGATION vers la page de passage du quiz
       setTimeout(() => {
         navigate(`/quizzes/${quizData.id}/take`);
         onCreated(); // Rafraîchir la liste après navigation

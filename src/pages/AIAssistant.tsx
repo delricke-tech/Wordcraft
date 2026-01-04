@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Sparkles, Send, Copy, Check, Upload, FileText, X, Loader } from 'lucide-react';
 
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 import { extractTextFromFile } from '../services/textExtractor';
 
 type Message = {
@@ -141,53 +142,20 @@ export function AIAssistant() {
     setIsLoading(true);
 
     try {
-      // Appel à l'API OpenAI avec contexte des documents
-      const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-      
-      if (!apiKey) {
-        throw new Error('Clé API OpenAI non configurée');
-      }
-
       // Construire le contexte des documents
       let documentsContext = '';
       if (uploadedDocuments.length > 0) {
         documentsContext = '\n\n📚 **DOCUMENTS DE COURS IMPORTÉS** :\n\n';
         uploadedDocuments.forEach((doc, index) => {
-          documentsContext += `--- DOCUMENT ${index + 1}: ${doc.name} ---\n${doc.content}\n\n`;
+          documentsContext += `--- DOCUMENT ${index + 1}: ${doc.name} ---\n${doc.content.substring(0, 3000)}\n\n`;
         });
         documentsContext += '\n⚠️ Base tes réponses UNIQUEMENT sur ces documents de cours.\n';
       }
 
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
+      // ✅ Appeler l'Edge Function Supabase pour éviter CORS
+      const { data, error } = await supabase.functions.invoke('chat-ai', {
+        body: {
           messages: [
-            {
-              role: 'system',
-              content: `Tu es WordCraft AI, un assistant pédagogique intelligent spécialisé dans l'analyse de cours académiques. 
-
-Tu as actuellement accès à ${uploadedDocuments.length} document(s) de cours.
-
-TES CAPACITÉS :
-- Résumer des cours
-- Expliquer des concepts complexes
-- Créer des quiz et fiches de révision
-- Répondre à des questions précises sur les cours
-- Comparer différents documents
-- Identifier les concepts clés
-
-RÈGLES :
-- Réponds TOUJOURS en français
-- Sois précis et pédagogique
-- Si tu cites un document, indique son nom
-- Si la question nécessite un document mais qu'aucun n'est fourni, demande à l'utilisateur d'en importer
-${documentsContext}`
-            },
             ...messages.map(m => ({
               role: m.role,
               content: m.content
@@ -197,18 +165,16 @@ ${documentsContext}`
               content: input
             }
           ],
-          temperature: 0.7,
-          max_tokens: 2000,
-        }),
+          context: documentsContext,
+          documentsCount: uploadedDocuments.length
+        },
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error?.message || 'Erreur lors de l\'appel à l\'API');
+      if (error) {
+        throw new Error(error.message || 'Erreur lors de l\'appel à l\'API');
       }
 
-      const data = await response.json();
-      const aiResponse = data.choices[0]?.message?.content || 'Désolé, je n\'ai pas pu générer de réponse.';
+      const aiResponse = data?.content || 'Désolé, je n\'ai pas pu générer de réponse.';
 
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -218,11 +184,11 @@ ${documentsContext}`
       };
       setMessages(prev => [...prev, aiMessage]);
     } catch (error) {
-      console.error('Erreur OpenAI:', error);
+      console.error('Erreur lors de l\'appel à l\'IA:', error);
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: `❌ Erreur: ${error instanceof Error ? error.message : 'Impossible de contacter l\'API OpenAI. Vérifiez votre clé API dans le fichier .env'}`,
+        content: `❌ Erreur: ${error instanceof Error ? error.message : 'Impossible de contacter l\'assistant IA'}`,
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, errorMessage]);

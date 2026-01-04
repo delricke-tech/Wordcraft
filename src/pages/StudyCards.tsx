@@ -24,6 +24,7 @@ import { supabase, StudyCard } from '../lib/supabase';
 import { formatDistanceToNow, format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { ContextualActions } from '../components/ContextualActions';
 
 export function StudyCards() {
   useAuth();
@@ -307,6 +308,12 @@ export function StudyCards() {
             {cards.filter((c) => c.is_ai_generated).length}
           </p>
         </div>
+      </div>
+
+      {/* ✅ Actions contextuelles */}
+      <div className="bg-gradient-to-r from-teal-50 to-blue-50 rounded-lg p-4 border border-teal-200">
+        <p className="text-sm text-gray-700 font-medium mb-3">Actions rapides depuis les fiches :</p>
+        <ContextualActions context="fiche" />
       </div>
 
       <div className="flex items-center gap-4">

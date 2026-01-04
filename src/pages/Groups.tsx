@@ -16,6 +16,7 @@ import { supabase, Group } from '../lib/supabase';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { ContextualActions } from '../components/ContextualActions';
 
 type GroupWithMembers = Group & {
   members?: Array<{ profiles: { avatar_url?: string; full_name?: string; email: string } }>;
@@ -164,6 +165,12 @@ export function Groups() {
           <Plus size={18} />
           Créer
         </button>
+      </div>
+
+      {/* ✅ Actions contextuelles */}
+      <div className="bg-gradient-to-r from-teal-50 to-emerald-50 rounded-lg p-4 border border-teal-200">
+        <p className="text-sm text-gray-700 font-medium mb-3">Actions rapides depuis les groupes :</p>
+        <ContextualActions context="group" />
       </div>
 
       {/* Filtres et Recherche */}

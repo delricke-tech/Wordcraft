@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
+import { QuickActionsMenu } from '../QuickActionsMenu';
 
 export function MainLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -22,6 +23,9 @@ export function MainLayout() {
           <Outlet />
         </main>
       </div>
+      
+      {/* ✅ Menu d'actions rapides flottant (style WhatsApp) */}
+      <QuickActionsMenu />
     </div>
   );
 }

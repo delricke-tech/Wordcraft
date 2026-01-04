@@ -18,6 +18,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Quiz } from '../lib/supabase';
 import { toast } from 'sonner';
+import { ContextualActions } from '../components/ContextualActions';
 
 export function Quizzes() {
   useAuth();
@@ -186,6 +187,12 @@ export function Quizzes() {
           </div>
           <p className="text-2xl font-bold text-gray-900 mt-2">{avgScore.toFixed(0)}%</p>
         </div>
+      </div>
+
+      {/* ✅ Actions contextuelles */}
+      <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg p-4 border border-amber-200">
+        <p className="text-sm text-gray-700 font-medium mb-3">Actions rapides depuis les quiz :</p>
+        <ContextualActions context="quiz" />
       </div>
 
       <div className="flex items-center gap-4">

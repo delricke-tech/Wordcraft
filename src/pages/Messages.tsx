@@ -17,6 +17,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Profile } from '../lib/supabase';
 import { format, isToday, isYesterday } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { ContextualActions } from '../components/ContextualActions';
 
 type Conversation = {
   id: string;
@@ -180,28 +181,39 @@ export function Messages() {
       <div className="flex-1 flex flex-col">
         {selectedConversation ? (
           <>
-            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center text-white font-medium">
-                  {selectedConversation.participant.full_name?.charAt(0) || 'U'}
+            <div className="border-b border-gray-200">
+              <div className="p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center text-white font-medium">
+                    {selectedConversation.participant.full_name?.charAt(0) || 'U'}
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-gray-900">
+                      {selectedConversation.participant.full_name}
+                    </h3>
+                    <span className="text-sm text-green-500">En ligne</span>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-medium text-gray-900">
-                    {selectedConversation.participant.full_name}
-                  </h3>
-                  <span className="text-sm text-green-500">En ligne</span>
+                <div className="flex items-center gap-2">
+                  <button className="p-2 hover:bg-gray-100 rounded-lg">
+                    <Phone size={20} className="text-gray-500" />
+                  </button>
+                  <button className="p-2 hover:bg-gray-100 rounded-lg">
+                    <Video size={20} className="text-gray-500" />
+                  </button>
+                  <button className="p-2 hover:bg-gray-100 rounded-lg">
+                    <MoreVertical size={20} className="text-gray-500" />
+                  </button>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button className="p-2 hover:bg-gray-100 rounded-lg">
-                  <Phone size={20} className="text-gray-500" />
-                </button>
-                <button className="p-2 hover:bg-gray-100 rounded-lg">
-                  <Video size={20} className="text-gray-500" />
-                </button>
-                <button className="p-2 hover:bg-gray-100 rounded-lg">
-                  <MoreVertical size={20} className="text-gray-500" />
-                </button>
+              
+              {/* ✅ Actions contextuelles */}
+              <div className="px-4 pb-3">
+                <ContextualActions 
+                  context="message" 
+                  contextId={selectedConversation.id}
+                  contextName={selectedConversation.participant.full_name || ''}
+                />
               </div>
             </div>
 

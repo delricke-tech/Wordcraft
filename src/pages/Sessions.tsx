@@ -19,6 +19,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase, StudySession } from '../lib/supabase';
 import { format, isFuture, isPast } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { ContextualActions } from '../components/ContextualActions';
 
 export function Sessions() {
   useAuth();
@@ -145,6 +146,12 @@ export function Sessions() {
           <Plus size={18} />
           Nouvelle session
         </button>
+      </div>
+
+      {/* ✅ Actions contextuelles */}
+      <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-4 border border-purple-200">
+        <p className="text-sm text-gray-700 font-medium mb-3">Actions rapides depuis les sessions :</p>
+        <ContextualActions context="session" />
       </div>
 
       {activeSessions.length > 0 && (

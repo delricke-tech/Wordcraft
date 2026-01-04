@@ -250,7 +250,7 @@ ${documentsContext}`
             ref={fileInputRef}
             type="file"
             multiple
-            accept=".pdf,.docx,.txt,.doc,.png,.jpg,.jpeg"
+            accept=".pdf,.docx,.txt,.doc,.pptx,.ppt,.png,.jpg,.jpeg,.gif,.bmp,.webp"
             onChange={handleFileUpload}
             className="hidden"
             disabled={isUploading}
@@ -319,11 +319,14 @@ ${documentsContext}`
 
         {/* Info formats supportés */}
         <div className="p-4 border-t border-slate-800">
-          <p className="text-xs text-slate-500">
-            📄 Formats : PDF, DOCX, TXT, Images (OCR)
+          <p className="text-xs text-slate-500 mb-1">
+            📄 Documents : PDF, DOCX, PPTX, TXT
           </p>
-          <p className="text-xs text-green-400 mt-1">
-            ✅ Import illimité !
+          <p className="text-xs text-slate-500 mb-1">
+            📸 Photos/Images : JPG, PNG, GIF, BMP, WEBP
+          </p>
+          <p className="text-xs text-green-400">
+            ✅ Import illimité • OCR automatique
           </p>
         </div>
       </div>

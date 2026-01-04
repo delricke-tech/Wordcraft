@@ -361,3 +361,32 @@ async function extractTextFromExcel(storagePath: string | File): Promise<string>
 function countWords(text: string): number {
   return text.trim().split(/\s+/).filter(word => word.length > 0).length;
 }
+
+/**
+ * Fonction wrapper pour extraction depuis un File object
+ * Utilisée par l'Assistant IA pour import de documents
+ */
+export async function extractTextFromFile(file: File): Promise<string> {
+  console.log('📄 Extraction depuis File object:', file.name);
+  
+  // Déterminer le type de fichier
+  let fileType = 'txt';
+  const extension = file.name.split('.').pop()?.toLowerCase();
+  
+  if (extension === 'pdf') {
+    fileType = 'pdf';
+  } else if (extension === 'docx' || extension === 'doc') {
+    fileType = 'docx';
+  } else if (extension === 'txt') {
+    fileType = 'txt';
+  } else if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(extension || '')) {
+    fileType = 'image';
+  } else if (extension === 'pptx' || extension === 'ppt') {
+    fileType = 'pptx';
+  } else if (extension === 'xlsx' || extension === 'xls') {
+    fileType = 'xlsx';
+  }
+  
+  const result = await extractText(file, fileType);
+  return result.text;
+}

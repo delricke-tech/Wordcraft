@@ -17,7 +17,7 @@ import { format, isToday, isTomorrow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 export function Dashboard() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();  // ✅ FIX : Récupérer user également
   const [stats, setStats] = useState({
     documents: 0,
     cards: 0,
@@ -30,16 +30,20 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchDashboardData();
-  }, []);
+    if (user) {  // ✅ FIX : Vérifier que le user existe
+      fetchDashboardData();
+    }
+  }, [user]);
 
   const fetchDashboardData = async () => {
+    if (!user) return;  // ✅ FIX : Protection supplémentaire
+    
     try {
       const [docsResult, cardsResult, quizzesResult, dueCardsResult] = await Promise.all([
-        supabase.from('documents').select('*', { count: 'exact' }).limit(5).order('created_at', { ascending: false }),
-        supabase.from('study_cards').select('*', { count: 'exact' }),
-        supabase.from('quizzes').select('*', { count: 'exact' }).limit(3).order('created_at', { ascending: false }),
-        supabase.from('study_cards').select('*').lte('next_review_at', new Date().toISOString()).limit(5),
+        supabase.from('documents').select('*', { count: 'exact' }).eq('user_id', user.id).limit(5).order('created_at', { ascending: false }),
+        supabase.from('study_cards').select('*', { count: 'exact' }).eq('user_id', user.id),
+        supabase.from('quizzes').select('*', { count: 'exact' }).eq('user_id', user.id).limit(3).order('created_at', { ascending: false }),
+        supabase.from('study_cards').select('*').eq('user_id', user.id).lte('next_review_at', new Date().toISOString()).limit(5),
       ]);
 
       setStats({

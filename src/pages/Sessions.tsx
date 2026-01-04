@@ -22,21 +22,26 @@ import { fr } from 'date-fns/locale';
 import { ContextualActions } from '../components/ContextualActions';
 
 export function Sessions() {
-  useAuth();
+  const { user } = useAuth();  // ✅ FIX : Récupérer le user
   const [sessions, setSessions] = useState<StudySession[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming');
   const [showNewSessionModal, setShowNewSessionModal] = useState(false);
 
   useEffect(() => {
-    fetchSessions();
-  }, []);
+    if (user) {  // ✅ FIX : Vérifier que le user existe
+      fetchSessions();
+    }
+  }, [user]);
 
   const fetchSessions = async () => {
+    if (!user) return;  // ✅ FIX : Protection supplémentaire
+    
     try {
-      const { data, error } = await supabase
+      const { data, error} = await supabase
         .from('study_sessions')
         .select('*')
+        .eq('user_id', user.id)  // ✅ FIX : Filtrer par user_id
         .order('scheduled_at', { ascending: true });
 
       if (error) throw error;

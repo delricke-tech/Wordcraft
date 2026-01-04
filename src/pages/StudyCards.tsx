@@ -27,7 +27,7 @@ import { toast } from 'sonner';
 import { ContextualActions } from '../components/ContextualActions';
 
 export function StudyCards() {
-  useAuth();
+  const { user } = useAuth();  // ✅ FIX : Récupérer le user
   const [cards, setCards] = useState<StudyCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -39,15 +39,20 @@ export function StudyCards() {
   const [selectionMode, setSelectionMode] = useState(false); // ✅ Mode sélection
 
   useEffect(() => {
-    fetchCards();
-  }, []);
+    if (user) {  // ✅ FIX : Vérifier que le user existe
+      fetchCards();
+    }
+  }, [user]);
 
   const fetchCards = async () => {
+    if (!user) return;  // ✅ FIX : Protection supplémentaire
+    
     try {
       const { data, error } = await supabase
         .from('study_cards')
         .select('*')
-        .order('created_at', { ascending: false });
+        .eq('user_id', user.id)  // ✅ FIX : Filtrer par user_id
+        .order('created_at', { ascending: false});
 
       if (error) throw error;
 

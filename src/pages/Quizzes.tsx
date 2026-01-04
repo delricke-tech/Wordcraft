@@ -21,7 +21,7 @@ import { toast } from 'sonner';
 import { ContextualActions } from '../components/ContextualActions';
 
 export function Quizzes() {
-  useAuth();
+  const { user } = useAuth();  // ✅ FIX : Récupérer le user
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -30,14 +30,19 @@ export function Quizzes() {
   const [selectionMode, setSelectionMode] = useState(false); // ✅ Mode sélection
 
   useEffect(() => {
-    fetchQuizzes();
-  }, []);
+    if (user) {  // ✅ FIX : Vérifier que le user existe
+      fetchQuizzes();
+    }
+  }, [user]);
 
   const fetchQuizzes = async () => {
+    if (!user) return;  // ✅ FIX : Protection supplémentaire
+    
     try {
       const { data, error } = await supabase
         .from('quizzes')
         .select('*')
+        .eq('user_id', user.id)  // ✅ FIX : Filtrer par user_id
         .order('created_at', { ascending: false });
 
       if (error) throw error;

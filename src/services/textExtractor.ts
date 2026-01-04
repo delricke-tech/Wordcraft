@@ -277,13 +277,13 @@ async function extractTextFromPowerPoint(storagePath: string | File): Promise<st
   console.log('📊 Extraction depuis fichier PowerPoint...');
   
   try {
-    // Pour PowerPoint, on utilise une approche simplifiée
-    // Les .pptx sont des archives ZIP contenant du XML
-    // Une extraction complète nécessiterait une bibliothèque spécialisée
+    // Importer pizzip dynamiquement
+    const PizZip = (await import('pizzip')).default;
     
-    // Note: arrayBuffer sera utilisé quand l'extraction sera implémentée
+    let arrayBuffer: ArrayBuffer;
+
     if (storagePath instanceof File) {
-      void await storagePath.arrayBuffer();
+      arrayBuffer = await storagePath.arrayBuffer();
     } else {
       const { data: publicUrlData } = supabase.storage
         .from('documents')
@@ -298,19 +298,53 @@ async function extractTextFromPowerPoint(storagePath: string | File): Promise<st
         throw new Error(`Erreur HTTP ${response.status}`);
       }
 
-      void await response.arrayBuffer();
+      arrayBuffer = await response.arrayBuffer();
     }
 
-    // Extraire le nom du fichier pour info
-    const fileName = storagePath instanceof File ? storagePath.name : storagePath.split('/').pop();
+    // Lire le fichier PPTX comme un ZIP
+    const zip = new PizZip(arrayBuffer);
+    let extractedText = '';
     
-    console.log('✅ Fichier PowerPoint détecté:', fileName);
+    // Les fichiers PPTX contiennent le texte dans slide*.xml
+    const slideFiles = Object.keys(zip.files).filter(name => 
+      name.startsWith('ppt/slides/slide') && name.endsWith('.xml')
+    );
     
-    // Pour l'instant, on retourne un message indiquant qu'il faut convertir en PDF
-    // Une vraie extraction nécessiterait une bibliothèque comme pptx-parser
-    return `[Présentation PowerPoint]\n\nFichier: ${fileName}\n\n💡 Pour que l'IA puisse analyser ce contenu :\n- Exportez votre PowerPoint en PDF\n- Ou copiez le texte des diapositives dans un fichier TXT\n\nL'extraction automatique de PowerPoint sera ajoutée prochainement !`;
+    console.log(`📊 ${slideFiles.length} diapositives trouvées`);
+    
+    for (const slideFile of slideFiles.sort()) {
+      const slideContent = zip.files[slideFile].asText();
+      
+      // Extraire le texte entre les balises <a:t>...</a:t>
+      const textMatches = slideContent.match(/<a:t>([^<]+)<\/a:t>/g);
+      
+      if (textMatches) {
+        const slideText = textMatches
+          .map(match => match.replace(/<\/?a:t>/g, ''))
+          .join(' ');
+        
+        extractedText += `\n\n--- Diapositive ${slideFiles.indexOf(slideFile) + 1} ---\n${slideText}`;
+      }
+    }
+    
+    if (extractedText.trim().length === 0) {
+      const fileName = storagePath instanceof File ? storagePath.name : storagePath.split('/').pop();
+      return `[Présentation PowerPoint]\n\nFichier: ${fileName}\n\n⚠️ Aucun texte extrait.\nLe fichier peut être vide ou protégé.`;
+    }
+    
+    console.log('✅ PowerPoint extrait:', extractedText.length, 'caractères');
+    return `[Présentation PowerPoint]\n${extractedText.trim()}`;
+    
   } catch (error: any) {
     console.error('❌ Erreur extraction PowerPoint:', error);
+    
+    // Fallback si pizzip n'est pas installé
+    if (error.message?.includes('Cannot find module') || error.message?.includes('pizzip')) {
+      const fileName = storagePath instanceof File ? storagePath.name : storagePath.split('/').pop();
+      console.warn('⚠️ Module pizzip non installé');
+      return `[Présentation PowerPoint]\n\nFichier: ${fileName}\n\n💡 Pour activer l'extraction automatique de PowerPoint :\n\nnpm install pizzip\n\nEn attendant, exportez votre PowerPoint en PDF pour l'analyser.`;
+    }
+    
     throw error;
   }
 }

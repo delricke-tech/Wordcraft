@@ -108,6 +108,29 @@ export function Sessions() {
     }
   };
 
+  const handleShareSession = async (sessionId: string, sessionTitle: string) => {
+    const sessionUrl = `${window.location.origin}/sessions/${sessionId}/join`;
+    
+    try {
+      // Utiliser l'API Web Share si disponible (mobile)
+      if (navigator.share) {
+        await navigator.share({
+          title: `Rejoindre : ${sessionTitle}`,
+          text: `Rejoignez la session d'étude "${sessionTitle}" sur WordCraft`,
+          url: sessionUrl,
+        });
+      } else {
+        // Sinon, copier dans le presse-papier
+        await navigator.clipboard.writeText(sessionUrl);
+        alert('✅ Lien copié dans le presse-papier !\n\nVous pouvez maintenant le partager avec vos collègues.');
+      }
+    } catch (error) {
+      console.error('Erreur partage:', error);
+      // Fallback : afficher le lien dans une alerte
+      prompt('Copiez ce lien pour partager la session :', sessionUrl);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -304,8 +327,12 @@ export function Sessions() {
                       Enregistrement
                     </button>
                   )}
-                  <button className="p-2 hover:bg-gray-100 rounded-lg">
-                    <Share2 size={18} className="text-gray-500" />
+                  <button 
+                    onClick={() => handleShareSession(session.id, session.title)}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                    title="Partager la session"
+                  >
+                    <Share2 size={18} className="text-gray-500 hover:text-teal-600" />
                   </button>
                   <button
                     onClick={() => handleDeleteSession(session.id)}

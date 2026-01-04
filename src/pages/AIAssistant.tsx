@@ -66,16 +66,6 @@ export function AIAssistant() {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
-    // Limiter à 20 documents
-    const maxFiles = 20;
-    const currentCount = uploadedDocuments.length;
-    const remainingSlots = maxFiles - currentCount;
-
-    if (files.length > remainingSlots) {
-      alert(`Vous pouvez importer maximum ${maxFiles} documents. Il reste ${remainingSlots} emplacements.`);
-      return;
-    }
-
     setIsUploading(true);
 
     try {
@@ -254,7 +244,7 @@ ${documentsContext}`
         <div className="p-4 border-b border-slate-800">
           <h3 className="font-semibold text-slate-200 mb-2">Documents de cours</h3>
           <p className="text-xs text-slate-400 mb-4">
-            {uploadedDocuments.length}/20 documents importés
+            {uploadedDocuments.length} document{uploadedDocuments.length > 1 ? 's' : ''} importé{uploadedDocuments.length > 1 ? 's' : ''}
           </p>
           <input
             ref={fileInputRef}
@@ -263,11 +253,11 @@ ${documentsContext}`
             accept=".pdf,.docx,.txt,.doc,.png,.jpg,.jpeg"
             onChange={handleFileUpload}
             className="hidden"
-            disabled={isUploading || uploadedDocuments.length >= 20}
+            disabled={isUploading}
           />
           <button
             onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading || uploadedDocuments.length >= 20}
+            disabled={isUploading}
             className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
             {isUploading ? (
@@ -282,8 +272,10 @@ ${documentsContext}`
               </>
             )}
           </button>
-          {uploadedDocuments.length >= 20 && (
-            <p className="text-xs text-red-400 mt-2">Limite atteinte (20 max)</p>
+          {uploadedDocuments.length > 50 && (
+            <p className="text-xs text-yellow-400 mt-2">
+              ⚠️ Beaucoup de documents ({uploadedDocuments.length}) - les réponses peuvent être plus lentes
+            </p>
           )}
         </div>
 
@@ -328,7 +320,10 @@ ${documentsContext}`
         {/* Info formats supportés */}
         <div className="p-4 border-t border-slate-800">
           <p className="text-xs text-slate-500">
-            📄 Formats supportés : PDF, DOCX, TXT, Images (OCR)
+            📄 Formats : PDF, DOCX, TXT, Images (OCR)
+          </p>
+          <p className="text-xs text-green-400 mt-1">
+            ✅ Import illimité !
           </p>
         </div>
       </div>

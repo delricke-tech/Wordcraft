@@ -144,9 +144,9 @@ export type Group = {
 
 export type StudySession = {
   id: string;
-  user_id: string;
+  host_id: string;  // ✅ FIX : Correction de user_id vers host_id (correspond à la table SQL)
   document_id?: string;
-  duration_minutes: number;
+  duration_minutes?: number;
   score?: number;
   status?: 'scheduled' | 'ongoing' | 'completed' | 'ended' | 'active';
   title?: string;

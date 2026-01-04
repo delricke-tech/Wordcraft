@@ -123,9 +123,16 @@ Réponds UNIQUEMENT avec un JSON valide dans ce format exact:
     )
 
   } catch (error) {
-    console.error('Erreur:', error)
+    console.error('❌ Erreur complète:', error)
+    console.error('Message:', error.message)
+    console.error('Stack:', error.stack)
+    
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message || 'Erreur inconnue',
+        details: error.toString(),
+        timestamp: new Date().toISOString()
+      }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400

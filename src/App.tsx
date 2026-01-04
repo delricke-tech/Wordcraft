@@ -20,6 +20,7 @@ import { Discover } from './pages/Discover';
 import { Profile } from './pages/Profile';
 import { Messages } from './pages/Messages';
 import { Sessions } from './pages/Sessions';
+import { SessionRoom } from './pages/SessionRoom';
 import { AIAssistant } from './pages/AIAssistant';
 import { Settings } from './pages/Settings';
 import { Subscription } from './pages/Subscription';
@@ -120,8 +121,8 @@ function AppRoutes() {
         <Route path="messages" element={<Messages />} />
         <Route path="sessions" element={<Sessions />} />
         <Route path="sessions/new" element={<Sessions />} />
-        <Route path="sessions/:id" element={<Sessions />} />
-        <Route path="sessions/:id/join" element={<Sessions />} />
+        <Route path="sessions/:sessionId" element={<Sessions />} />
+        <Route path="sessions/:sessionId/join" element={<SessionRoom />} />
         <Route path="ai-assistant" element={<AIAssistant />} />
         <Route path="settings" element={<Settings />} />
         <Route path="subscription" element={<Subscription />} />

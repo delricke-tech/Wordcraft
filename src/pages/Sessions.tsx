@@ -13,6 +13,7 @@ import {
   VideoIcon,
   Monitor,
   Sparkles,
+  Trash2,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, StudySession } from '../lib/supabase';
@@ -284,6 +285,13 @@ export function Sessions() {
                   )}
                   <button className="p-2 hover:bg-gray-100 rounded-lg">
                     <Share2 size={18} className="text-gray-500" />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteSession(session.id)}
+                    className="p-2 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Supprimer la session"
+                  >
+                    <Trash2 size={18} className="text-red-500 hover:text-red-700" />
                   </button>
                 </div>
               </div>

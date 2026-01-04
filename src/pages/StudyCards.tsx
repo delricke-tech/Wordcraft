@@ -62,10 +62,13 @@ export function StudyCards() {
   };
 
   const handleDeleteCard = async (id: string) => {
+    // ✅ Suppression automatique SANS confirmation
     const { error } = await supabase.from('study_cards').delete().eq('id', id);
     if (!error) {
       setCards(cards.filter((c) => c.id !== id));
       toast.success('Fiche supprimée !');
+    } else {
+      toast.error('Erreur lors de la suppression');
     }
   };
 

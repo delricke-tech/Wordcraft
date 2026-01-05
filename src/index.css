@@ -7,14 +7,35 @@
     font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Empêcher le zoom sur les inputs sur mobile */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
 
   body {
     @apply bg-gray-50 text-gray-900;
+    /* Empêcher le scroll horizontal */
+    overflow-x: hidden;
+    max-width: 100vw;
   }
 
   * {
     @apply border-gray-200;
+    /* Empêcher les éléments de dépasser */
+    box-sizing: border-box;
+  }
+
+  /* Rendre toutes les images fluides par défaut */
+  img, picture, video, canvas, svg {
+    max-width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  /* Empêcher le débordement des conteneurs */
+  #root {
+    overflow-x: hidden;
+    max-width: 100vw;
   }
 }
 

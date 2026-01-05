@@ -332,7 +332,7 @@ N'hésitez pas à me poser des questions !`,
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: '100%', opacity: 0 }}
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            className="fixed top-0 right-0 h-full w-full md:w-[500px] z-40 flex flex-col"
+            className="fixed top-0 right-0 h-full w-full sm:w-[90vw] md:w-[500px] max-w-full z-40 flex flex-col"
             style={{
               background: 'rgba(15, 23, 42, 0.85)', // Fond sombre avec transparence
               backdropFilter: 'blur(24px) saturate(180%)', // Flou + saturation pour effet verre
@@ -342,7 +342,7 @@ N'hésitez pas à me poser des questions !`,
             }}
           >
             {/* Header */}
-            <div className="p-6 border-b border-white/10">
+            <div className="p-4 sm:p-6 border-b border-white/10">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
@@ -428,7 +428,7 @@ N'hésitez pas à me poser des questions !`,
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
               {/* Suggestions interactives */}
               {showSuggestions && messages.length <= 1 && documentContext.extractedText && (
                 <motion.div
@@ -472,7 +472,7 @@ N'hésitez pas à me poser des questions !`,
                   className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-[85%] px-4 py-3 rounded-2xl ${
+                    className={`max-w-[85%] sm:max-w-[80%] px-3 sm:px-4 py-2 sm:py-3 rounded-2xl ${
                       msg.role === 'user'
                         ? 'bg-gradient-to-br from-purple-500/80 to-blue-500/80 text-white'
                         : 'bg-white/10 text-white'
@@ -542,7 +542,7 @@ N'hésitez pas à me poser des questions !`,
             </div>
 
             {/* Input */}
-            <div className="p-6 border-t border-white/10">
+            <div className="p-4 sm:p-6 border-t border-white/10">
               <div className="flex gap-2">
                 <input
                   type="text"

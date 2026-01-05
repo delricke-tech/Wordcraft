@@ -49,11 +49,24 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { profile } = useAuth();
   
   return (
-    <aside
-      className={`fixed left-0 top-0 h-full bg-white border-r border-gray-200 transition-all duration-300 z-40 flex flex-col ${
-        collapsed ? 'w-16' : 'w-64'
-      }`}
-    >
+    <>
+      {/* Overlay sombre sur mobile quand la sidebar est ouverte */}
+      {!collapsed && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-30 md:hidden"
+          onClick={onToggle}
+        />
+      )}
+      
+      <aside
+        className={`fixed left-0 top-0 h-full bg-white border-r border-gray-200 transition-all duration-300 z-40 flex flex-col ${
+          // Sur mobile : sidebar cachée ou pleine largeur (max 280px)
+          // Sur desktop : comportement normal
+          collapsed 
+            ? '-translate-x-full md:translate-x-0 md:w-16' 
+            : 'translate-x-0 w-64 md:w-64'
+        }`}
+      >
       <div className="h-16 flex items-center justify-between px-4 border-b border-gray-200">
         {!collapsed && (
           <Link to="/library" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
@@ -167,5 +180,6 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         </div>
       )}
     </aside>
+    </>
   );
 }

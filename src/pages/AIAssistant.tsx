@@ -218,9 +218,9 @@ export function AIAssistant() {
   };
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex gap-6 bg-[#020617] p-4 text-slate-100">
+    <div className="min-h-[calc(100vh-8rem)] flex flex-col lg:flex-row gap-4 lg:gap-6 bg-[#020617] p-2 sm:p-4 text-slate-100 overflow-x-hidden">
       {/* Panneau latéral - Documents importés */}
-      <div className="w-80 bg-[#09090b] rounded-2xl border border-slate-800 shadow-2xl flex flex-col overflow-hidden">
+      <div className="w-full lg:w-80 lg:flex-shrink-0 bg-[#09090b] rounded-2xl border border-slate-800 shadow-2xl flex flex-col overflow-hidden max-h-[40vh] lg:max-h-none">
         <div className="p-4 border-b border-slate-800">
           <h3 className="font-semibold text-slate-200 mb-2">Documents de cours</h3>
           <p className="text-xs text-slate-400 mb-4">
@@ -235,7 +235,7 @@ export function AIAssistant() {
             ref={fileInputRef}
             type="file"
             multiple
-            accept=".pdf,.docx,.txt,.doc,.pptx,.ppt,.png,.jpg,.jpeg,.gif,.bmp,.webp"
+            accept=".pdf,.docx,.txt,.doc,.pptx,.ppt,.xlsx,.xls,.png,.jpg,.jpeg,.gif,.bmp,.webp"
             onChange={handleFileUpload}
             className="hidden"
             disabled={isUploading}
@@ -355,18 +355,18 @@ export function AIAssistant() {
         {/* Info formats supportés */}
         <div className="p-4 border-t border-slate-800">
           <p className="text-xs text-slate-500 mb-1">
-            📄 Documents : PDF, DOCX, PPTX, TXT
+            📄 Documents : PDF, DOCX, PPTX, XLSX, TXT
           </p>
           <p className="text-xs text-slate-500 mb-1">
             📸 Photos/Images : JPG, PNG, GIF, BMP, WEBP
           </p>
           <p className="text-xs text-green-400">
-            ✅ Import illimité • OCR automatique
+            ✅ Import illimité • OCR automatique • Excel supporté
           </p>
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col bg-[#09090b] rounded-2xl border border-slate-800 shadow-2xl overflow-hidden">
+      <div className="flex-1 flex flex-col bg-[#09090b] rounded-2xl border border-slate-800 shadow-2xl overflow-hidden min-h-[50vh] lg:min-h-0">
         {/* Header */}
         <div className="p-4 border-b border-slate-800 bg-[#09090b] flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-900 to-black flex items-center justify-center border border-blue-500/20">
@@ -381,10 +381,10 @@ export function AIAssistant() {
         </div>
 
         {/* Chat */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4">
           {messages.map((m) => (
             <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`group relative max-w-[80%] rounded-2xl px-4 py-3 ${
+              <div className={`group relative max-w-[90%] sm:max-w-[80%] rounded-2xl px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base ${
                 m.role === 'user'
                   ? 'bg-blue-600 text-white'
                   : 'bg-[#18181b] border border-slate-800 text-slate-300'
@@ -421,7 +421,7 @@ export function AIAssistant() {
         </div>
 
         {/* Barre d'envoi */}
-        <div className="p-4 bg-[#0c0c0e] border-t border-slate-800">
+        <div className="p-3 sm:p-4 bg-[#0c0c0e] border-t border-slate-800">
           <div className="flex gap-2">
             <input
               type="text"
@@ -430,14 +430,15 @@ export function AIAssistant() {
               onKeyPress={(e) => e.key === 'Enter' && !isLoading && handleSend()}
               placeholder="Posez votre question..."
               disabled={isLoading}
-              className="flex-1 bg-[#18181b] border-slate-700 text-slate-200 rounded-xl px-4 outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+              className="flex-1 bg-[#18181b] border-slate-700 text-slate-200 rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+              style={{ fontSize: '16px' }} /* Empêche le zoom sur iOS */
             />
             <button 
               onClick={handleSend} 
               disabled={isLoading || !input.trim()}
-              className="bg-blue-600 p-3 rounded-xl hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              className="bg-blue-600 p-2 sm:p-3 rounded-xl hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex-shrink-0"
             >
-              <Send size={20} />
+              <Send size={18} className="sm:w-5 sm:h-5" />
             </button>
           </div>
         </div>

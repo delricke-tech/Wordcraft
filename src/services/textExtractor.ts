@@ -356,9 +356,13 @@ async function extractTextFromExcel(storagePath: string | File): Promise<string>
   console.log('📈 Extraction depuis fichier Excel...');
   
   try {
-    // Note: arrayBuffer sera utilisé quand l'extraction sera implémentée
+    // Importer dynamiquement xlsx
+    const XLSX = await import('xlsx');
+    
+    let arrayBuffer: ArrayBuffer;
+
     if (storagePath instanceof File) {
-      void await storagePath.arrayBuffer();
+      arrayBuffer = await storagePath.arrayBuffer();
     } else {
       const { data: publicUrlData } = supabase.storage
         .from('documents')
@@ -373,18 +377,50 @@ async function extractTextFromExcel(storagePath: string | File): Promise<string>
         throw new Error(`Erreur HTTP ${response.status}`);
       }
 
-      void await response.arrayBuffer();
+      arrayBuffer = await response.arrayBuffer();
     }
 
     const fileName = storagePath instanceof File ? storagePath.name : storagePath.split('/').pop();
     
-    console.log('✅ Fichier Excel détecté:', fileName);
+    console.log('📊 Lecture du fichier Excel:', fileName);
     
-    // Pour l'instant, on retourne un message indiquant qu'il faut convertir en CSV
-    // Une vraie extraction nécessiterait une bibliothèque comme xlsx ou exceljs
-    return `[Tableur Excel]\n\nFichier: ${fileName}\n\n💡 Pour que l'IA puisse analyser ce contenu :\n- Exportez votre Excel en CSV ou PDF\n- Ou copiez les données dans un fichier TXT\n\nL'extraction automatique d'Excel sera ajoutée prochainement !`;
+    // Lire le fichier Excel
+    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+    
+    let extractedText = `[Tableur Excel]\n\nFichier: ${fileName}\n`;
+    extractedText += `Nombre de feuilles: ${workbook.SheetNames.length}\n\n`;
+    
+    // Extraire le contenu de chaque feuille
+    for (const sheetName of workbook.SheetNames) {
+      const sheet = workbook.Sheets[sheetName];
+      
+      // Convertir la feuille en texte CSV pour une meilleure lisibilité
+      const csvContent = XLSX.utils.sheet_to_csv(sheet, { FS: '\t', RS: '\n' });
+      
+      if (csvContent.trim().length > 0) {
+        extractedText += `\n--- Feuille: ${sheetName} ---\n`;
+        extractedText += csvContent;
+        extractedText += '\n';
+      }
+    }
+    
+    if (extractedText.trim().length === 0) {
+      return `[Tableur Excel]\n\nFichier: ${fileName}\n\n⚠️ Aucune donnée trouvée.\nLe fichier peut être vide ou protégé.`;
+    }
+    
+    console.log('✅ Excel extrait:', extractedText.length, 'caractères');
+    return extractedText.trim();
+    
   } catch (error: any) {
     console.error('❌ Erreur extraction Excel:', error);
+    
+    // Fallback si xlsx n'est pas installé
+    if (error.message?.includes('Cannot find module') || error.message?.includes('xlsx')) {
+      const fileName = storagePath instanceof File ? storagePath.name : storagePath.split('/').pop();
+      console.warn('⚠️ Module xlsx non installé');
+      return `[Tableur Excel]\n\nFichier: ${fileName}\n\n💡 Pour activer l'extraction automatique d'Excel :\n\nnpm install xlsx\n\nEn attendant, exportez votre Excel en CSV ou PDF.`;
+    }
+    
     throw error;
   }
 }

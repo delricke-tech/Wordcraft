@@ -36,6 +36,58 @@ export function AIAssistant() {
 
   const { user } = useAuth();
 
+  // 🔄 Restaurer les documents depuis localStorage au chargement
+  useEffect(() => {
+    const savedDocuments = localStorage.getItem('aiAssistant_uploadedDocuments');
+    const savedMessages = localStorage.getItem('aiAssistant_messages');
+    
+    if (savedDocuments) {
+      try {
+        const parsed = JSON.parse(savedDocuments);
+        // Reconvertir les dates
+        const documentsWithDates = parsed.map((doc: any) => ({
+          ...doc,
+          extractedAt: new Date(doc.extractedAt)
+        }));
+        setUploadedDocuments(documentsWithDates);
+        console.log('✅ Documents restaurés depuis localStorage:', documentsWithDates.length);
+      } catch (error) {
+        console.error('❌ Erreur lors de la restauration des documents:', error);
+      }
+    }
+
+    if (savedMessages) {
+      try {
+        const parsed = JSON.parse(savedMessages);
+        // Reconvertir les dates
+        const messagesWithDates = parsed.map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp)
+        }));
+        setMessages(messagesWithDates);
+        console.log('✅ Messages restaurés depuis localStorage:', messagesWithDates.length);
+      } catch (error) {
+        console.error('❌ Erreur lors de la restauration des messages:', error);
+      }
+    }
+  }, []);
+
+  // 💾 Sauvegarder les documents dans localStorage à chaque modification
+  useEffect(() => {
+    if (uploadedDocuments.length > 0) {
+      localStorage.setItem('aiAssistant_uploadedDocuments', JSON.stringify(uploadedDocuments));
+      console.log('💾 Documents sauvegardés dans localStorage:', uploadedDocuments.length);
+    }
+  }, [uploadedDocuments]);
+
+  // 💾 Sauvegarder les messages dans localStorage à chaque modification
+  useEffect(() => {
+    if (messages.length > 0) {
+      localStorage.setItem('aiAssistant_messages', JSON.stringify(messages));
+      console.log('💾 Messages sauvegardés dans localStorage:', messages.length);
+    }
+  }, [messages]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -64,13 +116,51 @@ export function AIAssistant() {
     if (selectedDocuments.length === 0) return;
     
     // Suppression silencieuse sans confirmation
-    setUploadedDocuments(prev => prev.filter(doc => !selectedDocuments.includes(doc.id)));
+    const newDocuments = uploadedDocuments.filter(doc => !selectedDocuments.includes(doc.id));
+    setUploadedDocuments(newDocuments);
     setSelectedDocuments([]);
+    
+    // Mettre à jour localStorage
+    if (newDocuments.length === 0) {
+      localStorage.removeItem('aiAssistant_uploadedDocuments');
+    } else {
+      localStorage.setItem('aiAssistant_uploadedDocuments', JSON.stringify(newDocuments));
+    }
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
+
+    // 📱 Limites de taille selon l'appareil
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const MAX_FILE_SIZE_MOBILE = 10 * 1024 * 1024; // 10 MB sur mobile
+    const MAX_FILE_SIZE_DESKTOP = 50 * 1024 * 1024; // 50 MB sur desktop
+    const MAX_FILE_SIZE = isMobile ? MAX_FILE_SIZE_MOBILE : MAX_FILE_SIZE_DESKTOP;
+
+    // Vérifier la taille des fichiers AVANT de commencer l'extraction
+    const oversizedFiles: string[] = [];
+    for (let i = 0; i < files.length; i++) {
+      if (files[i].size > MAX_FILE_SIZE) {
+        oversizedFiles.push(`${files[i].name} (${(files[i].size / 1024 / 1024).toFixed(1)} MB)`);
+      }
+    }
+
+    if (oversizedFiles.length > 0) {
+      const maxSizeMB = isMobile ? 10 : 50;
+      alert(
+        `❌ Fichier(s) trop volumineux :\n\n${oversizedFiles.join('\n')}\n\n` +
+        `Limite ${isMobile ? 'sur mobile' : 'sur ordinateur'} : ${maxSizeMB} MB par fichier.\n\n` +
+        `💡 Conseils :\n` +
+        `- Compressez vos PDF\n` +
+        `- Divisez les gros documents\n` +
+        `- Utilisez un ordinateur pour les gros fichiers`
+      );
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return;
+    }
 
     setIsUploading(true);
 
@@ -80,10 +170,31 @@ export function AIAssistant() {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         
-        console.log(`📄 Extraction du document ${i + 1}/${files.length}: ${file.name}`);
+        console.log(`📄 Extraction du document ${i + 1}/${files.length}: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB)`);
 
         try {
           const extractedText = await extractTextFromFile(file);
+          
+          // Vérifier que le texte extrait n'est pas trop long pour localStorage
+          const estimatedStorageSize = new Blob([JSON.stringify({
+            id: `doc-${Date.now()}-${i}`,
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            content: extractedText,
+            extractedAt: new Date(),
+          })]).size;
+
+          if (estimatedStorageSize > 5 * 1024 * 1024) { // 5 MB max par document dans localStorage
+            console.warn(`⚠️ Document "${file.name}" trop volumineux pour le stockage (${(estimatedStorageSize / 1024 / 1024).toFixed(1)} MB)`);
+            alert(
+              `⚠️ Le document "${file.name}" contient trop de texte pour être stocké.\n\n` +
+              `Taille extraite : ${(estimatedStorageSize / 1024 / 1024).toFixed(1)} MB\n` +
+              `Limite : 5 MB\n\n` +
+              `💡 Essayez avec un document plus court ou divisez-le en plusieurs parties.`
+            );
+            continue;
+          }
           
           newDocuments.push({
             id: `doc-${Date.now()}-${i}`,
@@ -94,10 +205,10 @@ export function AIAssistant() {
             extractedAt: new Date(),
           });
 
-          console.log(`✅ Document "${file.name}" extrait (${extractedText.length} caractères)`);
+          console.log(`✅ Document "${file.name}" extrait (${extractedText.length} caractères, ${(estimatedStorageSize / 1024).toFixed(0)} KB stockage)`);
         } catch (error) {
           console.error(`❌ Erreur extraction "${file.name}":`, error);
-          alert(`Erreur lors de l'extraction de "${file.name}"`);
+          alert(`❌ Erreur lors de l'extraction de "${file.name}":\n\n${error instanceof Error ? error.message : 'Erreur inconnue'}`);
         }
       }
 
@@ -124,7 +235,15 @@ export function AIAssistant() {
   };
 
   const removeDocument = (docId: string) => {
-    setUploadedDocuments(prev => prev.filter(doc => doc.id !== docId));
+    const newDocuments = uploadedDocuments.filter(doc => doc.id !== docId);
+    setUploadedDocuments(newDocuments);
+    
+    // Mettre à jour localStorage
+    if (newDocuments.length === 0) {
+      localStorage.removeItem('aiAssistant_uploadedDocuments');
+    } else {
+      localStorage.setItem('aiAssistant_uploadedDocuments', JSON.stringify(newDocuments));
+    }
   };
 
   const formatFileSize = (bytes: number): string => {
@@ -217,6 +336,18 @@ export function AIAssistant() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  // 🗑️ Effacer tout (documents + messages)
+  const clearAll = () => {
+    if (confirm('Voulez-vous vraiment effacer tous les documents et messages ? Cette action est irréversible.')) {
+      setUploadedDocuments([]);
+      setMessages([]);
+      setSelectedDocuments([]);
+      localStorage.removeItem('aiAssistant_uploadedDocuments');
+      localStorage.removeItem('aiAssistant_messages');
+      console.log('🗑️ Tout a été effacé');
+    }
+  };
+
   return (
     <div className="min-h-[calc(100vh-8rem)] flex flex-col lg:flex-row gap-4 lg:gap-6 bg-[#020617] p-2 sm:p-4 text-slate-100 overflow-x-hidden">
       {/* Panneau latéral - Documents importés */}
@@ -273,14 +404,23 @@ export function AIAssistant() {
             )}
           </div>
 
-          {/* Sélectionner tout */}
+          {/* Sélectionner tout / Effacer tout */}
           {uploadedDocuments.length > 0 && (
-            <button
-              onClick={selectAllDocuments}
-              className="w-full text-xs text-slate-400 hover:text-blue-400 py-1 transition-colors"
-            >
-              {selectedDocuments.length === uploadedDocuments.length ? '☑️ Tout désélectionner' : '☐ Tout sélectionner'}
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={selectAllDocuments}
+                className="flex-1 text-xs text-slate-400 hover:text-blue-400 py-1 transition-colors"
+              >
+                {selectedDocuments.length === uploadedDocuments.length ? '☑️ Tout désélectionner' : '☐ Tout sélectionner'}
+              </button>
+              <button
+                onClick={clearAll}
+                className="text-xs text-red-400 hover:text-red-300 py-1 px-2 transition-colors"
+                title="Effacer tous les documents et messages"
+              >
+                🗑️ Tout effacer
+              </button>
+            </div>
           )}
           
           {uploadedDocuments.length > 50 && (
@@ -360,8 +500,13 @@ export function AIAssistant() {
           <p className="text-xs text-slate-500 mb-1">
             📸 Photos/Images : JPG, PNG, GIF, BMP, WEBP
           </p>
-          <p className="text-xs text-green-400">
-            ✅ Import illimité • OCR automatique • Excel supporté
+          <p className="text-xs text-green-400 mb-1">
+            ✅ Nombre illimité • OCR automatique • Excel supporté
+          </p>
+          <p className="text-xs text-yellow-400">
+            {/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) 
+              ? '⚠️ Mobile : 10 MB max/fichier' 
+              : '⚠️ Desktop : 50 MB max/fichier'}
           </p>
         </div>
       </div>

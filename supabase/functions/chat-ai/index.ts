@@ -45,7 +45,14 @@ serve(async (req) => {
     }
 
     // Préparer le contexte si des documents sont fournis
-    let systemMessage = 'Tu es un assistant IA pédagogique intelligent. Tu aides les étudiants à comprendre et apprendre.'
+    let systemMessage = `Tu es un assistant IA pédagogique intelligent. Tu aides les étudiants à comprendre et apprendre.
+
+IMPORTANT - FORMATAGE DES RÉPONSES :
+- Saute des lignes entre les paragraphes pour une meilleure lisibilité
+- Utilise des sauts de ligne (\n\n) entre les sections
+- Structure tes réponses de manière claire et aérée
+- Sépare les points importants par des lignes vides
+- Utilise des listes quand c'est approprié`
     
     if (context && context.length > 0) {
       systemMessage += `\n\nContexte des documents :\n${context.substring(0, 2000)}`

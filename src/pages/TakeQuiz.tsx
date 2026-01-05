@@ -11,6 +11,7 @@ import {
   Trophy,
   Target,
   Award,
+  X,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -396,13 +397,23 @@ export function TakeQuiz() {
         {/* Header */}
         <div className="bg-gradient-to-r from-teal-600 to-blue-600 p-6 text-white">
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold">{quiz.title}</h1>
-            {timeLeft !== null && (
-              <div className="flex items-center gap-2 bg-white/20 px-4 py-2 rounded-lg">
-                <Clock size={20} />
-                <span className="font-mono font-bold">{formatTime(timeLeft)}</span>
-              </div>
-            )}
+            <h1 className="text-2xl font-bold flex-1">{quiz.title}</h1>
+            <div className="flex items-center gap-3">
+              {timeLeft !== null && (
+                <div className="flex items-center gap-2 bg-white/20 px-4 py-2 rounded-lg">
+                  <Clock size={20} />
+                  <span className="font-mono font-bold">{formatTime(timeLeft)}</span>
+                </div>
+              )}
+              <button
+                onClick={() => navigate('/quizzes')}
+                className="flex items-center gap-2 bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-colors"
+                title="Quitter le quiz"
+              >
+                <X size={20} />
+                <span className="font-medium">Quitter</span>
+              </button>
+            </div>
           </div>
           <div className="flex items-center justify-between text-sm">
             <span>

@@ -61,8 +61,28 @@ export async function generateQuizFromText(
     });
 
     if (error) {
-      console.error('❌ Erreur Edge Function:', error);
-      throw new Error(`Erreur lors de la génération du quiz: ${error.message}`);
+      console.error('❌ Erreur Edge Function complète:', error);
+      console.error('📋 Message:', error.message);
+      
+      // L'erreur de Supabase Functions contient souvent le body dans error.context
+      let errorMessage = error.message || 'Erreur inconnue';
+      
+      // Essayer d'extraire les détails si disponibles
+      try {
+        // Supabase Functions met parfois l'erreur dans error.message directement
+        if (error.message && error.message.includes('{')) {
+          const jsonMatch = error.message.match(/\{.*\}/);
+          if (jsonMatch) {
+            const errorDetails = JSON.parse(jsonMatch[0]);
+            console.error('🔴 DÉTAILS DE L\'ERREUR:', errorDetails);
+            errorMessage = `${errorDetails.error || errorMessage}${errorDetails.details ? ' - ' + errorDetails.details : ''}`;
+          }
+        }
+      } catch (parseError) {
+        console.warn('Impossible de parser les détails de l\'erreur');
+      }
+      
+      throw new Error(`Erreur lors de la génération du quiz: ${errorMessage}`);
     }
 
     if (!data) {

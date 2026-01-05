@@ -41,7 +41,7 @@ export function Sessions() {
       const { data, error} = await supabase
         .from('study_sessions')
         .select('*')
-        .eq('user_id', user.id)  // ✅ FIX : Filtrer par user_id
+        .eq('host_id', user.id)  // ✅ FIX : Utiliser host_id au lieu de user_id
         .order('scheduled_at', { ascending: true });
 
       if (error) throw error;

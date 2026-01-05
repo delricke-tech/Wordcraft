@@ -50,8 +50,9 @@ export function Header() {
     { icon: LinkIcon, label: 'Importer une URL', action: () => navigate('/library?import=true') },
     { icon: BookOpen, label: 'Nouvelle fiche', action: () => navigate('/cards/new') },
     { icon: ClipboardList, label: 'Nouveau quiz', action: () => navigate('/quizzes/new') },
-    { icon: Users, label: 'Nouveau groupe', action: () => navigate('/groups/new') },
-    { icon: Video, label: 'Nouvelle session', action: () => navigate('/sessions/new') },
+    // Fonctionnalités désactivées temporairement
+    // { icon: Users, label: 'Nouveau groupe', action: () => navigate('/groups/new') },
+    // { icon: Video, label: 'Nouvelle session', action: () => navigate('/sessions/new') },
   ];
 
   return (

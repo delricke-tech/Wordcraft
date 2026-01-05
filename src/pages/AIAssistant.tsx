@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 
-import { Sparkles, Send, Copy, Check, Upload, FileText, X, Loader } from 'lucide-react';
+import { Sparkles, Send, Copy, Check, Upload, FileText, X, Loader, Trash2 } from 'lucide-react';
 
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -11,15 +11,6 @@ type Message = {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-};
-
-type QuickAction = {
-  id: string;
-  icon: any;
-  label: string;
-  description: string;
-  prompt: string;
-  credits: number;
 };
 
 type UploadedDocument = {
@@ -39,6 +30,7 @@ export function AIAssistant() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [uploadedDocuments, setUploadedDocuments] = useState<UploadedDocument[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [selectedDocuments, setSelectedDocuments] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -52,16 +44,29 @@ export function AIAssistant() {
     scrollToBottom();
   }, [messages]);
 
-  const quickActions: QuickAction[] = [
-    {
-      id: 'summarize',
-      icon: Sparkles,
-      label: 'Résumer',
-      description: 'Générer un résumé',
-      prompt: 'Résume ce texte :',
-      credits: 2
+  const toggleDocumentSelection = (docId: string) => {
+    setSelectedDocuments(prev =>
+      prev.includes(docId)
+        ? prev.filter(id => id !== docId)
+        : [...prev, docId]
+    );
+  };
+
+  const selectAllDocuments = () => {
+    if (selectedDocuments.length === uploadedDocuments.length) {
+      setSelectedDocuments([]);
+    } else {
+      setSelectedDocuments(uploadedDocuments.map(doc => doc.id));
     }
-  ];
+  };
+
+  const deleteSelectedDocuments = () => {
+    if (selectedDocuments.length === 0) return;
+    
+    // Suppression silencieuse sans confirmation
+    setUploadedDocuments(prev => prev.filter(doc => !selectedDocuments.includes(doc.id)));
+    setSelectedDocuments([]);
+  };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -170,11 +175,20 @@ export function AIAssistant() {
         },
       });
 
+      console.log('🤖 Réponse Edge Function chat-ai:', { data, error });
+
       if (error) {
+        console.error('❌ Erreur chat-ai:', error);
         throw new Error(error.message || 'Erreur lors de l\'appel à l\'API');
       }
 
-      const aiResponse = data?.content || 'Désolé, je n\'ai pas pu générer de réponse.';
+      if (!data) {
+        console.error('❌ Pas de data retournée');
+        throw new Error('Aucune réponse de l\'Edge Function');
+      }
+
+      // L'Edge Function retourne 'message' au lieu de 'content'
+      const aiResponse = data?.message || data?.content || 'Désolé, je n\'ai pas pu générer de réponse.';
 
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -211,6 +225,11 @@ export function AIAssistant() {
           <h3 className="font-semibold text-slate-200 mb-2">Documents de cours</h3>
           <p className="text-xs text-slate-400 mb-4">
             {uploadedDocuments.length} document{uploadedDocuments.length > 1 ? 's' : ''} importé{uploadedDocuments.length > 1 ? 's' : ''}
+            {selectedDocuments.length > 0 && (
+              <span className="text-blue-400 ml-1">
+                • {selectedDocuments.length} sélectionné{selectedDocuments.length > 1 ? 's' : ''}
+              </span>
+            )}
           </p>
           <input
             ref={fileInputRef}
@@ -221,23 +240,49 @@ export function AIAssistant() {
             className="hidden"
             disabled={isUploading}
           />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
-            {isUploading ? (
-              <>
-                <Loader className="animate-spin" size={18} />
-                <span>Extraction...</span>
-              </>
-            ) : (
-              <>
-                <Upload size={18} />
-                <span>Importer des cours</span>
-              </>
+          
+          {/* Boutons d'action */}
+          <div className="flex gap-2 mb-2">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              {isUploading ? (
+                <>
+                  <Loader className="animate-spin" size={18} />
+                  <span>Extraction...</span>
+                </>
+              ) : (
+                <>
+                  <Upload size={18} />
+                  <span>Importer</span>
+                </>
+              )}
+            </button>
+            
+            {uploadedDocuments.length > 0 && (
+              <button
+                onClick={deleteSelectedDocuments}
+                disabled={selectedDocuments.length === 0}
+                className="px-3 py-2 bg-red-600/10 text-red-400 rounded-lg hover:bg-red-600/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all border border-red-600/20"
+                title="Supprimer les documents sélectionnés"
+              >
+                <Trash2 size={18} />
+              </button>
             )}
-          </button>
+          </div>
+
+          {/* Sélectionner tout */}
+          {uploadedDocuments.length > 0 && (
+            <button
+              onClick={selectAllDocuments}
+              className="w-full text-xs text-slate-400 hover:text-blue-400 py-1 transition-colors"
+            >
+              {selectedDocuments.length === uploadedDocuments.length ? '☑️ Tout désélectionner' : '☐ Tout sélectionner'}
+            </button>
+          )}
+          
           {uploadedDocuments.length > 50 && (
             <p className="text-xs text-yellow-400 mt-2">
               ⚠️ Beaucoup de documents ({uploadedDocuments.length}) - les réponses peuvent être plus lentes
@@ -257,9 +302,28 @@ export function AIAssistant() {
             uploadedDocuments.map((doc) => (
               <div
                 key={doc.id}
-                className="bg-[#18181b] border border-slate-800 rounded-lg p-3 hover:border-blue-500 transition-colors group"
+                className={`bg-[#18181b] border rounded-lg p-3 transition-colors group cursor-pointer ${
+                  selectedDocuments.includes(doc.id)
+                    ? 'border-blue-500 bg-blue-500/10'
+                    : 'border-slate-800 hover:border-blue-500/50'
+                }`}
+                onClick={() => toggleDocumentSelection(doc.id)}
               >
-                <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start gap-3">
+                  {/* Checkbox */}
+                  <div className="flex-shrink-0 mt-0.5">
+                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                      selectedDocuments.includes(doc.id)
+                        ? 'bg-blue-500 border-blue-500'
+                        : 'border-slate-600 hover:border-blue-400'
+                    }`}>
+                      {selectedDocuments.includes(doc.id) && (
+                        <Check size={14} className="text-white" />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Info document */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <FileText size={14} className="text-blue-400 flex-shrink-0" />
@@ -271,9 +335,14 @@ export function AIAssistant() {
                       {formatFileSize(doc.size)} • {doc.content.length.toLocaleString()} caractères
                     </p>
                   </div>
+
+                  {/* Bouton supprimer individuel */}
                   <button
-                    onClick={() => removeDocument(doc.id)}
-                    className="p-1 text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeDocument(doc.id);
+                    }}
+                    className="p-1 text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0"
                   >
                     <X size={16} />
                   </button>
@@ -320,7 +389,9 @@ export function AIAssistant() {
                   ? 'bg-blue-600 text-white'
                   : 'bg-[#18181b] border border-slate-800 text-slate-300'
               }`}>
-                {m.content}
+                <div className="whitespace-pre-wrap leading-relaxed">
+                  {m.content}
+                </div>
                 {m.role === 'assistant' && (
                   <button
                     onClick={() => handleCopy(m.content, m.id)}
@@ -347,18 +418,6 @@ export function AIAssistant() {
             </div>
           )}
           <div ref={messagesEndRef} />
-        </div>
-
-        {/* Actions Rapides (Pour utiliser la variable quickActions) */}
-        <div className="px-4 pb-2 flex gap-2">
-          {quickActions.map(action => (
-            <button
-              key={action.id}
-              className="text-xs bg-[#18181b] border border-slate-800 px-3 py-1 rounded-full text-slate-400 hover:border-blue-500"
-            >
-              {action.label}
-            </button>
-          ))}
         </div>
 
         {/* Barre d'envoi */}

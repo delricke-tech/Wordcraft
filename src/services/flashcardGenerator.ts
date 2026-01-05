@@ -69,7 +69,23 @@ export async function generateFlashcardsFromText(
     });
 
     if (error) {
-      console.error('❌ Erreur Edge Function:', error);
+      console.error('❌ Erreur Edge Function complète:', error);
+      console.error('📋 Message:', error.message);
+      console.error('📋 Context:', error.context);
+      
+      // Si l'erreur contient un body avec des détails
+      if (error.context?.body) {
+        try {
+          const errorDetails = typeof error.context.body === 'string' 
+            ? JSON.parse(error.context.body) 
+            : error.context.body;
+          console.error('🔴 DÉTAILS DE L\'ERREUR:', errorDetails);
+          throw new Error(`Erreur génération flashcards: ${errorDetails.error || error.message}. Détails: ${errorDetails.details || ''}`);
+        } catch (parseError) {
+          console.error('Body brut:', error.context.body);
+        }
+      }
+      
       throw new Error(`Erreur lors de la génération des flashcards: ${error.message}`);
     }
 

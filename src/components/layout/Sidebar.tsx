@@ -25,28 +25,29 @@ type SidebarProps = {
   onToggle: () => void;
 };
 
+// Fonctionnalités actives
 const navItems = [
   { to: '/dashboard', icon: Home, label: 'Tableau de bord' },
-  { to: '/feed', icon: Rss, label: 'Fil d\'actualité' },
-  { to: '/discover', icon: Compass, label: 'Découvrir' },
   { to: '/profile', icon: UserCircle, label: 'Mon profil' },
-  { to: '/groups', icon: Users, label: 'Groupes' },
-  { to: '/library', icon: FileText, label: 'Bibliotheque' },
+  { to: '/library', icon: FileText, label: 'Bibliothèque' },
   { to: '/cards', icon: BookOpen, label: 'Fiches' },
   { to: '/quizzes', icon: ClipboardList, label: 'Quiz' },
-  { to: '/messages', icon: MessageSquare, label: 'Messages' },
-  { to: '/sessions', icon: Video, label: 'Sessions' },
   { to: '/ai-assistant', icon: Sparkles, label: 'Assistant IA' },
 ];
 
-const teacherItems = [
-  { to: '/teacher/courses', icon: GraduationCap, label: 'Mes cours' },
+// Fonctionnalités à venir (désactivées temporairement)
+const comingSoonItems = [
+  { to: '/feed', icon: Rss, label: 'Fil d\'actualité' },
+  { to: '/discover', icon: Compass, label: 'Découvrir' },
+  { to: '/groups', icon: Users, label: 'Groupes' },
+  { to: '/messages', icon: MessageSquare, label: 'Messages' },
+  { to: '/sessions', icon: Video, label: 'Sessions' },
+  { to: '/teacher/courses', icon: GraduationCap, label: 'Mes cours (Enseignant)' },
 ];
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { profile } = useAuth();
-  const isTeacher = profile?.role === 'teacher' || profile?.role === 'admin';
-
+  
   return (
     <aside
       className={`fixed left-0 top-0 h-full bg-white border-r border-gray-200 transition-all duration-300 z-40 flex flex-col ${
@@ -95,36 +96,35 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           ))}
         </ul>
 
-        {isTeacher && (
-          <>
-            <div className={`my-4 px-4 ${collapsed ? 'hidden' : ''}`}>
-              <div className="h-px bg-gray-200" />
-              <span className="block mt-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                Enseignant
-              </span>
-            </div>
-            <ul className="space-y-1 px-2">
-              {teacherItems.map((item) => (
-                <li key={item.to}>
-                  <NavLink
-                    to={item.to}
-                    className={({ isActive }) =>
-                      `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
-                        isActive
-                          ? 'bg-teal-50 text-teal-700'
-                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                      } ${collapsed ? 'justify-center' : ''}`
-                    }
-                    title={collapsed ? item.label : undefined}
-                  >
-                    <item.icon size={20} />
-                    {!collapsed && <span className="font-medium">{item.label}</span>}
-                  </NavLink>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
+        {/* Séparateur et fonctionnalités à venir */}
+        <div className={`my-4 px-4 ${collapsed ? 'hidden' : ''}`}>
+          <div className="h-px bg-gray-200" />
+          <span className="block mt-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+            À venir
+          </span>
+        </div>
+
+        {/* Fonctionnalités à venir - désactivées */}
+        <ul className="space-y-1 px-2">
+          {comingSoonItems.map((item) => (
+            <li key={item.to}>
+              <div
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 opacity-60 cursor-not-allowed"
+                title={`${item.label} - Fonctionnalité à venir`}
+              >
+                <item.icon size={20} />
+                {!collapsed && (
+                  <>
+                    <span className="font-medium">{item.label}</span>
+                    <span className="ml-auto text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">
+                      Bientôt
+                    </span>
+                  </>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
       </nav>
 
       <div className="border-t border-gray-200 p-2">

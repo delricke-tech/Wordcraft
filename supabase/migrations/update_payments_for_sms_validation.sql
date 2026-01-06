@@ -13,7 +13,33 @@ ADD COLUMN IF NOT EXISTS confirmed_at timestamp with time zone;
 ALTER TABLE public.payments 
 ADD COLUMN IF NOT EXISTS metadata jsonb;
 
+-- ============================================
+-- CONTRAINTE UNIQUE sur tid_submitted
+-- ============================================
+
+-- S'assurer que la contrainte UNIQUE existe sur tid_submitted
+-- (normalement créée lors de la création initiale de la table)
+DO $$ 
+BEGIN
+    -- Vérifier si la contrainte UNIQUE existe déjà
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE table_name = 'payments' 
+        AND constraint_type = 'UNIQUE'
+        AND constraint_name LIKE '%tid_submitted%'
+    ) THEN
+        -- Ajouter la contrainte UNIQUE si elle n'existe pas
+        ALTER TABLE public.payments 
+        ADD CONSTRAINT payments_tid_submitted_unique UNIQUE (tid_submitted);
+        
+        RAISE NOTICE '✅ Contrainte UNIQUE ajoutée sur tid_submitted';
+    ELSE
+        RAISE NOTICE '✅ Contrainte UNIQUE sur tid_submitted déjà présente';
+    END IF;
+END $$;
+
 -- Ajouter un index sur le TID pour des recherches rapides
+-- (Un index UNIQUE sera automatiquement créé par la contrainte UNIQUE ci-dessus)
 CREATE INDEX IF NOT EXISTS idx_payments_tid_submitted 
 ON public.payments(tid_submitted);
 
@@ -25,22 +51,36 @@ ON public.payments(status);
 CREATE INDEX IF NOT EXISTS idx_payments_tid_status 
 ON public.payments(tid_submitted, status);
 
+-- ============================================
+-- CONTRAINTES CHECK mises à jour
+-- ============================================
+
+-- Modifier le CHECK constraint sur operator pour Moov uniquement
+DO $$ 
+BEGIN
+    -- Supprimer l'ancien constraint sur operator si il existe
+    ALTER TABLE public.payments DROP CONSTRAINT IF EXISTS payments_operator_check;
+    
+    -- Ajouter le nouveau constraint (Moov uniquement)
+    ALTER TABLE public.payments 
+    ADD CONSTRAINT payments_operator_check 
+    CHECK (operator = 'moov');
+    
+    RAISE NOTICE '✅ Constraint operator mis à jour (Moov uniquement)';
+END $$;
+
 -- Modifier le CHECK constraint pour inclure 'confirmed' comme statut valide
--- (Doit d'abord supprimer l'ancien si il existe)
 DO $$ 
 BEGIN
     -- Supprimer l'ancien constraint si il existe
-    IF EXISTS (
-        SELECT 1 FROM information_schema.constraint_column_usage 
-        WHERE table_name = 'payments' AND constraint_name LIKE '%status%check%'
-    ) THEN
-        ALTER TABLE public.payments DROP CONSTRAINT IF EXISTS payments_status_check;
-    END IF;
+    ALTER TABLE public.payments DROP CONSTRAINT IF EXISTS payments_status_check;
     
     -- Ajouter le nouveau constraint avec les statuts mis à jour
     ALTER TABLE public.payments 
     ADD CONSTRAINT payments_status_check 
     CHECK (status IN ('pending', 'confirmed', 'failed', 'cancelled'));
+    
+    RAISE NOTICE '✅ Constraint status mis à jour';
 END $$;
 
 -- ============================================

@@ -1,8 +1,9 @@
 /**
  * Types et fonctions pour la gestion des paiements Mobile Money
- * Opérateurs: Airtel Money et Moov Money
+ * Opérateur: Moov Money Gabon (Libertis) uniquement
+ * Configuration: 2 cartes SIM Moov
  * 
- * Date: 5 janvier 2025
+ * Date: 6 janvier 2025
  */
 
 import { supabase } from './supabase';
@@ -11,8 +12,14 @@ import { supabase } from './supabase';
 // TYPES
 // ============================================
 
-export type PaymentOperator = 'airtel' | 'moov';
+export type PaymentOperator = 'moov';  // Moov Money Gabon uniquement
 export type PaymentStatus = 'pending' | 'confirmed' | 'failed' | 'cancelled';
+
+export interface SimInfo {
+  slot?: number;        // Numéro du slot SIM (1 ou 2)
+  number?: string;      // Numéro de téléphone de la SIM
+  timestamp?: string;   // Timestamp de réception du SMS
+}
 
 export interface Payment {
   id: string;
@@ -27,7 +34,13 @@ export interface Payment {
   phone_number?: string | null;
   reference?: string | null;
   error_message?: string | null;
-  metadata?: Record<string, any>;
+  metadata?: {
+    confirmed_by?: string;
+    operator?: string;
+    sms_amount?: number;
+    sim_info?: SimInfo;
+    [key: string]: any;
+  };
 }
 
 export interface CreatePaymentData {
@@ -251,7 +264,7 @@ export function formatAmount(amount: number): string {
  * Obtenir le nom complet de l'opérateur
  */
 export function getOperatorName(operator: PaymentOperator): string {
-  return operator === 'airtel' ? 'Airtel Money' : 'Moov Money';
+  return 'Moov Money';  // Moov Money Gabon uniquement
 }
 
 /**

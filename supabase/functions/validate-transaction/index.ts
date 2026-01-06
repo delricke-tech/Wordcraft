@@ -1,10 +1,10 @@
 /**
  * Supabase Edge Function: validate-transaction
  * 
- * Validation automatique des transactions Mobile Money via SMS
- * Opérateurs: Airtel Money, Moov Money, Libertis
+ * Validation automatique des transactions Moov Money Gabon via SMS
+ * Support de 2 cartes SIM Moov (Libertis)
  * 
- * Date: 5 janvier 2025
+ * Date: 6 janvier 2025
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
@@ -17,12 +17,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 interface SmsData {
   message: string;
   from: string;
+  sim_slot?: number;        // Optionnel : numéro du slot SIM (1 ou 2)
+  sim_number?: string;      // Optionnel : numéro de la SIM
+  timestamp?: string;       // Optionnel : timestamp du SMS
 }
 
 interface TransactionInfo {
   tid: string | null;
-  operator: 'airtel' | 'moov' | null;
-  amount?: number;
+  amount: number | null;
   reference?: string;
 }
 
@@ -32,39 +34,26 @@ interface TransactionInfo {
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-secret-key',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-custom-authorization',
 };
 
 // ============================================
-// REGEX PATTERNS
+// REGEX PATTERNS - MOOV MONEY GABON
 // ============================================
 
-const REGEX_PATTERNS = {
-  // Airtel Money: TID: XXXXX ou Transaction ID: XXXXX
-  airtel: [
-    /TID[:\s]+([A-Z0-9]{10,})/i,
-    /Transaction\s+ID[:\s]+([A-Z0-9]{10,})/i,
-    /Code[:\s]+([A-Z0-9]{10,})/i
+const MOOV_PATTERNS = {
+  // Référence transaction : Ref: ou Ref :
+  reference: [
+    /Ref\s*:\s*(\d+)/i,           // "Ref: 123456" ou "Ref : 123456"
+    /Reference\s*:\s*(\d+)/i,     // "Reference: 123456"
+    /Transaction\s*:\s*(\d+)/i    // "Transaction: 123456" (backup)
   ],
   
-  // Moov Money: Ref: XXXXX ou Reference: XXXXX
-  moov: [
-    /Ref[:\s]+([A-Z0-9]{10,})/i,
-    /Reference[:\s]+([A-Z0-9]{10,})/i,
-    /Transaction[:\s]+([A-Z0-9]{10,})/i
-  ],
-  
-  // Libertis (Moov): même format que Moov
-  libertis: [
-    /Ref[:\s]+([A-Z0-9]{10,})/i,
-    /Reference[:\s]+([A-Z0-9]{10,})/i,
-    /Transaction[:\s]+([A-Z0-9]{10,})/i
-  ],
-  
-  // Montant: chercher un nombre avec FCFA ou CFA
+  // Montant : chercher un nombre avec FCFA ou CFA
   amount: [
-    /(\d+(?:\s?\d+)*)\s*(?:FCFA|CFA|F\s*CFA)/i,
-    /Montant[:\s]+(\d+(?:\s?\d+)*)/i
+    /(\d+(?:\s?\d+)*)\s*(?:FCFA|F\s*CFA|CFA)/i,
+    /Montant\s*:\s*(\d+(?:\s?\d+)*)/i,
+    /(\d{3,})\s*F(?:\s|$)/i       // "5000 F" ou "5000F"
   ]
 };
 
@@ -73,46 +62,25 @@ const REGEX_PATTERNS = {
 // ============================================
 
 /**
- * Vérifier la clé secrète
+ * Vérifier le header d'autorisation personnalisé
  */
-function verifySecretKey(request: Request): boolean {
-  const secretKey = request.headers.get('x-secret-key');
-  const expectedKey = Deno.env.get('SMS_SECRET_KEY');
+function verifyAuthorization(request: Request): boolean {
+  const authHeader = request.headers.get('x-custom-authorization');
+  const expectedAuth = Deno.env.get('CUSTOM_AUTHORIZATION_KEY');
   
-  if (!expectedKey) {
-    console.error('❌ SMS_SECRET_KEY non configurée dans les variables d\'environnement');
+  if (!expectedAuth) {
+    console.error('❌ CUSTOM_AUTHORIZATION_KEY non configurée dans les variables d\'environnement');
     return false;
   }
   
-  return secretKey === expectedKey;
+  return authHeader === expectedAuth;
 }
 
 /**
- * Détecter l'opérateur depuis l'expéditeur
+ * Extraire la référence (TID) du SMS Moov Money
  */
-function detectOperator(from: string): 'airtel' | 'moov' | null {
-  const fromLower = from.toLowerCase();
-  
-  if (fromLower.includes('airtel')) {
-    return 'airtel';
-  }
-  
-  if (fromLower.includes('moov') || fromLower.includes('libertis')) {
-    return 'moov';
-  }
-  
-  return null;
-}
-
-/**
- * Extraire le TID du message selon l'opérateur
- */
-function extractTID(message: string, operator: 'airtel' | 'moov'): string | null {
-  const patterns = operator === 'airtel' 
-    ? REGEX_PATTERNS.airtel 
-    : [...REGEX_PATTERNS.moov, ...REGEX_PATTERNS.libertis];
-  
-  for (const pattern of patterns) {
+function extractTID(message: string): string | null {
+  for (const pattern of MOOV_PATTERNS.reference) {
     const match = message.match(pattern);
     if (match && match[1]) {
       const tid = match[1].replace(/\s+/g, ''); // Enlever les espaces
@@ -125,10 +93,10 @@ function extractTID(message: string, operator: 'airtel' | 'moov'): string | null
 }
 
 /**
- * Extraire le montant du message
+ * Extraire le montant du SMS
  */
 function extractAmount(message: string): number | null {
-  for (const pattern of REGEX_PATTERNS.amount) {
+  for (const pattern of MOOV_PATTERNS.amount) {
     const match = message.match(pattern);
     if (match && match[1]) {
       const amountStr = match[1].replace(/\s+/g, ''); // Enlever les espaces
@@ -146,21 +114,34 @@ function extractAmount(message: string): number | null {
  * Analyser le SMS et extraire les informations
  */
 function parseSmsMessage(data: SmsData): TransactionInfo {
-  const operator = detectOperator(data.from);
-  
-  if (!operator) {
-    console.warn(`⚠️ Opérateur non reconnu: ${data.from}`);
-    return { tid: null, operator: null };
-  }
-  
-  const tid = extractTID(data.message, operator);
+  const tid = extractTID(data.message);
   const amount = extractAmount(data.message);
   
   return {
     tid,
-    operator,
-    amount: amount || undefined
+    amount
   };
+}
+
+/**
+ * Logger les informations de la SIM
+ */
+function logSimInfo(data: SmsData) {
+  if (data.sim_slot !== undefined) {
+    console.log(`📱 SIM Slot: ${data.sim_slot} (SIM ${data.sim_slot})`);
+  }
+  
+  if (data.sim_number) {
+    console.log(`📞 Numéro SIM: ${data.sim_number}`);
+  }
+  
+  if (data.timestamp) {
+    console.log(`⏰ Timestamp SMS: ${data.timestamp}`);
+  }
+  
+  if (!data.sim_slot && !data.sim_number) {
+    console.log(`📱 Info SIM non fournie par l'application`);
+  }
 }
 
 /**
@@ -188,20 +169,27 @@ async function findPendingPayment(supabase: any, tid: string) {
 /**
  * Confirmer le paiement
  */
-async function confirmPayment(supabase: any, paymentId: string, amount?: number) {
-  const updateData: any = {
-    status: 'confirmed',
-    confirmed_at: new Date().toISOString()
+async function confirmPayment(supabase: any, paymentId: string, amount: number | null, simInfo?: any) {
+  const metadata: any = {
+    confirmed_by: 'sms_validation',
+    operator: 'moov_gabon'
   };
   
-  // Si le montant est extrait du SMS, vérifier qu'il correspond
   if (amount) {
-    updateData.metadata = { sms_amount: amount };
+    metadata.sms_amount = amount;
+  }
+  
+  if (simInfo) {
+    metadata.sim_info = simInfo;
   }
   
   const { error } = await supabase
     .from('payments')
-    .update(updateData)
+    .update({
+      status: 'confirmed',
+      confirmed_at: new Date().toISOString(),
+      metadata: metadata
+    })
     .eq('id', paymentId);
   
   if (error) throw error;
@@ -248,17 +236,14 @@ async function updateUserSubscription(supabase: any, userId: string, amount: num
  * Envoyer une notification à l'utilisateur (optionnel)
  */
 async function notifyUser(supabase: any, userId: string, paymentId: string) {
-  // Vous pouvez implémenter l'envoi d'une notification ici
-  // Par exemple, créer une entrée dans une table notifications
-  
   try {
     await supabase
       .from('notifications')
       .insert({
         user_id: userId,
         type: 'payment_confirmed',
-        title: 'Paiement confirmé',
-        message: 'Votre paiement a été confirmé avec succès. Votre abonnement est maintenant actif !',
+        title: '💰 Paiement confirmé',
+        message: 'Votre paiement Moov Money a été confirmé avec succès. Votre abonnement est maintenant actif !',
         data: { payment_id: paymentId }
       });
   } catch (error) {
@@ -277,12 +262,15 @@ serve(async (req) => {
   }
   
   try {
-    // 1. Vérifier la clé secrète
-    if (!verifySecretKey(req)) {
+    console.log('🇬🇦 === VALIDATION MOOV MONEY GABON ===');
+    
+    // 1. Vérifier l'autorisation personnalisée
+    if (!verifyAuthorization(req)) {
+      console.error('❌ Autorisation refusée');
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Unauthorized: Invalid secret key' 
+          error: 'Unauthorized: Invalid authorization header' 
         }),
         { 
           status: 401, 
@@ -310,17 +298,20 @@ serve(async (req) => {
     console.log('📱 SMS reçu de:', smsData.from);
     console.log('📄 Message:', smsData.message);
     
+    // Logger les informations de la SIM
+    logSimInfo(smsData);
+    
     // 3. Extraire les informations
     const transactionInfo = parseSmsMessage(smsData);
     
-    if (!transactionInfo.tid || !transactionInfo.operator) {
+    if (!transactionInfo.tid) {
+      console.warn('⚠️ TID non trouvé dans le message');
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Could not extract transaction information from SMS',
+          error: 'Could not extract transaction reference (TID) from SMS',
           details: {
-            operator_detected: transactionInfo.operator,
-            tid_found: !!transactionInfo.tid
+            message_preview: smsData.message.substring(0, 100)
           }
         }),
         { 
@@ -330,7 +321,10 @@ serve(async (req) => {
       );
     }
     
-    console.log(`✅ Transaction Info:`, transactionInfo);
+    console.log(`✅ Transaction Info:`, {
+      tid: transactionInfo.tid,
+      amount: transactionInfo.amount
+    });
     
     // 4. Se connecter à Supabase
     const supabaseClient = createClient(
@@ -342,6 +336,7 @@ serve(async (req) => {
     const payment = await findPendingPayment(supabaseClient, transactionInfo.tid);
     
     if (!payment) {
+      console.warn(`⚠️ Aucun paiement en attente trouvé pour TID: ${transactionInfo.tid}`);
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -357,13 +352,33 @@ serve(async (req) => {
     
     console.log(`💰 Paiement trouvé:`, payment.id);
     
-    // 6. Vérifier que l'opérateur correspond
-    if (payment.operator !== transactionInfo.operator) {
-      console.warn(`⚠️ Opérateur différent: ${payment.operator} vs ${transactionInfo.operator}`);
+    // 6. Vérifier que c'est bien Moov
+    if (payment.operator !== 'moov') {
+      console.error(`❌ Opérateur incorrect: ${payment.operator} (attendu: moov)`);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Payment operator mismatch',
+          details: {
+            expected: 'moov',
+            found: payment.operator
+          }
+        }),
+        { 
+          status: 400, 
+          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } 
+        }
+      );
     }
     
     // 7. Confirmer le paiement
-    await confirmPayment(supabaseClient, payment.id, transactionInfo.amount);
+    const simInfo = {
+      slot: smsData.sim_slot,
+      number: smsData.sim_number,
+      timestamp: smsData.timestamp
+    };
+    
+    await confirmPayment(supabaseClient, payment.id, transactionInfo.amount, simInfo);
     console.log(`✅ Paiement confirmé:`, payment.id);
     
     // 8. Mettre à jour l'abonnement
@@ -385,7 +400,8 @@ serve(async (req) => {
         user_id: payment.user_id,
         amount: transactionInfo.amount || payment.amount,
         tid: transactionInfo.tid,
-        operator: transactionInfo.operator,
+        operator: 'moov',
+        sim_info: simInfo,
         subscription: subscription
       }),
       { 

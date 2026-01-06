@@ -25,7 +25,7 @@ import { Sessions } from './pages/Sessions';
 import { SessionRoom } from './pages/SessionRoom';
 import { AIAssistant } from './pages/AIAssistant';
 import { Settings } from './pages/Settings';
-import { Subscription } from './pages/Subscription';
+import Subscription from './pages/Subscription';
 import { TeacherDashboard } from './pages/teacher/TeacherDashboard';
 import { MigrationPDF } from './pages/MigrationPDF';
 import { AutoFixOrphans } from './pages/AutoFixOrphans';

@@ -1,7 +1,8 @@
 -- ============================================
 -- Table PAYMENTS pour WordCraft
--- Gestion des paiements mobile (Airtel/Moov)
--- Date: 5 janvier 2025
+-- Gestion des paiements Mobile Money Gabon
+-- Opérateur: Moov Money (Libertis) uniquement
+-- Date: 6 janvier 2025 (mis à jour)
 -- ============================================
 
 -- 1. Créer la table payments
@@ -10,7 +11,7 @@ CREATE TABLE IF NOT EXISTS public.payments (
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     amount NUMERIC(10, 2) NOT NULL CHECK (amount > 0),
     tid_submitted TEXT NOT NULL UNIQUE,
-    operator TEXT NOT NULL CHECK (operator IN ('airtel', 'moov')),
+    operator TEXT NOT NULL CHECK (operator = 'moov'),
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'failed', 'cancelled')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
@@ -127,16 +128,16 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- 11. Commentaires sur la table et les colonnes
-COMMENT ON TABLE public.payments IS 'Table des paiements mobile money (Airtel/Moov) pour WordCraft';
+COMMENT ON TABLE public.payments IS 'Table des paiements Moov Money Gabon pour WordCraft';
 COMMENT ON COLUMN public.payments.id IS 'Identifiant unique du paiement';
 COMMENT ON COLUMN public.payments.user_id IS 'Référence vers l''utilisateur qui effectue le paiement';
 COMMENT ON COLUMN public.payments.amount IS 'Montant du paiement (max 99999999.99)';
-COMMENT ON COLUMN public.payments.tid_submitted IS 'Code TID soumis par l''utilisateur (unique)';
-COMMENT ON COLUMN public.payments.operator IS 'Opérateur mobile: airtel ou moov';
+COMMENT ON COLUMN public.payments.tid_submitted IS 'Code TID/Ref soumis par l''utilisateur (unique)';
+COMMENT ON COLUMN public.payments.operator IS 'Opérateur mobile: moov uniquement (Moov Money Gabon)';
 COMMENT ON COLUMN public.payments.status IS 'Statut: pending, confirmed, failed, cancelled';
 COMMENT ON COLUMN public.payments.created_at IS 'Date de création du paiement';
 COMMENT ON COLUMN public.payments.updated_at IS 'Date de dernière modification';
-COMMENT ON COLUMN public.payments.confirmed_at IS 'Date de confirmation du paiement';
+COMMENT ON COLUMN public.payments.confirmed_at IS 'Date de confirmation du paiement (via SMS)';
 
 -- ============================================
 -- FIN DU SCRIPT

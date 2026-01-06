@@ -197,6 +197,7 @@ async function confirmPayment(supabase: any, paymentId: string, amount: number |
 
 /**
  * Mettre à jour l'abonnement de l'utilisateur
+ * CORRECTION BUG : Étend l'abonnement existant au lieu de l'écraser
  */
 async function updateUserSubscription(supabase: any, userId: string, amount: number) {
   // Déterminer le type d'abonnement selon le montant
@@ -214,8 +215,37 @@ async function updateUserSubscription(supabase: any, userId: string, amount: num
     durationDays = 30;
   }
   
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + durationDays);
+  // ✅ FIX: Récupérer d'abord l'abonnement existant
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('subscription_expires_at')
+    .eq('id', userId)
+    .single();
+  
+  // Calculer la nouvelle date d'expiration
+  let expiresAt: Date;
+  
+  if (profile && profile.subscription_expires_at) {
+    const currentExpiration = new Date(profile.subscription_expires_at);
+    const now = new Date();
+    
+    // ✅ Si l'abonnement actuel n'a pas encore expiré, on ÉTEND
+    if (currentExpiration > now) {
+      expiresAt = new Date(currentExpiration);
+      expiresAt.setDate(expiresAt.getDate() + durationDays);
+      console.log(`📅 Extension d'abonnement: ${durationDays} jours ajoutés à ${currentExpiration.toISOString()}`);
+    } else {
+      // Abonnement expiré, on part de maintenant
+      expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + durationDays);
+      console.log(`📅 Nouvel abonnement: ${durationDays} jours à partir de maintenant`);
+    }
+  } else {
+    // Pas d'abonnement existant, on part de maintenant
+    expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + durationDays);
+    console.log(`📅 Premier abonnement: ${durationDays} jours`);
+  }
   
   // Mettre à jour le profil utilisateur
   const { error } = await supabase

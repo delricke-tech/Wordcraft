@@ -55,18 +55,41 @@ ON public.payments(tid_submitted, status);
 -- CONTRAINTES CHECK mises à jour
 -- ============================================
 
--- Modifier le CHECK constraint sur operator pour Moov uniquement
+-- Supprimer TOUTES les contraintes CHECK sur operator (y compris celle inline créée sans nom)
+-- puis ajouter la nouvelle contrainte (Moov uniquement)
 DO $$ 
+DECLARE
+    constraint_rec RECORD;
+    constraints_dropped INTEGER := 0;
 BEGIN
-    -- Supprimer l'ancien constraint sur operator si il existe
-    ALTER TABLE public.payments DROP CONSTRAINT IF EXISTS payments_operator_check;
+    -- Trouver et supprimer toutes les contraintes CHECK qui concernent la colonne 'operator'
+    FOR constraint_rec IN 
+        SELECT c.conname
+        FROM pg_constraint c
+        JOIN pg_class t ON c.conrelid = t.oid
+        JOIN pg_namespace n ON t.relnamespace = n.oid
+        WHERE n.nspname = 'public'
+          AND t.relname = 'payments'
+          AND c.contype = 'c'  -- CHECK constraint
+          AND pg_get_constraintdef(c.oid) ILIKE '%operator%'
+    LOOP
+        EXECUTE format('ALTER TABLE public.payments DROP CONSTRAINT %I', constraint_rec.conname);
+        constraints_dropped := constraints_dropped + 1;
+        RAISE NOTICE '🗑️ Contrainte supprimée: %', constraint_rec.conname;
+    END LOOP;
     
-    -- Ajouter le nouveau constraint (Moov uniquement)
+    IF constraints_dropped = 0 THEN
+        RAISE NOTICE '⚠️ Aucune contrainte operator trouvée à supprimer';
+    ELSE
+        RAISE NOTICE '✅ % contrainte(s) operator supprimée(s)', constraints_dropped;
+    END IF;
+    
+    -- Ajouter la nouvelle contrainte (Moov uniquement)
     ALTER TABLE public.payments 
     ADD CONSTRAINT payments_operator_check 
     CHECK (operator = 'moov');
     
-    RAISE NOTICE '✅ Constraint operator mis à jour (Moov uniquement)';
+    RAISE NOTICE '✅ Nouvelle contrainte operator ajoutée (Moov uniquement)';
 END $$;
 
 -- Modifier le CHECK constraint pour inclure 'confirmed' comme statut valide

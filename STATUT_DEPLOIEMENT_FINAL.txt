@@ -1,0 +1,234 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                                                                            ║
+║   ✅ DÉPLOIEMENT SUPABASE - STATUT FINAL                                  ║
+║                                                                            ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+Date : 6 janvier 2025, 22:15
+Commit : 9897293
+Projet Supabase : uexuecubafgfhpfebknt
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ CE QUI EST DÉJÀ DÉPLOYÉ
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ ✅ GitHub                                                                 │
+├──────────────────────────────────────────────────────────────────────────┤
+│ • Commit : 9897293                                                       │
+│ • Branche : main                                                         │
+│ • Tous les fichiers poussés                                             │
+└──────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ ✅ Edge Function validate-transaction                                    │
+├──────────────────────────────────────────────────────────────────────────┤
+│ • Bug 2 (Extension abonnement) : CORRIGÉ ✅                              │
+│ • Déployée sur Supabase                                                  │
+│ • URL : https://supabase.com/.../functions/validate-transaction         │
+└──────────────────────────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⏳ CE QU'IL RESTE À FAIRE (2 MINUTES)
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ ⏳ Migrations SQL (Bug 1 - Contraintes operator)                         │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│ À exécuter dans Supabase SQL Editor :                                   │
+│                                                                          │
+│ 1. Ouvrir : https://supabase.com/dashboard/project/uexuecubafgfhpfebknt │
+│ 2. Cliquer sur "SQL Editor"                                             │
+│ 3. Cliquer sur "New query"                                              │
+│ 4. Exécuter les 3 scripts ci-dessous                                    │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 SCRIPTS À EXÉCUTER DANS SQL EDITOR
+
+Script 1 : Créer la table payments (30 secondes)
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Fichier : supabase/migrations/20250106000001_create_payments_table.sql  │
+│                                                                          │
+│ Action :                                                                 │
+│ 1. Ouvrir le fichier dans votre IDE                                     │
+│ 2. Copier TOUT le contenu                                               │
+│ 3. Coller dans SQL Editor                                               │
+│ 4. Cliquer "RUN"                                                         │
+│                                                                          │
+│ Résultat attendu : "Success. No rows returned"                          │
+└──────────────────────────────────────────────────────────────────────────┘
+
+Script 2 : Corriger la contrainte operator (BUG 1) (30 secondes)
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Fichier : supabase/migrations/                                          │
+│           20250106000002_update_payments_for_sms_validation.sql          │
+│                                                                          │
+│ ⚠️ CRITIQUE : Ce script corrige le Bug 1                                │
+│                                                                          │
+│ Action :                                                                 │
+│ 1. Ouvrir le fichier dans votre IDE                                     │
+│ 2. Copier TOUT le contenu                                               │
+│ 3. Coller dans SQL Editor                                               │
+│ 4. Cliquer "RUN"                                                         │
+│                                                                          │
+│ Résultat attendu :                                                       │
+│ • "🗑️ Contrainte supprimée: ..." (peut apparaître plusieurs fois)      │
+│ • "✅ Nouvelle contrainte payments_operator_check ajoutée"              │
+└──────────────────────────────────────────────────────────────────────────┘
+
+Script 3 : Créer la fonction RPC atomique (30 secondes)
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Fichier : supabase/migrations/                                          │
+│           20250106000003_create_rpc_validate_payment_atomic.sql          │
+│                                                                          │
+│ Info : Protection contre les validations simultanées (2 SIM)            │
+│                                                                          │
+│ Action :                                                                 │
+│ 1. Ouvrir le fichier dans votre IDE                                     │
+│ 2. Copier TOUT le contenu                                               │
+│ 3. Coller dans SQL Editor                                               │
+│ 4. Cliquer "RUN"                                                         │
+│                                                                          │
+│ Résultat attendu : "✅ Fonction validate_and_confirm_payment créée"     │
+└──────────────────────────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ VÉRIFICATIONS APRÈS EXÉCUTION
+
+Vérification 1 : Une seule contrainte operator
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Dans SQL Editor, exécuter :                                              │
+│                                                                          │
+│ SELECT COUNT(*) FROM pg_constraint                                       │
+│ WHERE conrelid='payments'::regclass                                      │
+│   AND pg_get_constraintdef(oid) ILIKE '%operator%';                     │
+│                                                                          │
+│ Résultat ATTENDU : 1                                                    │
+│ Si différent : ALERTER !                                                 │
+└──────────────────────────────────────────────────────────────────────────┘
+
+Vérification 2 : Test insertion Moov/Airtel
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Test Moov (doit RÉUSSIR) :                                               │
+│                                                                          │
+│ INSERT INTO payments (user_id, amount, tid_submitted, operator, status) │
+│ VALUES (                                                                 │
+│   (SELECT id FROM auth.users LIMIT 1),                                  │
+│   5000, 'TEST_MOOV_001', 'moov', 'pending'                              │
+│ );                                                                       │
+│                                                                          │
+│ Résultat attendu : ✅ Success                                            │
+│                                                                          │
+│ Test Airtel (doit ÉCHOUER) :                                            │
+│                                                                          │
+│ INSERT INTO payments (user_id, amount, tid_submitted, operator, status) │
+│ VALUES (                                                                 │
+│   (SELECT id FROM auth.users LIMIT 1),                                  │
+│   5000, 'TEST_AIRTEL_001', 'airtel', 'pending'                          │
+│ );                                                                       │
+│                                                                          │
+│ Résultat attendu : ❌ ERROR: violates check constraint                  │
+│                                                                          │
+│ Nettoyer : DELETE FROM payments WHERE tid_submitted LIKE 'TEST_%';      │
+└──────────────────────────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📚 DOCUMENTATION DISPONIBLE
+
+Guide principal :
+  📖 DEPLOIEMENT_SUPABASE_COMPLET.md
+     → Instructions détaillées, scripts complets, vérifications
+
+Guides alternatifs :
+  📖 DEPLOIEMENT_FIX_2_BUGS.md
+     → Guide général de déploiement
+  
+  📖 FIX_2_BUGS_CRITIQUES.md
+     → Explications techniques complètes
+
+Tests automatisés :
+  📖 test_operator_constraint_fix.sql (Bug 1)
+  📖 test_subscription_extension.js (Bug 2)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📊 TABLEAU DE BORD FINAL
+
+┌─────────────────────────────────────┬─────────────┬────────────────────┐
+│ Composant                           │ Statut      │ Temps              │
+├─────────────────────────────────────┼─────────────┼────────────────────┤
+│ GitHub                              │ ✅ Déployé   │ -                  │
+│ Edge Function (Bug 2)               │ ✅ Déployé   │ -                  │
+│ Table payments                      │ ⏳ À faire   │ 30 secondes        │
+│ Contrainte operator (Bug 1)         │ ⏳ À faire   │ 30 secondes        │
+│ Fonction RPC atomique               │ ⏳ À faire   │ 30 secondes        │
+│ Vérifications                       │ ⏳ À faire   │ 1 minute           │
+├─────────────────────────────────────┴─────────────┴────────────────────┤
+│ TOTAL RESTANT                       │ ⏳          │ 2-3 minutes        │
+└─────────────────────────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 CHECKLIST COMPLÈTE
+
+GitHub :
+  [✅] Code poussé (commit 9897293)
+  [✅] Tous les fichiers à jour
+
+Edge Function :
+  [✅] validate-transaction déployée
+  [✅] Bug 2 (Extension abonnement) corrigé
+
+Migrations SQL :
+  [ ] ⏳ Script 1 : Table payments créée
+  [ ] ⏳ Script 2 : Contrainte operator corrigée (Bug 1)
+  [ ] ⏳ Script 3 : Fonction RPC créée
+
+Vérifications :
+  [ ] ⏳ 1 seule contrainte operator
+  [ ] ⏳ Test Moov OK, Airtel KO
+  [ ] ⏳ Logs Edge Function OK
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💡 CONSEILS
+
+1. Exécuter les scripts dans l'ORDRE (1 → 2 → 3)
+2. Vérifier les messages de succès après chaque script
+3. En cas d'erreur, consulter DEPLOIEMENT_SUPABASE_COMPLET.md
+4. Effectuer les vérifications après tous les scripts
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠️ RAPPEL IMPORTANT
+
+Le Bug 2 (Extension abonnement) est déjà déployé ✅
+Le Bug 1 (Contrainte operator) nécessite Script 2 ⏳
+
+Sans le Script 2 :
+  - Risque d'erreurs SQL avec operator
+  - Comportement imprévisible
+  - Tests échoueront
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║                                                                            ║
+║   🚀 PROCHAINE ÉTAPE : SQL EDITOR (2 MINUTES)                             ║
+║                                                                            ║
+║   https://supabase.com/dashboard/project/uexuecubafgfhpfebknt/sql         ║
+║                                                                            ║
+║   📖 Guide complet : DEPLOIEMENT_SUPABASE_COMPLET.md                      ║
+║                                                                            ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+Date : 6 janvier 2025
+Projet : uexuecubafgfhpfebknt
+Commit : 9897293
+Statut : ✅ 50% (Edge Function OK, SQL à faire)

@@ -25,7 +25,6 @@ import { Sessions } from './pages/Sessions';
 import { SessionRoom } from './pages/SessionRoom';
 import { AIAssistant } from './pages/AIAssistant';
 import { Settings } from './pages/Settings';
-import Subscription from './pages/Subscription';
 import { TeacherDashboard } from './pages/teacher/TeacherDashboard';
 import { MigrationPDF } from './pages/MigrationPDF';
 import { AutoFixOrphans } from './pages/AutoFixOrphans';
@@ -143,7 +142,6 @@ function AppRoutes() {
         <Route path="sessions/:sessionId/join" element={<SessionRoom />} />
         <Route path="ai-assistant" element={<AIAssistant />} />
         <Route path="settings" element={<Settings />} />
-        <Route path="subscription" element={<Subscription />} />
         <Route path="profile" element={<Settings />} />
         <Route path="notifications" element={<Dashboard />} />
         <Route path="teacher/courses" element={<TeacherDashboard />} />

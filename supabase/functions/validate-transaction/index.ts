@@ -125,19 +125,19 @@ serve(async (req) => {
     // METTRE À JOUR L'ABONNEMENT (AVEC FIX BUG 2)
     const amount = smsAmount || payment.amount
 
-    // Déterminer le type d'abonnement selon les tarifs
+    // Déterminer le type d'abonnement
     let subscriptionType = 'basic'
     let durationDays = 30
 
-    if (amount >= 15000) {
+    if (amount >= 10000) {
       subscriptionType = 'premium'
-      durationDays = 365  // 1 an
+      durationDays = 365
     } else if (amount >= 5000) {
-      subscriptionType = 'standard'
-      durationDays = 90   // 3 mois
+      subscriptionType = 'premium'
+      durationDays = 30
     } else if (amount >= 2000) {
-      subscriptionType = 'basic'
-      durationDays = 30   // 1 mois
+      subscriptionType = 'standard'
+      durationDays = 30
     }
 
     // RÉCUPÉRER L'ABONNEMENT EXISTANT

@@ -104,6 +104,28 @@ export function getFileExtension(fileName: string): string {
   return lastDotIndex !== -1 ? fileName.substring(lastDotIndex) : '';
 }
 
+/** Taille max par fichier pour l'upload (50 Mo) — Phase 1.1 Roadmap */
+export const MAX_UPLOAD_FILE_SIZE_BYTES = 50 * 1024 * 1024;
+
+/** Types de fichiers acceptés à l'upload (pas 'url') */
+export const UPLOAD_ALLOWED_FILE_TYPES = ['pdf', 'docx', 'pptx', 'xlsx', 'txt', 'image', 'video', 'audio'] as const;
+
+/**
+ * Valide un fichier pour l'upload (taille + type).
+ * @returns Message d'erreur si invalide, null si OK
+ */
+export function validateFileForUpload(file: File): string | null {
+  const fileType = getFileType(file.name);
+  if (!UPLOAD_ALLOWED_FILE_TYPES.includes(fileType)) {
+    return `Type non supporté. Acceptés : PDF, Word, Excel, PowerPoint, TXT, images, vidéo, audio.`;
+  }
+  if (file.size > MAX_UPLOAD_FILE_SIZE_BYTES) {
+    const maxMo = MAX_UPLOAD_FILE_SIZE_BYTES / (1024 * 1024);
+    return `Taille max ${maxMo} Mo par fichier.`;
+  }
+  return null;
+}
+
 /**
  * Obtient le type de fichier basé sur l'extension
  * 

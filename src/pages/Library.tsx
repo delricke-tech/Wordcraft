@@ -33,7 +33,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase, Document, Folder as FolderType, uploadFile } from '../lib/supabase';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { generateUniqueFileName, getFileType } from '../utils/fileUtils';
+import { generateUniqueFileName, getFileType, validateFileForUpload, MAX_UPLOAD_FILE_SIZE_BYTES } from '../utils/fileUtils';
 import { toast } from 'sonner';
 import { NewFolderModal } from '../components/modals/NewFolderModal';
 import { FolderSelector } from '../components/modals/FolderSelector';
@@ -105,6 +105,13 @@ export function Library() {
   // État pour la modale de suppression totale
   const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
+
+  // État pour le glisser-déposer (Phase 1.1 Roadmap)
+  const [isDraggingOverLibrary, setIsDraggingOverLibrary] = useState(false);
+  const [isDraggingOverModal, setIsDraggingOverModal] = useState(false);
+
+  // Prévisualisation avant validation (Phase 1.1) — fichiers en attente dans la modale
+  const [pendingUploadFiles, setPendingUploadFiles] = useState<File[]>([]);
 
   // États pour Quiz et Flashcards
   const [generatingQuizForDoc, setGeneratingQuizForDoc] = useState<string | null>(null);
@@ -743,24 +750,39 @@ export function Library() {
     }
   };
 
-  const handleFileUpload = async (files: FileList | null) => {
-    // ✅ OPTION A : Permettre les uploads anonymes (user_id peut être NULL)
+  const handleFileUpload = async (files: FileList | null, folderIdOverride?: string | null) => {
     if (!files) return;
+
+    const filesArray = Array.from(files);
+    const validFiles: File[] = [];
+    const errors: string[] = [];
+
+    for (const file of filesArray) {
+      const err = validateFileForUpload(file);
+      if (err) errors.push(`${file.name} : ${err}`);
+      else validFiles.push(file);
+    }
+
+    if (errors.length > 0) {
+      toast.error(errors.length === 1 ? errors[0] : `${errors.length} fichier(s) refusé(s)`, {
+        description: errors.slice(0, 3).join(' — ') + (errors.length > 3 ? ` et ${errors.length - 3} autre(s).` : ''),
+        duration: 6000,
+      });
+    }
+    if (validFiles.length === 0) return;
 
     setIsUploading(true);
     setUploadProgress(0);
-    const totalFiles = files.length;
-    let successfulUploads = 0; // ✅ Compteur pour valider les succès réels
-    
-    // Toast de chargement
+    const totalFiles = validFiles.length;
+    const targetFolderId = folderIdOverride !== undefined ? folderIdOverride : selectedFolderForGeneralUpload;
+    let successfulUploads = 0;
     const loadingToastId = toast.loading(`Upload de ${totalFiles} fichier(s) en cours...`);
 
     try {
-      // Importer les services d'extraction
       const { extractText } = await import('../services/textExtractor');
 
       for (let i = 0; i < totalFiles; i++) {
-        const file = Array.from(files)[i];
+        const file = validFiles[i];
         
         // Mettre à jour la progression
         const progress = ((i + 1) / totalFiles) * 100;
@@ -812,7 +834,7 @@ export function Library() {
           storage_path: uploadData.path, // ✅ CRITIQUE [cite: 2025-12-27] : Chemin exact retourné par Storage
           user_id: user?.id || null, // ✅ NULL si non connecté pour éviter erreur 400 [cite: 2025-12-27]
           file_type: fileType,
-          folder_id: selectedFolderForGeneralUpload || null,
+          folder_id: targetFolderId ?? null,
           processing_status: 'pending' // ✅ Statut pour l'extraction IA
         };
 
@@ -937,7 +959,8 @@ export function Library() {
       }
       
       setShowUploadModal(false);
-      setSelectedFolderForGeneralUpload(null); // ✅ Réinitialiser la sélection
+      setSelectedFolderForGeneralUpload(null);
+      setPendingUploadFiles([]);
       
     } catch (error) {
       console.error('❌ Erreur générale:', error);
@@ -1626,8 +1649,28 @@ export function Library() {
         </select>
       </div>
 
-      {/* Documents Grid/List */}
-      <div className="flex-1 overflow-auto">
+      {/* Documents Grid/List — zone de glisser-déposer (Phase 1.1 Roadmap) */}
+      <div
+        className={`flex-1 overflow-auto relative transition-colors ${isDraggingOverLibrary ? 'ring-2 ring-teal-500 ring-inset bg-teal-50/50 rounded-xl' : ''}`}
+        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingOverLibrary(true); }}
+        onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingOverLibrary(false); }}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsDraggingOverLibrary(false);
+          if (e.dataTransfer.files?.length) {
+            handleFileUpload(e.dataTransfer.files, selectedFolder);
+          }
+        }}
+      >
+        {isDraggingOverLibrary && (
+          <div className="absolute inset-0 flex items-center justify-center bg-teal-100/80 rounded-xl z-10 pointer-events-none">
+            <div className="bg-white rounded-2xl shadow-xl px-8 py-6 border-2 border-teal-400 flex items-center gap-4">
+              <Upload size={40} className="text-teal-600" />
+              <span className="text-lg font-medium text-teal-800">Déposez les fichiers ici</span>
+            </div>
+          </div>
+        )}
         {filteredDocuments.length === 0 && filteredFolders.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-gray-500">
             {searchQuery ? (
@@ -2001,6 +2044,7 @@ export function Library() {
                 onClick={() => {
                   setShowUploadModal(false);
                   setSelectedFolderForGeneralUpload(null);
+                  setPendingUploadFiles([]);
                 }}
                 className="p-2 hover:bg-gray-100 rounded-lg"
               >
@@ -2008,7 +2052,7 @@ export function Library() {
               </button>
             </div>
             <div className="p-6">
-              {/* ✅ Sélecteur de dossier */}
+              {/* Sélecteur de dossier */}
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Dossier de destination
@@ -2024,18 +2068,86 @@ export function Library() {
                 ref={fileInputRef}
                 type="file"
                 multiple
-                onChange={(e) => handleFileUpload(e.target.files)}
+                onChange={(e) => {
+                  const list = e.target.files;
+                  if (list?.length) setPendingUploadFiles(Array.from(list));
+                  e.target.value = '';
+                }}
                 className="hidden"
               />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full p-8 border-2 border-dashed border-gray-300 rounded-xl hover:border-teal-500 hover:bg-teal-50 transition-all"
-              >
-                <Upload size={48} className="mx-auto mb-4 text-gray-400" />
-                <p className="text-sm text-gray-600">
-                  Cliquez pour sélectionner des fichiers
-                </p>
-              </button>
+
+              {pendingUploadFiles.length > 0 ? (
+                /* Prévisualisation avant validation (Phase 1.1) */
+                <div className="space-y-4">
+                  <p className="text-sm text-gray-600">
+                    Taille max {MAX_UPLOAD_FILE_SIZE_BYTES / (1024 * 1024)} Mo par fichier. Types : PDF, Word, Excel, PowerPoint, TXT, images, vidéo, audio.
+                  </p>
+                  <ul className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                    {pendingUploadFiles.map((file, i) => {
+                      const err = validateFileForUpload(file);
+                      return (
+                        <li key={i} className={`flex items-center justify-between px-3 py-2 text-sm ${err ? 'bg-red-50 text-red-800' : 'bg-gray-50'}`}>
+                          <span className="truncate flex-1">{file.name}</span>
+                          <span className="text-gray-500 ml-2 flex-shrink-0">{(file.size / 1024).toFixed(0)} Ko</span>
+                          {err && <span className="text-xs text-red-600 ml-2 flex-shrink-0">{err}</span>}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const valid = pendingUploadFiles.filter(f => !validateFileForUpload(f));
+                        if (valid.length === 0) {
+                          toast.error('Aucun fichier valide à envoyer.');
+                          return;
+                        }
+                        const dt = new DataTransfer();
+                        valid.forEach(f => dt.items.add(f));
+                        handleFileUpload(dt.files);
+                        setPendingUploadFiles([]);
+                      }}
+                      disabled={!pendingUploadFiles.some(f => !validateFileForUpload(f)) || isUploading}
+                      className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Confirmer l&apos;upload
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPendingUploadFiles([])}
+                      className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                    >
+                      Tout effacer
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => fileInputRef.current?.click()}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInputRef.current?.click(); } }}
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingOverModal(true); }}
+                  onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingOverModal(false); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDraggingOverModal(false);
+                    if (e.dataTransfer.files?.length) setPendingUploadFiles(Array.from(e.dataTransfer.files));
+                  }}
+                  className={`w-full p-8 border-2 border-dashed rounded-xl transition-all cursor-pointer ${
+                    isDraggingOverModal
+                      ? 'border-teal-500 bg-teal-100'
+                      : 'border-gray-300 hover:border-teal-500 hover:bg-teal-50'
+                  }`}
+                >
+                  <Upload size={48} className={`mx-auto mb-4 ${isDraggingOverModal ? 'text-teal-600' : 'text-gray-400'}`} />
+                  <p className="text-sm text-gray-600">
+                    {isDraggingOverModal ? 'Déposez les fichiers ici' : 'Cliquez ou glissez-déposez des fichiers'}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>

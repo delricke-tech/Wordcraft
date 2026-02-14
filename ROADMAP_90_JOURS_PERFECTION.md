@@ -37,12 +37,12 @@ RYTHME    : ~1 feature tous les 1,3 jours
 ## 📅 PHASE 1 — Jours 1 à 30 : Fondations & Documents (≈22 features)
 
 ### 1.1 Upload & ingestion
-- [ ] Upload par glisser-déposer multi-fichiers
-- [ ] Support PDF (texte + images / OCR)
-- [ ] Support DOCX, XLSX, TXT, images (OCR)
-- [ ] Détection automatique du type et extraction fiable
-- [ ] Limites de taille claires et messages d’erreur explicites
-- [ ] Prévisualisation avant validation
+- [x] Upload par glisser-déposer multi-fichiers
+- [x] Support PDF (texte + images / OCR)
+- [x] Support DOCX, XLSX, TXT, images (OCR)
+- [x] Détection automatique du type et extraction fiable
+- [x] Limites de taille claires et messages d’erreur explicites
+- [x] Prévisualisation avant validation
 
 ### 1.2 Organisation
 - [ ] Arborescence de dossiers (création, renommage, suppression)
@@ -146,8 +146,8 @@ RYTHME    : ~1 feature tous les 1,3 jours
 | Phase 2 | 31–60  | ~22             | ~70%         |
 | Phase 3 | 61–90  | ~25             | 100%         |
 
-**Progression actuelle :** _____ / 85 (_____ %)  
-**Dernière mise à jour :** _______________
+**Progression actuelle :** 25 / 85 (~29 %)  
+**Dernière mise à jour :** Phase 1.1 — Limites 50 Mo, messages d'erreur, prévisualisation avant validation
 
 ---
 

@@ -1,9 +1,9 @@
--- Create the 'shares' table
+-- Create the 'shares' table (user FKs reference profiles for consistency with existing schema)
 CREATE TABLE shares (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
-    shared_by UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-    shared_with_user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    shared_by UUID REFERENCES profiles(id) ON DELETE CASCADE,
+    shared_with_user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
     shared_with_email TEXT,
     permissions TEXT NOT NULL DEFAULT 'view',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now()

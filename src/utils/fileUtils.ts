@@ -110,6 +110,11 @@ export const MAX_UPLOAD_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 /** Types de fichiers acceptés à l'upload (pas 'url') */
 export const UPLOAD_ALLOWED_FILE_TYPES = ['pdf', 'docx', 'pptx', 'xlsx', 'txt', 'image', 'video', 'audio'] as const;
 
+// Note: les URLs ne sont pas uploadées, elles sont ajoutées via un formulaire dédié ;
+// la détection de type ci‑dessus se base uniquement sur l'extension ou sur le fait
+// que la chaîne ressemble à une URL (http:// ou https://), et renvoie 'url' le
+// cas échéant.
+
 /**
  * Valide un fichier pour l'upload (taille + type).
  * @returns Message d'erreur si invalide, null si OK
@@ -133,6 +138,12 @@ export function validateFileForUpload(file: File): string | null {
  * @returns Le type de fichier (pdf, docx, pptx, xlsx, txt, image, video, audio, url)
  */
 export function getFileType(fileName: string): 'pdf' | 'docx' | 'pptx' | 'xlsx' | 'txt' | 'image' | 'video' | 'audio' | 'url' {
+  // Reconnaissance d'URL basique : si la chaîne commence par http(s)://,
+  // on considère qu'il s'agit d'un lien externe.
+  if (/^https?:\/\//i.test(fileName)) {
+    return 'url';
+  }
+
   const ext = getFileExtension(fileName).toLowerCase();
   
   if (ext === '.pdf') return 'pdf';
@@ -144,6 +155,8 @@ export function getFileType(fileName: string): 'pdf' | 'docx' | 'pptx' | 'xlsx' 
   if (['.mp3', '.wav', '.ogg', '.aac', '.flac'].includes(ext)) return 'audio';
   if (['.txt', '.md', '.rtf', '.csv'].includes(ext)) return 'txt';
   
+  // Par défaut, on retourne 'txt' pour éviter de casser les anciens usages,
+  // mais la déclaration de type autorise 'url' si nécessaire.
   return 'txt';
 }
 

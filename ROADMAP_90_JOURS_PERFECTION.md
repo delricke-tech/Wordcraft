@@ -40,7 +40,8 @@ RYTHME    : ~1 feature tous les 1,3 jours
 - [x] Upload par glisser-déposer multi-fichiers
 - [x] Support PDF (texte + images / OCR)
 - [x] Support DOCX, XLSX, TXT, images (OCR)
-- [x] Détection automatique du type et extraction fiable
+- [x] Support liens/URLs et extraction de pages web
+- [x] Détection automatique du type et extraction fiable (incl. URL)
 - [x] Limites de taille claires et messages d’erreur explicites
 - [x] Prévisualisation avant validation
 

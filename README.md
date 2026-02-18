@@ -11,10 +11,11 @@ WordCraft IA est une plateforme d'apprentissage intelligente qui utilise l'intel
 ## ✨ Fonctionnalités Principales
 
 ### 📚 Gestion de Documents
-- **Upload multi-formats** : PDF, DOCX, Images, TXT
-- **Extraction de texte automatique** avec OCR
+- **Upload multi-formats** : PDF, DOCX, PPTX, XLSX, Images, TXT, Audio, Vidéo
+- **Ajout de liens externes** (URL) directement dans la bibliothèque
+- **Extraction de texte automatique** avec OCR et lecture des pages web
 - **Organisation en dossiers** personnalisables
-- **Viewer PDF intégré** avec navigation fluide
+- **Viewer universel** : PDF embarqué, images, vidéos, audio et liens (iframe), aperçu Word/PowerPoint via Google Docs
 - **Système de favoris** pour un accès rapide
 
 ### 🎴 Fiches de Révision Intelligentes
@@ -71,6 +72,15 @@ WordCraft IA est une plateforme d'apprentissage intelligente qui utilise l'intel
    VITE_OPENAI_API_KEY=sk-votre-clé
    VITE_SERPER_API_KEY=votre-clé-serper
    ```
+
+   
+   *💡 Dépendances optionnelles* : l'extraction de DOCX, PPTX, XLSX et l'OCR
+   d'images utilisent des librairies tierces. Elles sont déjà listées dans
+   `package.json`, mais si vous démarrez d'un clone vide, installez-les via :
+   ```bash
+   npm install mammoth pizzip xlsx tesseract.js
+   ```
+   ou ajoutez la commande ci-dessus après l'`npm install` principal.
 
 4. **Configurer Supabase**
    

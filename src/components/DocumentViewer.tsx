@@ -5,7 +5,7 @@
  * Date: 31 décembre 2024
  */
 
-import { X, Download, FileText, Image as ImageIcon, Video as VideoIcon, Music } from 'lucide-react';
+import { X, Download, FileText, Image as ImageIcon, Video as VideoIcon, Music, Globe } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
@@ -36,7 +36,15 @@ export function DocumentViewer({
     try {
       setLoading(true);
 
-      // Générer l'URL publique
+      // Cas particulier : le document est une URL externe
+      if (fileType === 'url') {
+        // On considère que storagePath contient l'URL complète
+        setPublicUrl(storagePath as string);
+        setLoading(false);
+        return;
+      }
+
+      // Générer l'URL publique pour un fichier stocké
       const { data: urlData } = supabase.storage
         .from('documents')
         .getPublicUrl(storagePath);
@@ -92,6 +100,15 @@ export function DocumentViewer({
           />
         );
 
+      case 'url':
+        return (
+          <iframe
+            src={publicUrl}
+            className="w-full h-full"
+            title={documentName || publicUrl}
+          />
+        );
+
       case 'txt':
         return (
           <div className="w-full h-full overflow-auto bg-white">
@@ -115,23 +132,23 @@ export function DocumentViewer({
         );
 
       case 'docx':
+        // On utilise le visionneur Google Docs tant que le rendu local n'est pas
+        // prêt ; la même technique fonctionne pour pptx.
         return (
-          <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 p-8">
-            <FileText size={64} className="text-blue-500 mb-4" />
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">Document DOCX</h2>
-            <p className="text-gray-600 mb-6 text-center max-w-md">
-              L'aperçu des fichiers DOCX sera bientôt disponible.
-              <br />
-              En attendant, vous pouvez télécharger le fichier.
-            </p>
-            <button
-              onClick={handleDownload}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-            >
-              <Download size={20} />
-              Télécharger le document
-            </button>
-          </div>
+          <iframe
+            src={`https://docs.google.com/gview?url=${encodeURIComponent(publicUrl)}&embedded=true`}
+            className="w-full h-full"
+            title={documentName}
+          />
+        );
+
+      case 'pptx':
+        return (
+          <iframe
+            src={`https://docs.google.com/gview?url=${encodeURIComponent(publicUrl)}&embedded=true`}
+            className="w-full h-full"
+            title={documentName}
+          />
         );
 
       case 'video':
@@ -186,7 +203,8 @@ export function DocumentViewer({
           {fileType === 'image' && <ImageIcon className="text-white" size={24} />}
           {fileType === 'txt' && <FileText className="text-white" size={24} />}
           {fileType === 'pdf' && <FileText className="text-white" size={24} />}
-          {fileType === 'docx' && <FileText className="text-white" size={24} />}
+          {(fileType === 'docx' || fileType === 'pptx') && <FileText className="text-white" size={24} />}
+          {fileType === 'url' && <Globe className="text-white" size={24} />}
           {fileType === 'video' && <VideoIcon className="text-white" size={24} />}
           {fileType === 'audio' && <Music className="text-white" size={24} />}
           <h1 className="text-lg font-semibold text-white truncate max-w-md">

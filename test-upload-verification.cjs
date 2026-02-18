@@ -170,6 +170,19 @@ if (libraryContent.includes('import { generateUniqueFileName') &&
   allChecksPass = false;
 }
 
+
+// ========================================
+// TEST 8 : Support des liens externes
+// ========================================
+console.log('📋 Test 8 : Vérifier la présence du gestionnaire handleAddLink');
+
+if (libraryContent.includes('const handleAddLink') && libraryContent.includes('file_type: \'url\'')) {
+  console.log('✅ PASS : support basique des URLs détecté dans Library.tsx');
+} else {
+  console.log('❌ FAIL : le support des URLs semble manquer');
+  allChecksPass = false;
+}
+
 console.log('');
 
 // ========================================

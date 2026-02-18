@@ -14,6 +14,7 @@
 | `pizzip` | 3.2.0 | Extraction PPTX | ✅ Installé |
 | `xlsx` | Latest | Extraction XLSX | ✅ **NOUVEAU - Installé** |
 | `tesseract.js` | 7.0.0 | OCR Images | ✅ Installé |
+| **Aucune dépendance** | — | Extraction à partir d'une URL | ✅ Supportée (fetch+nettoyage HTML) |
 
 ---
 

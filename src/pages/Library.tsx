@@ -17,6 +17,7 @@ import {
   Image,
   Video,
   Globe,
+  Link as LinkIcon,
   Download,
   FolderInput,
   Star,
@@ -732,6 +733,52 @@ export function Library() {
         id: 'delete-cards',
         description: error.message
       });
+    }
+  };
+
+
+  // ✨ Nouvelle fonction : ajouter un lien externe (type 'url')
+  const handleAddLink = async () => {
+    if (!user) {
+      toast.error('Erreur', { description: 'Vous devez être connecté' });
+      return;
+    }
+
+    const url = prompt('Entrez l\'URL à ajouter :');
+    if (!url) return;
+    if (!/^https?:\/\//i.test(url)) {
+      toast.error('URL invalide. Elle doit commencer par http:// ou https://');
+      return;
+    }
+
+    try {
+      // Insérer le document de type url directement
+      const { data, error } = await supabase
+        .from('documents')
+        .insert([
+          {
+            name: url,
+            storage_path: url, // on utilise storage_path pour stocker l'URL
+            file_type: 'url',
+            user_id: user.id,
+            file_url: url
+          }
+        ]);
+
+      if (error) throw error;
+
+      toast.success('Lien ajouté à la bibliothèque !');
+      // Extraire le texte de l'URL dans le champ extracted_text
+      const docId = data?.[0]?.id;
+      if (docId) {
+        const { extractText } = await import('../services/textExtractor');
+        extractText(url, 'url', docId).catch(console.error);
+      }
+
+      fetchData();
+    } catch (err: any) {
+      console.error('❌ Erreur ajout lien :', err);
+      toast.error('Erreur lors de l\'ajout du lien', { description: err.message });
     }
   };
 
@@ -1499,6 +1546,14 @@ export function Library() {
           >
             <Upload size={20} />
             Ajouter documents
+          </button>
+          <button
+            onClick={handleAddLink}
+            className="px-4 py-2 bg-yellow-600 text-white rounded-xl hover:bg-yellow-700 transition-colors flex items-center gap-2"
+            title="Ajouter un lien externe"
+          >
+            <LinkIcon size={20} />
+            Ajouter lien
           </button>
           {/* ✅ Bouton Supprimer Tout */}
           {documents.length > 0 && (

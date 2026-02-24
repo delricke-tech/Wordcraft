@@ -4,13 +4,37 @@ import { X, Folder, Loader2 } from 'lucide-react';
 interface NewFolderModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreateFolder: (folderName: string) => Promise<void>;
+  // list of existing folders so the user can choose a parent
+  folders: Array<{ id: string; name: string; parent_id: string | null }>;
+  onCreateFolder: (folderName: string, parentId: string | null) => Promise<void>;
 }
 
-export function NewFolderModal({ isOpen, onClose, onCreateFolder }: NewFolderModalProps) {
+export function NewFolderModal({ isOpen, onClose, folders, onCreateFolder }: NewFolderModalProps) {
   const [folderName, setFolderName] = useState('');
+  const [parentId, setParentId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // build a flat list with indentation to represent hierarchy
+  const folderOptions = (() => {
+    // map id -> node
+    const map = new Map<string, any>();
+    folders.forEach(f => map.set(f.id, { ...f, children: [] }));
+    // assign children
+    folders.forEach(f => {
+      if (f.parent_id && map.has(f.parent_id)) {
+        map.get(f.parent_id).children.push(map.get(f.id));
+      }
+    });
+    const roots = Array.from(map.values()).filter(f => !f.parent_id);
+    const result: Array<{ id: string; name: string }> = [];
+    const traverse = (node: any, depth = 0) => {
+      result.push({ id: node.id, name: `${'  '.repeat(depth)}${node.name}` });
+      node.children.sort((a: any, b: any) => a.name.localeCompare(b.name)).forEach((child: any) => traverse(child, depth + 1));
+    };
+    roots.sort((a: any, b: any) => a.name.localeCompare(b.name)).forEach(root => traverse(root));
+    return result;
+  })();
 
   if (!isOpen) return null;
 
@@ -26,8 +50,9 @@ export function NewFolderModal({ isOpen, onClose, onCreateFolder }: NewFolderMod
     setError('');
 
     try {
-      await onCreateFolder(folderName.trim());
+      await onCreateFolder(folderName.trim(), parentId);
       setFolderName('');
+      setParentId(null);
       onClose();
     } catch (err: any) {
       setError(err.message || 'Erreur lors de la création du dossier');
@@ -81,6 +106,24 @@ export function NewFolderModal({ isOpen, onClose, onCreateFolder }: NewFolderMod
             {error && (
               <p className="mt-2 text-sm text-red-600">{error}</p>
             )}
+          </div>
+          {/* Parent folder selector */}
+          <div className="mb-6">
+            <label htmlFor="parentFolder" className="block text-sm font-medium text-gray-700 mb-2">
+              Dossier parent (optionnel)
+            </label>
+            <select
+              id="parentFolder"
+              value={parentId || ''}
+              onChange={(e) => setParentId(e.target.value || null)}
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+              disabled={loading}
+            >
+              <option value="">Aucun (racine)</option>
+              {folderOptions.map(f => (
+                <option key={f.id} value={f.id}>{f.name}</option>
+              ))}
+            </select>
           </div>
 
           <div className="flex gap-3">

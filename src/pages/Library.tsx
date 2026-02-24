@@ -60,6 +60,18 @@ export function Library() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  // used for breadcrumb navigation
+  const currentFolder = folders.find(f => f.id === selectedFolder) || null;
+
+  // compute ancestors chain for breadcrumb
+  const folderPath: Array<{ id: string; name: string }> = [];
+  if (currentFolder) {
+    let node = currentFolder;
+    while (node) {
+      folderPath.unshift({ id: node.id, name: node.name });
+      node = folders.find(f => f.id === node.parent_id) || null;
+    }
+  }
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<string>('all');
@@ -1621,6 +1633,41 @@ export function Library() {
               </button>
             )}
           </div>
+          {/* Breadcrumb navigation */}
+          {folderPath.length > 0 && (
+            <nav className="mt-2 text-sm text-gray-700 flex items-center gap-2">
+              {currentFolder?.parent_id && (
+                <button
+                  onClick={() => setSelectedFolder(currentFolder.parent_id!)}
+                  className="text-gray-500 hover:text-gray-700"
+                  title="Dossier parent"
+                >
+                  ←
+                </button>
+              )}
+              <button
+                onClick={() => setSelectedFolder(null)}
+                className="hover:underline"
+              >
+                Racine
+              </button>
+              {folderPath.map((f, idx) => (
+                <span key={f.id} className="inline-flex items-center gap-1">
+                  <span>/</span>
+                  {idx === folderPath.length - 1 ? (
+                    <span className="font-medium">{f.name}</span>
+                  ) : (
+                    <button
+                      onClick={() => setSelectedFolder(f.id)}
+                      className="hover:underline"
+                    >
+                      {f.name}
+                    </button>
+                  )}
+                </span>
+              ))}
+            </nav>
+          )}
           {/* Badge contextuel de recherche et favoris */}
           <div className="mt-2 flex items-center gap-2 text-xs text-gray-600">
             {showOnlyFavorites && (
@@ -1774,7 +1821,9 @@ export function Library() {
         ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {/* ✅ Afficher les dossiers en premier */}
-            {selectedFolder === null && filteredFolders.map((folder) => (
+            {filteredFolders
+              .filter(f => f.parent_id === selectedFolder)    /* show only direct children */
+              .map((folder) => (
               <div
                 key={folder.id}
                 className="bg-gradient-to-br from-teal-50 to-teal-100 border-2 border-teal-200 rounded-xl overflow-hidden hover:shadow-lg transition-all group cursor-pointer"
@@ -2294,6 +2343,7 @@ export function Library() {
       <NewFolderModal
         isOpen={showNewFolderModal}
         onClose={() => setShowNewFolderModal(false)}
+        folders={folders}
         onCreateFolder={handleCreateFolder}
       />
 

@@ -340,7 +340,7 @@ export function Sessions() {
                     </button>
                   )}
                   <button 
-                    onClick={() => handleShareSession(session.id, session.title)}
+                    onClick={() => handleShareSession(session.id, session.title || 'Session')}
                     className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                     title="Partager la session"
                   >

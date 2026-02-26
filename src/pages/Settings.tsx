@@ -68,6 +68,11 @@ export function Settings() {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    if (!profile?.id) {
+      toast.error('Profil introuvable, veuillez vous reconnecter.');
+      return;
+    }
+
     // Vérifier le type de fichier
     if (!file.type.startsWith('image/')) {
       toast.error('Veuillez sélectionner une image (JPG, PNG, GIF)');
@@ -83,13 +88,16 @@ export function Settings() {
     setUploading(true);
     try {
       // Upload vers Supabase Storage
-      const result = await uploadFile(file, profile?.id);
+      const result = await uploadFile(file, profile.id);
       
       if (result.error) {
         throw new Error(result.error);
       }
 
       const publicUrl = result.data?.publicUrl;
+      if (!publicUrl) {
+        throw new Error('URL publique introuvable pour la photo de profil');
+      }
 
       // Mettre à jour le profil dans la base de données
       const { error: updateError } = await supabase

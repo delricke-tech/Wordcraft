@@ -12,8 +12,6 @@ import {
   Link as LinkIcon,
   BookOpen,
   ClipboardList,
-  Users,
-  Video,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 

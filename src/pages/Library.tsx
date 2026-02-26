@@ -35,6 +35,7 @@ import { supabase, Document, Folder as FolderType, uploadFile } from '../lib/sup
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { generateUniqueFileName, getFileType, validateFileForUpload, MAX_UPLOAD_FILE_SIZE_BYTES } from '../utils/fileUtils';
+import { searchDocuments } from '../utils/searchDocuments';
 import { toast } from 'sonner';
 import { NewFolderModal } from '../components/modals/NewFolderModal';
 import { FolderSelector } from '../components/modals/FolderSelector';
@@ -61,20 +62,22 @@ export function Library() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   // used for breadcrumb navigation
-  const currentFolder = folders.find(f => f.id === selectedFolder) || null;
+  const currentFolder: FolderType | null = folders.find(f => f.id === selectedFolder) || null;
 
   // compute ancestors chain for breadcrumb
   const folderPath: Array<{ id: string; name: string }> = [];
   if (currentFolder) {
-    let node = currentFolder;
+    let node: FolderType | null = currentFolder;
     while (node) {
-      folderPath.unshift({ id: node.id, name: node.name });
-      node = folders.find(f => f.id === node.parent_id) || null;
+      const current: FolderType = node;
+      folderPath.unshift({ id: current.id, name: current.name });
+      node = folders.find(f => f.id === current.parent_id) || null;
     }
   }
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<string>('all');
+  const [selectedDateFilter, setSelectedDateFilter] = useState<string>('all');
   const [contextMenu, setContextMenu] = useState<{ 
     id: string; 
     x: number; 
@@ -142,6 +145,32 @@ export function Library() {
   useEffect(() => {
     fetchData();
   }, [selectedFolder]);
+
+  // Recherche full-text côté serveur (debounced)
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      try {
+        if (searchQuery && searchQuery.trim().length > 0) {
+          const results = await searchDocuments(
+            user ? user.id : null,
+            searchQuery,
+            selectedFolder,
+            showOnlyFavorites,
+            selectedFilter === 'all' ? null : selectedFilter,
+            selectedDateFilter === 'all' ? null : selectedDateFilter
+          );
+          setDocuments(Array.isArray(results) ? results : []);
+        } else {
+          // Si la recherche est vide, recharger la liste normale
+          await fetchData();
+        }
+      } catch (err) {
+        console.error('Erreur lors de la recherche full-text:', err);
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, selectedFolder, showOnlyFavorites, selectedFilter, selectedDateFilter, user]);
 
   // Fermer le dropdown de déplacement rapide quand on clique ailleurs
   useEffect(() => {
@@ -781,7 +810,8 @@ export function Library() {
 
       toast.success('Lien ajouté à la bibliothèque !');
       // Extraire le texte de l'URL dans le champ extracted_text
-      const docId = data?.[0]?.id;
+      const inserted = (data?.[0] as { id?: string } | undefined);
+      const docId = inserted?.id;
       if (docId) {
         const { extractText } = await import('../services/textExtractor');
         extractText(url, 'url', docId).catch(console.error);
@@ -1471,8 +1501,21 @@ export function Library() {
     
     // ✅ Filtrage par favoris
     const matchesFavorites = !showOnlyFavorites || doc.is_favorite === true;
-    
-    return matchesSearch && matchesFilter && matchesFolder && matchesFavorites;
+
+    // Filtre par date (client-side si nécessaire)
+    const matchesDate = (() => {
+      if (!selectedDateFilter || selectedDateFilter === 'all') return true;
+      if (!doc.created_at) return false;
+      const created = new Date(doc.created_at);
+      const now = new Date();
+      if (selectedDateFilter === '24h') return created >= new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      if (selectedDateFilter === '7d') return created >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      if (selectedDateFilter === '30d') return created >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      if (selectedDateFilter === 'year') return created >= new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+      return true;
+    })();
+
+    return matchesSearch && matchesFilter && matchesFolder && matchesFavorites && matchesDate;
   });
 
   // ✅ Filtrer les dossiers également pour la recherche
@@ -1748,6 +1791,18 @@ export function Library() {
           <option value="docx">Word</option>
           <option value="txt">Texte</option>
           <option value="image">Images</option>
+        </select>
+        <select
+          value={selectedDateFilter}
+          onChange={(e) => setSelectedDateFilter(e.target.value)}
+          className="px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500"
+          title="Filtrer par date"
+        >
+          <option value="all">Tous les temps</option>
+          <option value="24h">Dernières 24h</option>
+          <option value="7d">7 jours</option>
+          <option value="30d">30 jours</option>
+          <option value="year">1 an</option>
         </select>
       </div>
 

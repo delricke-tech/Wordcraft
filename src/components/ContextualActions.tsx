@@ -15,7 +15,7 @@ type ContextualActionsProps = {
   contextName?: string;
 };
 
-export function ContextualActions({ context, contextId, contextName }: ContextualActionsProps) {
+export function ContextualActions({ context }: ContextualActionsProps) {
   const navigate = useNavigate();
 
   const getActions = () => {

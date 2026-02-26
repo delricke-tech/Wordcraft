@@ -121,6 +121,10 @@ export const UPLOAD_ALLOWED_FILE_TYPES = ['pdf', 'docx', 'pptx', 'xlsx', 'txt', 
  */
 export function validateFileForUpload(file: File): string | null {
   const fileType = getFileType(file.name);
+
+  if (fileType === 'url') {
+    return 'Les liens externes ne doivent pas être uploadés comme fichiers. Utilisez l’option d’ajout de lien.';
+  }
   if (!UPLOAD_ALLOWED_FILE_TYPES.includes(fileType)) {
     return `Type non supporté. Acceptés : PDF, Word, Excel, PowerPoint, TXT, images, vidéo, audio.`;
   }

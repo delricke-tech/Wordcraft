@@ -151,6 +151,15 @@ export function DocumentViewer({
           />
         );
 
+      case 'xlsx':
+        return (
+          <iframe
+            src={`https://docs.google.com/gview?url=${encodeURIComponent(publicUrl)}&embedded=true`}
+            className="w-full h-full"
+            title={documentName}
+          />
+        );
+
       case 'video':
         return (
           <div className="w-full h-full flex items-center justify-center bg-black p-4">
@@ -195,8 +204,25 @@ export function DocumentViewer({
     }
   };
 
+  // Fermeture au clavier (Échap)
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 bg-gray-900 flex flex-col">
+    <div
+      className="fixed inset-0 z-50 bg-gray-900 flex flex-col"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Document ${documentName}`}
+    >
       {/* Header */}
       <div className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700">
         <div className="flex items-center gap-3">

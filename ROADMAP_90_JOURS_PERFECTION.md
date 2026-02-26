@@ -1,4 +1,4 @@
-de l # 👑 ROADMAP COMPLÈTE : 100% DE PERFECTION ABSOLUE
+de l pl# 👑 ROADMAP COMPLÈTE : 100% DE PERFECTION ABSOLUE
 
 **Objectif :** Implémenter 100% des fonctionnalités de référence (NotebookLM + Adobe AI)  
 **Durée :** 90 jours (3 mois)  
@@ -45,10 +45,10 @@ RYTHME    : ~1 feature tous les 1,3 jours
 
 ### 1.2 Organisation
 - [x] Arborescence de dossiers (création, renommage, suppression)
-- [ ] Déplacement de documents entre dossiers
-- [ ] Favoris / épinglage
-- [ ] Recherche full-text dans la bibliothèque
-- [ ] Filtres (type, date, dossier)
+- [x] Déplacement de documents entre dossiers
+- [x] Favoris / épinglage
+- [x] Recherche full-text dans la bibliothèque
+- [x] Filtres (type, date, dossier)
 
 ### 1.3 Lecture & prévisualisation
 - [ ] Viewer PDF intégré avec navigation (pages, zoom)
@@ -145,8 +145,8 @@ RYTHME    : ~1 feature tous les 1,3 jours
 | Phase 2 | 31–60  | ~22             | ~70%         |
 | Phase 3 | 61–90  | ~25             | 100%         |
 
-**Progression actuelle :** 26 / 85 (~31 %)
-**Dernière mise à jour :** Phase 1.1 — Limites 50 Mo, messages d'erreur, prévisualisation avant validation
+**Progression actuelle :** 30 / 85 (~35 %)
+**Dernière mise à jour :** Phase 1.2 — Favoris et filtres implémentés (type + date + dossier)
 ---
 
 ## 🔖 RÉFÉRENCES

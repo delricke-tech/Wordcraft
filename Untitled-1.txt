@@ -1,0 +1,2 @@
+.envVITE_SUPABASE_URL=https://uexuecubafgfhpfebknt.supabase.co
+VITE_SUPABASE_ANON_KEY=sb_publishable_W8LyatUUDO_INLxJ6FiAHg_mdt7EYpI

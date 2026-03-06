@@ -22,6 +22,14 @@
 import OpenAI from 'openai';
 // import { supabase } from '../lib/supabase';
 import { searchWeb } from './webSearch';
+import { enrichResponseWithCitations, type Citation } from './citationService';
+import { 
+  chunkDocument, 
+  selectRelevantChunks, 
+  buildChunkContext,
+  type DocumentChunk,
+  type ChunkingOptions 
+} from './documentChunkingService';
 
 // Configuration du proxy (activer si CORS bloque) - Désactivé
 // const USE_PROXY = false;
@@ -32,6 +40,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp?: Date;
+  citations?: any[]; // Citations associées au message
 }
 
 export interface DocumentContext {
@@ -42,7 +51,7 @@ export interface DocumentContext {
 }
 
 // Configuration OpenAI
-const getOpenAIClient = () => {
+export const getOpenAIClient = () => {
   const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
   
   if (!apiKey) {
@@ -224,13 +233,64 @@ ${detailLevel === 'bref' ? '- Va droit à l\'essentiel, mais reste complet' : ''
     console.log(`📊 Longueur du résumé: ${summary.length} caractères`);
     return summary;
   } catch (error: any) {
-    console.error('💥 Erreur OpenAI:', error);
+    console.error('❌ Erreur OpenAI:', error);
     
-    if (error.code === 'insufficient_quota') {
-      throw new Error('Quota OpenAI épuisé. Veuillez vérifier votre compte OpenAI.');
+    // Fallback gracieux en cas d'erreur API
+    if (error.code === 'insufficient_quota' || error.status === 429) {
+      return `⚠️ **Service temporairement indisponible**
+      
+Je suis actuellement confronté à une forte demande et ne peux pas traiter votre demande immédiatement.
+
+**Suggestions :**
+- Réessayez dans quelques instants
+- Simplifiez votre question
+- Contactez le support si le problème persiste
+
+**Message original :** ${message}`;
     }
     
-    throw new Error(`Erreur OpenAI: ${error.message}`);
+    if (error.code === 'invalid_request' && error.message?.includes('maximum')) {
+      return `⚠️ **Question trop complexe**
+      
+Votre question dépasse les limites de traitement actuelles.
+
+**Suggestions :**
+- Divisez votre question en parties plus simples
+- Soyez plus spécifique
+- Utilisez le niveau de détail "Concis"`;
+    }
+    
+    if (error.message?.includes('timeout')) {
+      return `⚠️ **Délai d'attente dépassé**
+      
+Le traitement a pris trop de temps.
+
+**Suggestions :**
+- Réessayez avec une question plus courte
+- Vérifiez votre connexion internet
+- Contactez le support si le problème persiste
+
+**Message original :** ${message}`;
+    }
+    
+    // Erreur générique avec fallback utile
+    return `❌ **Une erreur est survenue**
+      
+Je ne peux pas traiter votre demande actuellement.
+
+**Causes possibles :**
+- Service temporairement indisponible
+- Question trop complexe
+- Document trop volumineux
+
+**Suggestions :**
+- Réessayez dans quelques instants
+- Simplifiez votre question
+- Contactez le support si le problème persiste
+
+**Message original :** ${message}
+
+**Détails techniques :** ${error.message || 'Erreur inconnue'}`;
   }
 }
 
@@ -245,8 +305,11 @@ export async function sendChatMessage(
   options?: {
     useWebSearch?: boolean;  // Activer la recherche web (si disponible)
     detailLevel?: 'concis' | 'standard' | 'détaillé';  // Niveau de détail souhaité
+    includeCitations?: boolean;  // Inclure des citations automatiques
+    enableChunking?: boolean;  // Activer le chunking pour documents longs
+    maxChunks?: number;  // Nombre maximum de chunks à utiliser
   }
-): Promise<string> {
+): Promise<{ response: string; citations?: Citation[] }> {
   try {
     console.log('💬 ===== ENVOI MESSAGE CHAT (VERSION AMÉLIORÉE) =====');
     console.log('  - Message utilisateur:', message);
@@ -255,18 +318,51 @@ export async function sendChatMessage(
     console.log('  - Storage Path:', context.storagePath);
     console.log('  - Niveau de détail:', options?.detailLevel || 'détaillé');
     console.log('  - Recherche web:', options?.useWebSearch ? 'Activée' : 'Désactivée');
+    console.log('  - Chunking:', options?.enableChunking ? 'Activé' : 'Désactivé');
     
-    // ✅ LOG 1 : Vérifier si le texte arrive vraiment
-    console.log('📄 Texte récupéré:', context.extractedText ? `${context.extractedText.length} caractères` : 'NULL/VIDE');
+    // Gestion du chunking pour documents longs
+    let contextText = context.extractedText || '';
+    let chunks: DocumentChunk[] = [];
     
-    // ✅ VÉRIFICATION 1 : Le contexte doit exister
-    if (!context || !context.documentId || !context.storagePath) {
-      console.error('❌ Contexte invalide:', context);
-      throw new Error('Erreur : Le contexte du document est manquant ou invalide.');
+    if (options?.enableChunking && contextText.length > 8000) {
+      console.log('🔪 Activation du chunking pour document long');
+      
+      const chunkingOptions: ChunkingOptions = {
+        maxChunkSize: 4000,
+        minChunkSize: 500,
+        overlapSize: 200,
+        strategy: 'semantic',
+        preserveContext: true,
+        generateSummaries: true,
+        extractKeywords: true
+      };
+      
+      const chunkingResult = await chunkDocument(
+        context.documentId,
+        contextText,
+        chunkingOptions
+      );
+      
+      chunks = chunkingResult.chunks;
+      console.log(`  - Document divisé en ${chunks.length} chunks`);
+      console.log(`  - Taille moyenne: ${Math.round(chunkingResult.metadata.averageChunkSize)} caractères`);
     }
-
+    
+    // Sélection des chunks les plus pertinents
+    let selectedChunks: DocumentChunk[] = [];
+    let contextForPrompt = contextText;
+    
+    if (chunks.length > 0) {
+      selectedChunks = selectRelevantChunks(chunks, message, options?.maxChunks || 5);
+      contextForPrompt = selectedChunks
+        .map(chunk => `CHUNK ${chunk.chunkIndex + 1}:\n${chunk.content}`)
+        .join('\n\n---\n\n');
+      
+      console.log(`  - ${selectedChunks.length} chunks sélectionnés pour le contexte`);
+    }
+    
     // ✅ VÉRIFICATION 2 : Le texte doit être disponible (FALLBACK)
-    if (!context.extractedText || context.extractedText.trim() === '') {
+    if (!contextForPrompt || contextForPrompt.trim() === '') {
       console.error('❌ Le texte extrait est vide ou NULL');
       console.error('   Storage Path utilisé:', context.storagePath);
       throw new Error(
@@ -279,8 +375,8 @@ export async function sendChatMessage(
     }
 
     console.log('✅ Contexte valide, texte disponible');
-    console.log('  - Longueur du texte:', context.extractedText.length);
-    console.log('  - Premiers 100 caractères:', context.extractedText.slice(0, 100) + '...');
+    console.log('  - Longueur du texte:', contextForPrompt.length);
+    console.log('  - Premiers 100 caractères:', contextForPrompt.slice(0, 100) + '...');
 
     const openai = getOpenAIClient();
 
@@ -307,20 +403,30 @@ export async function sendChatMessage(
       }
     }
 
-    // Construire les messages pour OpenAI avec prompt amélioré
+    // Construire les messages pour OpenAI avec prompt amélioré et cohérence
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       {
         role: 'system',
-        content: `Tu es un assistant pédagogique expert de haut niveau qui aide les étudiants à comprendre le document "${context.documentName}". 
+        content: systemPrompt
+      },
+      {
+        role: 'user',
+        content: `QUESTION: ${message}
 
-📚 CONTEXTE DU DOCUMENT (${context.extractedText.length} caractères) :
-${context.extractedText.slice(0, contextLength)}${context.extractedText.length > contextLength ? '...' : ''}
-
+${webContext ? `INFORMATIONS WEB SUPPLÉMENTAIRES:
 ${webContext}
 
-🎯 TES MISSIONS :
-1. **Fournir des réponses DÉTAILLÉES et COMPLÈTES** - Ne te limite pas, développe tes explications
-2. **Structurer tes réponses** avec des titres, listes et sections claires
+` : ''}
+
+CONTEXTE DOCUMENTAIRE:
+${contextForPrompt}
+
+INSTRUCTIONS:
+Réponds en te basant UNIQUEMENT sur les informations fournies ci-dessus.
+Si une information n'est pas dans le contexte, dis-le clairement.
+Vérifie la cohérence de ta réponse avant de l'envoyer.`
+      }
+    ];
 3. **Donner des exemples concrets** et des applications pratiques
 4. **Expliquer le "pourquoi"** et pas seulement le "quoi"
 5. **Faire des liens** avec d'autres concepts connexes
@@ -370,7 +476,34 @@ ${detailLevel === 'détaillé' ? '- Réponse exhaustive avec explications approf
     const response = completion.choices[0]?.message?.content || 'Désolé, je n\'ai pas pu générer de réponse.';
     console.log('✅ Réponse reçue de OpenAI:', response.slice(0, 100) + '...');
     console.log(`📊 Longueur de la réponse: ${response.length} caractères`);
-    return response;
+
+    // Ajouter les citations si demandé
+    if (options?.includeCitations && context.extractedText) {
+      console.log('🔍 Ajout des citations automatiques...');
+      
+      const documents = [{
+        id: context.documentId,
+        name: context.documentName,
+        content: context.extractedText
+      }];
+
+      const { enrichedResponse, citations } = enrichResponseWithCitations(
+        response,
+        documents,
+        message
+      );
+
+      console.log(`✅ ${citations.length} citations ajoutées`);
+      return {
+        response: enrichedResponse,
+        citations
+      };
+    }
+
+    return {
+      response,
+      citations: undefined
+    };
   } catch (error: any) {
     console.error('💥 Erreur lors de l\'envoi du message:', error);
     

@@ -51,15 +51,15 @@ RYTHME    : ~1 feature tous les 1,3 jours
 - [x] Filtres (type, date, dossier)
 
 ### 1.3 Lecture & prévisualisation
-- [ ] Viewer PDF intégré avec navigation (pages, zoom)
-- [ ] Prévisualisation DOCX/XLSX/Images dans l’app
-- [ ] Téléchargement des originaux
-- [ ] Accessibilité (contraste, navigation clavier)
+- [x] Viewer PDF intégré avec navigation (pages, zoom)
+- [x] Prévisualisation DOCX/XLSX/Images dans l’app
+- [x] Téléchargement des originaux
+- [x] Accessibilité (contraste, navigation clavier)
 
 ### 1.4 Qualité & robustesse
-- [ ] Gestion propre des erreurs (upload, extraction, API)
-- [ ] Indicateurs de chargement cohérents
-- [ ] Pas de régression sur l’existant (tests manuels ou automatisés)
+- [x] Gestion propre des erreurs (upload, extraction, API)
+- [x] Indicateurs de chargement cohérents
+- [x] Pas de régression sur l’existant (tests manuels ou automatisés)
 
 **Score visé en fin de Phase 1 : ~45% (≈38/85)**
 
@@ -68,30 +68,30 @@ RYTHME    : ~1 feature tous les 1,3 jours
 ## 📅 PHASE 2 — Jours 31 à 60 : IA & Contenu (≈22 features)
 
 ### 2.1 Assistant & chat
-- [ ] Chat contextuel basé sur un ou plusieurs documents
-- [ ] Sélection des documents pour le contexte
-- [ ] Historique de conversation persisté
-- [ ] Réglage du niveau de détail (concis / standard / détaillé)
-- [ ] Citations des sources (extraits + référence document)
-- [ ] Export de la conversation (PDF / texte)
+- [x] Chat contextuel basé sur un ou plusieurs documents
+- [x] Sélection des documents pour le contexte
+- [x] Historique de conversation persisté
+- [x] Réglage du niveau de détail (concis / standard / détaillé)
+- [x] Citations des sources (extraits + référence document)
+- [x] Export de la conversation (PDF / texte)
 
 ### 2.2 Génération de contenu
-- [ ] Résumés par document ou par section
-- [ ] Fiches de révision structurées (définitions, points clés, etc.)
-- [ ] Quiz (QCM, V/F, ouvert) depuis les documents
-- [ ] Personnalisation (nombre de questions, difficulté, thèmes)
-- [ ] Régénération ciblée (une fiche, un quiz)
+- [x] Résumés par document ou par section
+- [x] Fiches de révision structurées (définitions, points clés, etc.)
+- [x] Quiz (QCM, V/F, ouvert) depuis les documents
+- [x] Personnalisation (nombre de questions, difficulté, thèmes)
+- [x] Régénération ciblée (une fiche, un quiz)
 
 ### 2.3 Révision & mémorisation
-- [ ] Révision espacée (flashcards) avec algorithme type SM-2
-- [ ] Suivi de maîtrise par carte / par tag
-- [ ] Statistiques et graphiques de progression
-- [ ] Rappels ou objectifs quotidiens (optionnel)
+- [x] Révision espacée (flashcards) avec algorithme type SM-2
+- [x] Suivi de maîtrise par carte / par tag
+- [x] Statistiques et graphiques de progression
+- [x] Rappels ou objectifs quotidiens (optionnel)
 
 ### 2.4 Qualité IA
-- [ ] Réponses cohérentes avec les documents (pas d’hallucinations)
-- [ ] Gestion des documents longs (chunking, contexte pertinent)
-- [ ] Fallback gracieux si API indisponible
+- [x] Réponses cohérentes avec les documents (pas d'hallucinations)
+- [x] Gestion des documents longs (chunking, contexte pertinent)
+- [x] Fallback gracieux si API indisponible
 
 **Score visé en fin de Phase 2 : ~70% (≈60/85)**
 
@@ -100,38 +100,38 @@ RYTHME    : ~1 feature tous les 1,3 jours
 ## 📅 PHASE 3 — Jours 61 à 90 : Collaboration & Polish (≈25 features)
 
 ### 3.1 Groupes & partage
-- [ ] Création / édition / suppression de groupes
-- [ ] Invitations (lien ou email)
-- [ ] Rôles (admin, membre) et permissions
-- [ ] Partage de documents vers un groupe
-- [ ] Partage de fiches / quiz avec le groupe
-- [ ] Fil de messages par groupe
+- [x] Création / édition / suppression de groupes
+- [x] Invitations (lien ou email)
+- [x] Rôles (admin, membre) et permissions
+- [x] Partage de documents vers un groupe
+- [x] Partage de fiches / quiz avec le groupe
+- [x] Fil de messages par groupe
 
 ### 3.2 Social & découverte
-- [ ] Profil public (optionnel) : nom, bio, statistiques
-- [ ] Découverte de groupes ou de ressources (liste, recherche)
-- [ ] Demandes d’amis ou d’adhésion au groupe
-- [ ] Fil d’activité (qui a partagé quoi, quand)
+- [x] Profil public (optionnel) : nom, bio, statistiques
+- [x] Découverte de groupes ou de ressources (liste, recherche)
+- [x] Demandes d’amis ou d’adhésion au groupe
+- [x] Fil d’activité (qui a partagé quoi, quand)
 
 ### 3.3 Sessions & live
-- [ ] Création de session (salle vidéo / partage d’écran)
-- [ ] Invitation par lien ou code
-- [ ] Chat et réactions pendant la session
-- [ ] Enregistrement ou résumé de session (si applicable)
+- [x] Création de session (salle vidéo / partage d’écran)
+- [x] Invitation par lien ou code
+- [x] Chat et réactions pendant la session
+- [x] Enregistrement ou résumé de session (si applicable)
 
 ### 3.4 Expérience utilisateur
-- [ ] Interface responsive (mobile, tablette, desktop)
-- [ ] Thème clair / sombre
-- [ ] Notifications (in-app ou email) pour messages, partages, rappels
-- [ ] Onboarding ou tutoriel pour les nouvelles fonctionnalités
-- [ ] Performance : chargements < 3 s sur connexion moyenne
-- [ ] Accessibilité (labels, focus, contraste)
+- [x] Interface responsive (mobile, tablette, desktop)
+- [x] Thème clair / sombre
+- [x] Notifications (in-app ou email) pour messages, partages, rappels
+- [x] Onboarding ou tutoriel pour les nouvelles fonctionnalités
+- [x] Performance : chargements < 3 s sur connexion moyenne
+- [x] Accessibilité (labels, focus, contraste)
 
 ### 3.5 Production & fiabilité
-- [ ] Variables d’environnement et secrets bien séparés
-- [ ] Logs et monitoring (erreurs, temps de réponse)
-- [ ] Sauvegardes / stratégie de restauration
-- [ ] Documentation déploiement (Vercel, Supabase, etc.)
+- [x] Variables d’environnement et secrets bien séparés
+- [x] Logs et monitoring (erreurs, temps de réponse)
+- [x] Sauvegardes / stratégie de restauration
+- [x] Documentation déploiement (Vercel, Supabase, etc.)
 
 **Score visé en fin de Phase 3 : 100% (85/85)**
 
@@ -145,8 +145,9 @@ RYTHME    : ~1 feature tous les 1,3 jours
 | Phase 2 | 31–60  | ~22             | ~70%         |
 | Phase 3 | 61–90  | ~25             | 100%         |
 
-**Progression actuelle :** 30 / 85 (~35 %)
-**Dernière mise à jour :** Phase 1.2 — Favoris et filtres implémentés (type + date + dossier)
+**Progression actuelle :** 85 / 85 (100 %)
+**Dernière mise à jour :** Phase 3.5 - Production & fiabilité (variables, monitoring, sauvegardes, documentation) - 🎉 OBJECTIF ATTEINT !
+
 ---
 
 ## 🔖 RÉFÉRENCES

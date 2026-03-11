@@ -32,7 +32,7 @@ export async function searchDocuments(
       // Date filter
       if (dateRange && dateRange !== 'all') {
         const now = new Date();
-        let threshold = new Date();
+        const threshold = new Date();
         if (dateRange === '24h') threshold.setDate(now.getDate() - 1);
         else if (dateRange === '7d') threshold.setDate(now.getDate() - 7);
         else if (dateRange === '30d') threshold.setDate(now.getDate() - 30);
@@ -66,7 +66,7 @@ export async function searchDocuments(
 
     if (dateRange && dateRange !== 'all') {
       const now = new Date();
-      let threshold = new Date();
+      const threshold = new Date();
       if (dateRange === '24h') threshold.setDate(now.getDate() - 1);
       else if (dateRange === '7d') threshold.setDate(now.getDate() - 7);
       else if (dateRange === '30d') threshold.setDate(now.getDate() - 30);

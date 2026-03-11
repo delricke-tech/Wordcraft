@@ -17,6 +17,7 @@ import {
   Rss,
   UserCircle,
   Compass,
+  Mic,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -33,6 +34,7 @@ const navItems = [
   { to: '/cards', icon: BookOpen, label: 'Fiches' },
   { to: '/quizzes', icon: ClipboardList, label: 'Quiz' },
   { to: '/ai-assistant', icon: Sparkles, label: 'Assistant IA' },
+  { to: '/podcast', icon: Mic, label: 'Podcast IA' },
 ];
 
 // Fonctionnalités à venir (désactivées temporairement)

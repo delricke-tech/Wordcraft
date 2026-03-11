@@ -80,7 +80,7 @@ export function calculateNextReview(
   nextRepetitions: number;
   nextMastery: number;
 } {
-  let { easeFactor, interval, repetitions, totalReviews, correctReviews } = card;
+  const { easeFactor, interval, repetitions, totalReviews, correctReviews } = card;
   
   // Calcul du nouveau facteur de facilité
   let nextEaseFactor = easeFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));

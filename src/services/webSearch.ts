@@ -42,7 +42,7 @@ export interface WebSearchResponse {
  */
 export async function searchWithTavily(query: string): Promise<string> {
   try {
-    const apiKey = import.meta.env.VITE_TAVILY_API_KEY;
+    const apiKey = (import.meta as any).env?.VITE_TAVILY_API_KEY;
     
     if (!apiKey) {
       console.warn('⚠️ Clé Tavily non configurée dans .env');
@@ -117,7 +117,7 @@ export async function searchWithTavily(query: string): Promise<string> {
  */
 export async function searchWithSerper(query: string): Promise<string> {
   try {
-    const apiKey = import.meta.env.VITE_SERPER_API_KEY;
+    const apiKey = (import.meta as any).env?.VITE_SERPER_API_KEY;
     
     if (!apiKey) {
       console.warn('⚠️ Clé Serper non configurée dans .env');
@@ -214,21 +214,19 @@ export async function searchWeb(query: string, documentName: string = ''): Promi
     : query;
 
   // Essayer Tavily en priorité
-  if (import.meta.env.VITE_TAVILY_API_KEY) {
+  if ((import.meta as any).env?.VITE_TAVILY_API_KEY) {
     console.log('🎯 Tentative avec Tavily API...');
     const result = await searchWithTavily(optimizedQuery);
     if (result) {
-      console.log('✅ Recherche Tavily réussie');
       return result;
     }
   }
 
   // Essayer Serper en fallback
-  if (import.meta.env.VITE_SERPER_API_KEY) {
+  if ((import.meta as any).env?.VITE_SERPER_API_KEY) {
     console.log('🎯 Tentative avec Serper API...');
     const result = await searchWithSerper(optimizedQuery);
     if (result) {
-      console.log('✅ Recherche Serper réussie');
       return result;
     }
   }

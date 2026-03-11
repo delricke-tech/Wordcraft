@@ -1,9 +1,20 @@
 /**
  * Service de gestion des citations sources
  * Permet d'extraire et de formater des citations avec références aux documents
+ * VERSION AMÉLIORÉE : Support RAG avancé avec embeddings vectoriels
  * 
  * Date: 6 mars 2025
+ * Mis à jour: 10 mars 2026 (RAG avancé)
  */
+
+import { 
+  searchRelevantChunks, 
+  generateEnhancedCitations, 
+  formatEnhancedCitations,
+  updateDocumentEmbeddings,
+  type SearchResult,
+  type EnhancedCitation
+} from './vectorEmbeddingService';
 
 export interface Citation {
   id: string;
@@ -106,7 +117,7 @@ function extractKeywords(question: string): string[] {
     .split(/\s+/)
     .filter(word => word.length > 2 && !stopWords.has(word));
   
-  return [...new Set(words)]; // Éliminer les doublons
+  return Array.from(new Set(words)); // Éliminer les doublons
 }
 
 /**
@@ -170,40 +181,149 @@ export function formatCitationsForResponse(citations: Citation[]): string {
 
 /**
  * Enrichit une réponse IA avec des citations pertinentes
+ * VERSION AMÉLIORÉE : Utilise les embeddings vectoriels si disponibles
  */
-export function enrichResponseWithCitations(
+export async function enrichResponseWithCitations(
   response: string,
   documents: Array<{ id: string; name: string; content: string }>,
-  question: string
-): { enrichedResponse: string; citations: Citation[] } {
-  const allCitations: Citation[] = [];
+  question: string,
+  options: {
+    useAdvancedRAG?: boolean; // Utiliser RAG avancé avec embeddings
+    maxCitations?: number;
+  } = {}
+): Promise<{ enrichedResponse: string; citations: Citation[] | EnhancedCitation[] }> {
+  const { useAdvancedRAG = true, maxCitations = 5 } = options;
   
-  // Extraire les citations de chaque document
-  documents.forEach(document => {
-    const citations = extractRelevantCitations(
-      document.content,
-      document.id,
-      document.name,
-      question,
-      2 // 2 citations par document maximum
-    );
-    allCitations.push(...citations);
-  });
-  
-  // Toutes les citations par score de pertinence
-  allCitations.sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
-  
-  // Prendre les 5 meilleures citations
-  const topCitations = allCitations.slice(0, 5);
-  
-  // Ajouter les citations à la réponse
-  const citationsText = formatCitationsForResponse(topCitations);
-  const enrichedResponse = response + citationsText;
-  
-  return {
-    enrichedResponse,
-    citations: topCitations
-  };
+  try {
+    if (useAdvancedRAG) {
+      console.log('🔍 Utilisation RAG avancé avec embeddings...');
+      
+      // Rechercher les chunks pertinents pour chaque document
+      const allSearchResults: SearchResult[] = [];
+      const documentNames: Record<string, string> = {};
+      
+      for (const document of documents) {
+        try {
+          const searchResults = await searchRelevantChunks(question, {
+            documentId: document.id,
+            limit: Math.ceil(maxCitations / documents.length)
+          });
+          
+          allSearchResults.push(...searchResults);
+          documentNames[document.id] = document.name;
+        } catch (error) {
+          console.warn(`⚠️ Erreur recherche embeddings pour ${document.name}:`, error);
+          // Fallback vers méthode classique pour ce document
+          const classicCitations = extractRelevantCitations(
+            document.content,
+            document.id,
+            document.name,
+            question,
+            2
+          );
+          // Convertir en format SearchResult pour traitement unifié
+          allSearchResults.push(...classicCitations.map(citation => ({
+            chunkId: citation.id,
+            documentId: citation.documentId,
+            chunkIndex: 0,
+            chunkText: citation.excerpt,
+            similarity: citation.relevanceScore || 0.5,
+            metadata: { legacy: true }
+          })));
+        }
+      }
+      
+      // Générer les citations avancées
+      const enhancedCitations = await generateEnhancedCitations(
+        question,
+        allSearchResults.slice(0, maxCitations),
+        documentNames
+      );
+      
+      // Formater et ajouter à la réponse
+      const citationsText = formatEnhancedCitations(enhancedCitations);
+      const enrichedResponse = response + citationsText;
+      
+      return {
+        enrichedResponse,
+        citations: enhancedCitations
+      };
+    } else {
+      // Méthode classique (legacy)
+      console.log('📚 Utilisation méthode classique de citations...');
+      
+      const allCitations: Citation[] = [];
+      
+      // Extraire les citations de chaque document
+      documents.forEach(document => {
+        const citations = extractRelevantCitations(
+          document.content,
+          document.id,
+          document.name,
+          question,
+          Math.ceil(maxCitations / documents.length)
+        );
+        allCitations.push(...citations);
+      });
+      
+      // Trier par score de pertinence
+      allCitations.sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
+      
+      // Prendre les meilleures citations
+      const topCitations = allCitations.slice(0, maxCitations);
+      
+      // Ajouter les citations à la réponse
+      const citationsText = formatCitationsForResponse(topCitations);
+      const enrichedResponse = response + citationsText;
+      
+      return {
+        enrichedResponse,
+        citations: topCitations
+      };
+    }
+  } catch (error) {
+    console.error('Erreur enrichissement citations:', error);
+    // Fallback gracieux
+    return {
+      enrichedResponse: response,
+      citations: []
+    };
+  }
+}
+
+/**
+ * Met à jour les embeddings d'un document pour RAG avancé
+ */
+export async function updateDocumentCitationsEmbeddings(
+  documentId: string,
+  documentContent: string
+): Promise<boolean> {
+  try {
+    await updateDocumentEmbeddings(documentId, documentContent);
+    console.log(`✅ Embeddings mis à jour pour document ${documentId}`);
+    return true;
+  } catch (error) {
+    console.error('Erreur mise à jour embeddings:', error);
+    return false;
+  }
+}
+
+/**
+ * Vérifie si les embeddings sont disponibles pour un document
+ */
+export async function hasEmbeddings(documentId: string): Promise<boolean> {
+  try {
+    const { supabase } = await import('../lib/supabase');
+    const { data, error } = await supabase
+      .from('document_embeddings')
+      .select('id')
+      .eq('document_id', documentId)
+      .limit(1);
+    
+    return !error && data && data.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 /**

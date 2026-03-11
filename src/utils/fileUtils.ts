@@ -142,7 +142,7 @@ export function validateFileForUpload(file: File): string | null {
  * @returns Le type de fichier (pdf, docx, pptx, xlsx, txt, image, video, audio, url)
  */
 export function getFileType(fileName: string): 'pdf' | 'docx' | 'pptx' | 'xlsx' | 'txt' | 'image' | 'video' | 'audio' | 'url' {
-  // Reconnaissance d'URL basique : si la chaîne commence par http(s)://,
+  // Reconnaissance d'URL basique : si la chaîne commence par http(s)://,
   // on considère qu'il s'agit d'un lien externe.
   if (/^https?:\/\//i.test(fileName)) {
     return 'url';

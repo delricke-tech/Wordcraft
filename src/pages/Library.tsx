@@ -1084,7 +1084,7 @@ export function Library() {
     setUploadProgress(0);
 
     let successCount = 0;
-    let errorCount = 0;
+    const errorCount = 0;
 
     try {
       for (let i = 0; i < totalFiles; i++) {

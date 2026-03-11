@@ -20,8 +20,16 @@
  */
 
 import OpenAI from 'openai';
-// import { supabase } from '../lib/supabase';
 import { searchWeb } from './webSearch';
+import { enrichResponseWithCitations, type Citation } from './citationService';
+import type { EnhancedCitation } from './vectorEmbeddingService';
+import { podcastGenerator } from './podcastGenerator';
+import { 
+  chunkDocument, 
+  selectRelevantChunks, 
+  type DocumentChunk,
+  type ChunkingOptions 
+} from './documentChunkingService';
 
 // Configuration du proxy (activer si CORS bloque) - Désactivé
 // const USE_PROXY = false;
@@ -32,6 +40,25 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp?: Date;
+  citations?: any[]; // Citations associées au message
+}
+
+export interface ChatOptions {
+  useWebSearch?: boolean;
+  detailLevel?: 'concis' | 'standard' | 'détaillé';
+  includeCitations?: boolean;
+  enableChunking?: boolean;
+  maxChunks?: number;
+  useAdvancedRAG?: boolean;
+}
+
+export interface StreamingChatOptions extends ChatOptions {
+  enableStreaming?: boolean;
+  onChunk?: (chunk: string) => void;
+  onComplete?: (fullResponse: string) => void;
+  onError?: (error: Error) => void;
+  chunkDelay?: number;
+  typewriterSpeed?: number;
 }
 
 export interface DocumentContext {
@@ -42,8 +69,8 @@ export interface DocumentContext {
 }
 
 // Configuration OpenAI
-const getOpenAIClient = () => {
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+export const getOpenAIClient = () => {
+  const apiKey = (import.meta as any).env?.VITE_OPENAI_API_KEY;
   
   if (!apiKey) {
     throw new Error('Clé OpenAI manquante. Veuillez ajouter VITE_OPENAI_API_KEY dans votre fichier .env');
@@ -54,9 +81,6 @@ const getOpenAIClient = () => {
     dangerouslyAllowBrowser: true // Pour utiliser dans le navigateur (dev uniquement)
   });
 };
-
-// Note: La fonction downloadPDF a été supprimée car elle n'est pas utilisée.
-// Une fonction similaire existe dans pdfExtractor.ts si nécessaire.
 
 /**
  * Extrait le texte d'un PDF depuis Supabase Storage
@@ -177,76 +201,85 @@ ${detailLevel === 'exhaustif' ? `
 ## 🔑 Points Clés (4-6 points)
 - Les éléments essentiels
 
-## 💡 Concepts Importants
+## 💡 Concepts (3-4 concepts)
 - Définitions et explications
 
-## 📌 À Retenir
-- Ce qu'il faut mémoriser
+## 📌 Points à Retenir (3-5 points)
+- Les éléments les plus importants
 
 ## ✅ Conclusion
 - Synthèse finale
 ` : `
 🎯 STRUCTURE REQUISE (résumé bref) :
 
-## 📖 En Bref
-- Résumé en 2-3 phrases
+## 📖 Résumé
+- Vue d'ensemble en 1-2 phrases
 
-## 🔑 Points Clés (3-4 points)
-- L'essentiel à retenir
+## 🔑 Points Clés (2-3 points)
+- Les éléments absolument essentiels
 
 ## ✅ Conclusion
-- Synthèse en 1 phrase
+- Synthèse ultra-brève
 `}
 
-📄 **CONTENU DU DOCUMENT** :
+DOCUMENT À ANALYSER :
 ${truncatedText}
 
-💡 **CONSIGNES** :
-- Utilise Markdown pour structurer
-- Sois pédagogique et clair
-- Utilise des emojis pour faciliter la lecture
-- Développe RÉELLEMENT chaque section (ne te contente pas de listes sommaires)
-- Pour les formules : utilise la syntaxe LaTeX ($$ ... $$)
-${detailLevel === 'exhaustif' ? '- SOIS EXHAUSTIF : Fournis un maximum de détails et d\'informations' : ''}
-${detailLevel === 'standard' ? '- Équilibre entre concision et complétude' : ''}
-${detailLevel === 'bref' ? '- Va droit à l\'essentiel, mais reste complet' : ''}`
+Génère maintenant le résumé structuré en suivant EXACTEMENT cette structure.`
         }
       ],
       temperature: 0.7,
       max_tokens: maxTokens,
       top_p: 0.95,
       frequency_penalty: 0.3,
-      presence_penalty: 0.3,
+      presence_penalty: 0.3
     });
 
-    const summary = completion.choices[0]?.message?.content || 'Impossible de générer un résumé.';
-    console.log('✅ Résumé généré');
-    console.log(`📊 Longueur du résumé: ${summary.length} caractères`);
+    const summary = completion.choices[0]?.message?.content || 'Désolé, je n\'ai pas pu générer de résumé.';
+    console.log('✅ Résumé généré avec succès:', summary.slice(0, 100) + '...');
     return summary;
+
   } catch (error: any) {
-    console.error('💥 Erreur OpenAI:', error);
+    console.error('💥 Erreur lors de la génération du résumé:', error);
     
     if (error.code === 'insufficient_quota') {
-      throw new Error('Quota OpenAI épuisé. Veuillez vérifier votre compte OpenAI.');
+      return `❌ **Quota OpenAI épuisé**
+
+Veuillez vérifier votre compte OpenAI et ajouter des crédits pour continuer à utiliser cette fonctionnalité.`;
     }
     
-    throw new Error(`Erreur OpenAI: ${error.message}`);
+    if (error.code === 'invalid_api_key') {
+      return `❌ **Clé API OpenAI invalide**
+
+Veuillez vérifier votre configuration OpenAI dans les variables d'environnement.`;
+    }
+    
+    // Erreur générique avec fallback utile
+    return `❌ **Une erreur est survenue**
+      
+Je ne peux pas générer de résumé actuellement.
+
+**Causes possibles :**
+- Service temporairement indisponible
+- Document trop volumineux
+- Erreur de format
+
+**Suggestions :**
+- Réessayez dans quelques instants
+- Simplifiez le document si possible
+- Contactez le support si le problème persiste`;
   }
 }
 
 /**
- * Envoie un message au chat avec le contexte du document
+ * Envoie un message à l'API OpenAI avec le contexte du document
  * VERSION AMÉLIORÉE : Réponses plus détaillées et enrichies
  */
 export async function sendChatMessage(
   message: string,
   context: DocumentContext,
-  conversationHistory: ChatMessage[],
-  options?: {
-    useWebSearch?: boolean;  // Activer la recherche web (si disponible)
-    detailLevel?: 'concis' | 'standard' | 'détaillé';  // Niveau de détail souhaité
-  }
-): Promise<string> {
+  options?: ChatOptions
+): Promise<{ response: string; citations?: Citation[] | EnhancedCitation[] }> {
   try {
     console.log('💬 ===== ENVOI MESSAGE CHAT (VERSION AMÉLIORÉE) =====');
     console.log('  - Message utilisateur:', message);
@@ -255,18 +288,51 @@ export async function sendChatMessage(
     console.log('  - Storage Path:', context.storagePath);
     console.log('  - Niveau de détail:', options?.detailLevel || 'détaillé');
     console.log('  - Recherche web:', options?.useWebSearch ? 'Activée' : 'Désactivée');
+    console.log('  - Chunking:', options?.enableChunking ? 'Activé' : 'Désactivé');
     
-    // ✅ LOG 1 : Vérifier si le texte arrive vraiment
-    console.log('📄 Texte récupéré:', context.extractedText ? `${context.extractedText.length} caractères` : 'NULL/VIDE');
+    // Gestion du chunking pour documents longs
+    const contextText = context.extractedText || '';
+    let chunks: DocumentChunk[] = [];
     
-    // ✅ VÉRIFICATION 1 : Le contexte doit exister
-    if (!context || !context.documentId || !context.storagePath) {
-      console.error('❌ Contexte invalide:', context);
-      throw new Error('Erreur : Le contexte du document est manquant ou invalide.');
+    if (options?.enableChunking && contextText.length > 8000) {
+      console.log('🔪 Activation du chunking pour document long');
+      
+      const chunkingOptions: ChunkingOptions = {
+        maxChunkSize: 4000,
+        minChunkSize: 500,
+        overlapSize: 200,
+        strategy: 'semantic',
+        preserveContext: true,
+        generateSummaries: true,
+        extractKeywords: true
+      };
+      
+      const chunkingResult = await chunkDocument(
+        context.documentId,
+        contextText,
+        chunkingOptions
+      );
+      
+      chunks = chunkingResult.chunks;
+      console.log(`  - Document divisé en ${chunks.length} chunks`);
+      console.log(`  - Taille moyenne: ${Math.round(chunkingResult.metadata.averageChunkSize)} caractères`);
     }
-
+    
+    // Sélection des chunks les plus pertinents
+    let selectedChunks: DocumentChunk[] = [];
+    let contextForPrompt = contextText;
+    
+    if (chunks.length > 0) {
+      selectedChunks = selectRelevantChunks(chunks, message, options?.maxChunks || 5);
+      contextForPrompt = selectedChunks
+        .map(chunk => `CHUNK ${chunk.chunkIndex + 1}:\n${chunk.content}`)
+        .join('\n\n---\n\n');
+      
+      console.log(`  - ${selectedChunks.length} chunks sélectionnés pour le contexte`);
+    }
+    
     // ✅ VÉRIFICATION 2 : Le texte doit être disponible (FALLBACK)
-    if (!context.extractedText || context.extractedText.trim() === '') {
+    if (!contextForPrompt || contextForPrompt.trim() === '') {
       console.error('❌ Le texte extrait est vide ou NULL');
       console.error('   Storage Path utilisé:', context.storagePath);
       throw new Error(
@@ -279,17 +345,14 @@ export async function sendChatMessage(
     }
 
     console.log('✅ Contexte valide, texte disponible');
-    console.log('  - Longueur du texte:', context.extractedText.length);
-    console.log('  - Premiers 100 caractères:', context.extractedText.slice(0, 100) + '...');
+    console.log('  - Longueur du texte:', contextForPrompt.length);
+    console.log('  - Premiers 100 caractères:', contextForPrompt.slice(0, 100) + '...');
 
     const openai = getOpenAIClient();
 
     // Déterminer le niveau de détail
     const detailLevel = options?.detailLevel || 'détaillé';
     const maxTokens = detailLevel === 'concis' ? 800 : detailLevel === 'standard' ? 1500 : 3000;
-    
-    // Utiliser plus de contexte du document pour des réponses plus riches
-    const contextLength = detailLevel === 'concis' ? 3000 : detailLevel === 'standard' ? 5000 : 8000;
 
     // 🔍 Recherche web optionnelle (si activée)
     let webContext = '';
@@ -307,52 +370,55 @@ export async function sendChatMessage(
       }
     }
 
-    // Construire les messages pour OpenAI avec prompt amélioré
-    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-      {
-        role: 'system',
-        content: `Tu es un assistant pédagogique expert de haut niveau qui aide les étudiants à comprendre le document "${context.documentName}". 
+    // Construire le systemPrompt amélioré
+    const systemPrompt = `Tu es un expert en pédagogie et en synthèse de documents. Ton objectif est d'aider l'utilisateur à comprendre et à maîtriser le contenu des documents fournis.
 
-📚 CONTEXTE DU DOCUMENT (${context.extractedText.length} caractères) :
-${context.extractedText.slice(0, contextLength)}${context.extractedText.length > contextLength ? '...' : ''}
+CONSIGNE PRINCIPALE :
+Génère une réponse qui permette à l'étudiant de :
+1. Comprendre en profondeur les concepts clés
+2. Retenir efficacement l'information essentielle  
+3. Appliquer concrètement les connaissances
 
-${webContext}
-
-🎯 TES MISSIONS :
-1. **Fournir des réponses DÉTAILLÉES et COMPLÈTES** - Ne te limite pas, développe tes explications
-2. **Structurer tes réponses** avec des titres, listes et sections claires
-3. **Donner des exemples concrets** et des applications pratiques
-4. **Expliquer le "pourquoi"** et pas seulement le "quoi"
-5. **Faire des liens** avec d'autres concepts connexes
-6. **Citer des passages** du document quand pertinent
-7. **Ajouter des notes complémentaires** pour approfondir
-
-📝 RÈGLES DE FORMATAGE :
-- Utilise Markdown pour structurer (titres ##, listes, **gras**, *italique*)
-- Pour les formules mathématiques : $$ pour les équations en bloc et $ pour inline (LaTeX)
-- Utilise des emojis pour rendre la lecture agréable 📖✨
+MÉTHODOLOGIE :
+- Commence par une synthèse claire des points principaux
+- Ensuite, développe chaque point avec des explications détaillées
 - Ajoute des sections comme :
-  - 💡 **Point Clé**
-  - ⚠️ **Attention**
-  - 📌 **À Retenir**
-  - 🔍 **Approfondissement**
-  - 💪 **Exercice Pratique**
-  - 🌐 **Contexte Plus Large**
+  - Point Clé
+  - Attention
+  - A Retenir
+  - Approfondissement
+  - Exercice Pratique
+  - Contexte Plus Large
 
-🎨 STYLE DE RÉPONSE (${detailLevel}) :
+STYLE DE RÉPONSE (${detailLevel}) :
 ${detailLevel === 'concis' ? '- Réponse synthétique mais complète (800 tokens max)' : ''}
 ${detailLevel === 'standard' ? '- Réponse équilibrée avec détails et exemples (1500 tokens max)' : ''}
 ${detailLevel === 'détaillé' ? '- Réponse exhaustive avec explications approfondies, exemples multiples, contexte élargi (3000 tokens max)' : ''}
 
-🌟 OBJECTIF : Rendre l'étudiant EXPERT sur le sujet abordé !`
+OBJECTIF : Rendre l'étudiant EXPERT sur le sujet abordé !`;
+
+    // Construire les messages pour OpenAI avec prompt amélioré et cohérence
+    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+      {
+        role: 'system',
+        content: systemPrompt
       },
-      ...conversationHistory.map(msg => ({
-        role: msg.role as 'user' | 'assistant' | 'system',
-        content: msg.content
-      })),
       {
         role: 'user',
-        content: message
+        content: `QUESTION: ${message}
+
+${webContext ? `INFORMATIONS WEB SUPPLÉMENTAIRES:
+${webContext}
+
+` : ''}
+
+CONTEXTE DOCUMENTAIRE:
+${contextForPrompt}
+
+INSTRUCTIONS:
+Réponds en te basant UNIQUEMENT sur les informations fournies ci-dessus.
+Si une information n'est pas dans le contexte, dis-le clairement.
+Vérifie la cohérence de ta réponse avant de l'envoyer.`
       }
     ];
 
@@ -370,7 +436,38 @@ ${detailLevel === 'détaillé' ? '- Réponse exhaustive avec explications approf
     const response = completion.choices[0]?.message?.content || 'Désolé, je n\'ai pas pu générer de réponse.';
     console.log('✅ Réponse reçue de OpenAI:', response.slice(0, 100) + '...');
     console.log(`📊 Longueur de la réponse: ${response.length} caractères`);
-    return response;
+
+    // Ajouter les citations si demandé
+    if (options?.includeCitations && context.extractedText) {
+      console.log('🔍 Ajout des citations automatiques...');
+      
+      const documents = [{
+        id: context.documentId,
+        name: context.documentName,
+        content: context.extractedText
+      }];
+
+      const citationResult = await enrichResponseWithCitations(
+        response,
+        documents,
+        message,
+        {
+          useAdvancedRAG: options?.useAdvancedRAG,
+          maxCitations: 5
+        }
+      );
+
+      console.log(`✅ ${citationResult.citations.length} citations ajoutées`);
+      return {
+        response: citationResult.enrichedResponse,
+        citations: citationResult.citations
+      };
+    }
+
+    return {
+      response,
+      citations: undefined
+    };
   } catch (error: any) {
     console.error('💥 Erreur lors de l\'envoi du message:', error);
     
@@ -418,3 +515,83 @@ export async function analyzeUploadedDocument(file: File): Promise<string> {
     throw new Error(`Impossible d'analyser le fichier: ${error.message}`);
   }
 }
+
+// === FONCTIONS TTS ET PODCAST ===
+
+/**
+ * Génère de l'audio à partir du texte avec OpenAI TTS
+ */
+export async function generateSpeechFromText(text: string, voice = 'nova'): Promise<ArrayBuffer> {
+  try {
+    console.log(`🎤 Génération audio avec OpenAI TTS - Voix: ${voice}`);
+    
+    const openai = getOpenAIClient();
+    const mp3 = await openai.audio.speech.create({
+      model: 'tts-1-hd',
+      voice: voice as any,
+      input: text,
+      response_format: 'mp3',
+      speed: 1.0,
+    });
+
+    const audioBuffer = await mp3.arrayBuffer();
+    console.log('✅ Audio généré avec succès');
+    return audioBuffer;
+    
+  } catch (error) {
+    console.error('❌ Erreur génération TTS:', error);
+    throw new Error(`Échec de la génération audio: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
+  }
+}
+
+/**
+ * Génère un podcast complet à partir du contenu
+ */
+export async function generatePodcastFromContent(
+  content: string, 
+  options: {
+    title?: string;
+    duration?: number;
+    style?: 'conversationnel' | 'éducatif' | 'journalistique';
+    voices?: {
+      host1?: 'nova' | 'alloy' | 'echo' | 'shimmer' | 'fable' | 'onyx';
+      host2?: 'nova' | 'alloy' | 'echo' | 'shimmer' | 'fable' | 'onyx';
+    };
+  } = {}
+) {
+  try {
+    console.log('🎙️ Début génération podcast complet...');
+    
+    const podcast = await podcastGenerator.generatePodcastAudio(content, {
+      title: options.title || 'Podcast WordCraft IA',
+      duration: options.duration || 7,
+      style: options.style || 'conversationnel',
+      voices: options.voices ? {
+        host1: options.voices.host1 || 'nova',
+        host2: options.voices.host2 || 'alloy'
+      } : {
+        host1: 'nova',
+        host2: 'alloy'
+      }
+    });
+    console.log('✅ Podcast généré avec succès');
+    return podcast;
+    
+  } catch (error) {
+    console.error('❌ Erreur génération podcast:', error);
+    throw new Error(`Échec de la génération du podcast: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
+  }
+}
+
+/**
+ * Export par défaut pour compatibilité
+ */
+export default {
+  getOpenAIClient,
+  extractPDFText,
+  summarizeDocument,
+  sendChatMessage,
+  analyzeUploadedDocument,
+  generateSpeechFromText,
+  generatePodcastFromContent
+};

@@ -66,6 +66,11 @@ export async function extractText(
         extractedText = await extractTextFromImage(storagePath);
         break;
 
+      case 'url':
+        // Extraire le texte d'une page web à partir d'une URL
+        extractedText = await extractTextFromURL(storagePath as string);
+        break;
+
       default:
         throw new Error(`Type de fichier non supporté pour l'extraction: ${fileType}`);
     }
@@ -422,6 +427,33 @@ async function extractTextFromExcel(storagePath: string | File): Promise<string>
     }
     
     throw error;
+  }
+}
+
+/**
+ * Extrait le texte d'une page web à partir d'une URL
+ */
+async function extractTextFromURL(url: string): Promise<string> {
+  console.log('🌐 Extraction depuis URL:', url);
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Erreur HTTP ${response.status}`);
+    }
+    const html = await response.text();
+    // Retirer les scripts, styles puis balises HTML
+    let text = html
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ');
+    text = text.replace(/\s+/g, ' ').trim();
+    console.log('✅ Texte extrait de l\'URL:', text.length, 'caractères');
+    return text;
+  } catch (error: any) {
+    console.error('❌ Erreur extraction URL:', error);
+    return `[URL]
+
+Impossible de récupérer le contenu de la page : ${error.message}`;
   }
 }
 

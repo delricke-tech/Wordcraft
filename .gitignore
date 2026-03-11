@@ -1,33 +1,117 @@
-# Logs
-logs
-*.log
+# ===========================================
+# SÉCURITÉ - VARIABLES D'ENVIRONNEMENT
+# ===========================================
+# Ne jamais commiter les vraies clés API ou secrets !
+
+# Variables d'environnement
+.env
+.env.local
+.env.development
+.env.production
+.env.*.local
+
+# ===========================================
+# DÉPENDANCES
+# ===========================================
+node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
+# ===========================================
+# BUILD OUTPUT
+# ===========================================
+dist/
+build/
+.next/
+.nuxt/
+.vuepress/dist/
+.serverless/
 dist-ssr
-*.local
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
+# ===========================================
+# RUNTIME
+# ===========================================
+.cache/
+.parcel-cache/
+.temp/
+.tmp/
+.vite/
+
+# ===========================================
+# LOGS
+# ===========================================
+logs/
+*.log
+
+# ===========================================
+# COVERAGE REPORTS
+# ===========================================
+coverage/
+*.lcov
+.nyc_output/
+
+# ===========================================
+# IDE & EDITORS
+# ===========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ===========================================
+# OS
+# ===========================================
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
-# Environment variables
-.env
-.env.local
-.env.production
-.env.development
+# ===========================================
+# TESTING
+# ===========================================
+coverage/
+.nyc_output/
+junit.xml
+test-results/
 
-# Vercel
-.vercel
+# ===========================================
+# BACKUPS
+# ===========================================
+*.backup
+*.bak
+*.old
+
+# ===========================================
+# LOCAL CONFIGURATION
+# ===========================================
+config/local.json
+secrets.json
+
+# ===========================================
+# GENERATED FILES
+# ===========================================
+.env.generated
+auto-imports.d.ts
+components.d.ts
+
+# ===========================================
+# DEPLOYMENT
+# ===========================================
+.vercel/
+.netlify/
+.firebase/
+.aws/
+
+# ===========================================
+# SUPABASE
+# ===========================================
+supabase/.temp/
+supabase/functions/.nuxt/
+supabase/functions/.tmp/

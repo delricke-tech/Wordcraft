@@ -8,10 +8,7 @@ import {
   Monitor,
   MessageSquare,
   Users,
-  FileText,
-  Settings,
   PhoneOff,
-  Upload,
   Send,
   ArrowLeft,
   Loader,
@@ -62,7 +59,6 @@ export function SessionRoom() {
   
   // États Daily.co
   const [dailyCall, setDailyCall] = useState<DailyCall | null>(null);
-  const [dailyRoomUrl, setDailyRoomUrl] = useState<string>('');
   const [isJoiningCall, setIsJoiningCall] = useState(false);
   const videoContainerRef = useRef<HTMLDivElement>(null);
   
@@ -72,7 +68,6 @@ export function SessionRoom() {
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   
   // États UI
-  const [showSettings, setShowSettings] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dailyConfigured, setDailyConfigured] = useState(false);
 
@@ -121,8 +116,6 @@ export function SessionRoom() {
           .update({ daily_room_url: roomUrl })
           .eq('id', session.id);
       }
-      
-      setDailyRoomUrl(roomUrl);
       
       // Rejoindre la salle
       const call = await joinDailyRoom(

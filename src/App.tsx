@@ -28,6 +28,7 @@ import { Settings } from './pages/Settings';
 import { TeacherDashboard } from './pages/teacher/TeacherDashboard';
 import { MigrationPDF } from './pages/MigrationPDF';
 import { AutoFixOrphans } from './pages/AutoFixOrphans';
+import PodcastPage from './pages/PodcastPage';
 import { Toaster } from 'sonner';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -141,6 +142,7 @@ function AppRoutes() {
         <Route path="sessions/:sessionId" element={<Sessions />} />
         <Route path="sessions/:sessionId/join" element={<SessionRoom />} />
         <Route path="ai-assistant" element={<AIAssistant />} />
+        <Route path="podcast" element={<PodcastPage />} />
         <Route path="settings" element={<Settings />} />
         <Route path="profile" element={<Settings />} />
         <Route path="notifications" element={<Dashboard />} />

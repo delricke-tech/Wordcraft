@@ -153,6 +153,18 @@ export function PDFViewer({ documentId, documentName, storagePath, onClose }: PD
     }
   };
 
+  // Fermeture au clavier (Échap)
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        handleClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const handleZoomIn = () => {
     setScale(prev => Math.min(prev + 0.25, 3.0)); // Max 300%
   };

@@ -2,7 +2,7 @@
  * Configuration et utilitaires pour Daily.co (Vidéo/Audio)
  */
 
-import DailyIframe, { DailyCall, DailyEvent, DailyEventObjectParticipant } from '@daily-co/daily-js';
+import DailyIframe, { DailyCall } from '@daily-co/daily-js';
 
 const DAILY_API_KEY = import.meta.env.VITE_DAILY_API_KEY;
 

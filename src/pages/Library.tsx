@@ -17,6 +17,7 @@ import {
   Image,
   Video,
   Globe,
+  Link as LinkIcon,
   Download,
   FolderInput,
   Star,
@@ -33,7 +34,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase, Document, Folder as FolderType, uploadFile } from '../lib/supabase';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { generateUniqueFileName, getFileType } from '../utils/fileUtils';
+import { generateUniqueFileName, getFileType, validateFileForUpload, MAX_UPLOAD_FILE_SIZE_BYTES } from '../utils/fileUtils';
+import { searchDocuments } from '../utils/searchDocuments';
 import { toast } from 'sonner';
 import { NewFolderModal } from '../components/modals/NewFolderModal';
 import { FolderSelector } from '../components/modals/FolderSelector';
@@ -59,9 +61,23 @@ export function Library() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  // used for breadcrumb navigation
+  const currentFolder: FolderType | null = folders.find(f => f.id === selectedFolder) || null;
+
+  // compute ancestors chain for breadcrumb
+  const folderPath: Array<{ id: string; name: string }> = [];
+  if (currentFolder) {
+    let node: FolderType | null = currentFolder;
+    while (node) {
+      const current: FolderType = node;
+      folderPath.unshift({ id: current.id, name: current.name });
+      node = folders.find(f => f.id === current.parent_id) || null;
+    }
+  }
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<string>('all');
+  const [selectedDateFilter, setSelectedDateFilter] = useState<string>('all');
   const [contextMenu, setContextMenu] = useState<{ 
     id: string; 
     x: number; 
@@ -106,6 +122,13 @@ export function Library() {
   const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
 
+  // État pour le glisser-déposer (Phase 1.1 Roadmap)
+  const [isDraggingOverLibrary, setIsDraggingOverLibrary] = useState(false);
+  const [isDraggingOverModal, setIsDraggingOverModal] = useState(false);
+
+  // Prévisualisation avant validation (Phase 1.1) — fichiers en attente dans la modale
+  const [pendingUploadFiles, setPendingUploadFiles] = useState<File[]>([]);
+
   // États pour Quiz et Flashcards
   const [generatingQuizForDoc, setGeneratingQuizForDoc] = useState<string | null>(null);
   const [generatingFlashcardsForDoc, setGeneratingFlashcardsForDoc] = useState<string | null>(null);
@@ -122,6 +145,32 @@ export function Library() {
   useEffect(() => {
     fetchData();
   }, [selectedFolder]);
+
+  // Recherche full-text côté serveur (debounced)
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      try {
+        if (searchQuery && searchQuery.trim().length > 0) {
+          const results = await searchDocuments(
+            user ? user.id : null,
+            searchQuery,
+            selectedFolder,
+            showOnlyFavorites,
+            selectedFilter === 'all' ? null : selectedFilter,
+            selectedDateFilter === 'all' ? null : selectedDateFilter
+          );
+          setDocuments(Array.isArray(results) ? results : []);
+        } else {
+          // Si la recherche est vide, recharger la liste normale
+          await fetchData();
+        }
+      } catch (err) {
+        console.error('Erreur lors de la recherche full-text:', err);
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, selectedFolder, showOnlyFavorites, selectedFilter, selectedDateFilter, user]);
 
   // Fermer le dropdown de déplacement rapide quand on clique ailleurs
   useEffect(() => {
@@ -728,6 +777,53 @@ export function Library() {
     }
   };
 
+
+  // ✨ Nouvelle fonction : ajouter un lien externe (type 'url')
+  const handleAddLink = async () => {
+    if (!user) {
+      toast.error('Erreur', { description: 'Vous devez être connecté' });
+      return;
+    }
+
+    const url = prompt('Entrez l\'URL à ajouter :');
+    if (!url) return;
+    if (!/^https?:\/\//i.test(url)) {
+      toast.error('URL invalide. Elle doit commencer par http:// ou https://');
+      return;
+    }
+
+    try {
+      // Insérer le document de type url directement
+      const { data, error } = await supabase
+        .from('documents')
+        .insert([
+          {
+            name: url,
+            storage_path: url, // on utilise storage_path pour stocker l'URL
+            file_type: 'url',
+            user_id: user.id,
+            file_url: url
+          }
+        ]);
+
+      if (error) throw error;
+
+      toast.success('Lien ajouté à la bibliothèque !');
+      // Extraire le texte de l'URL dans le champ extracted_text
+      const inserted = (data?.[0] as { id?: string } | undefined);
+      const docId = inserted?.id;
+      if (docId) {
+        const { extractText } = await import('../services/textExtractor');
+        extractText(url, 'url', docId).catch(console.error);
+      }
+
+      fetchData();
+    } catch (err: any) {
+      console.error('❌ Erreur ajout lien :', err);
+      toast.error('Erreur lors de l\'ajout du lien', { description: err.message });
+    }
+  };
+
   // 🔘 Fonction pour supprimer les cartes sélectionnées
   const handleDeleteSelectedCards = async () => {
     if (!generatedFlashcards || selectedCards.length === 0) return;
@@ -743,24 +839,39 @@ export function Library() {
     }
   };
 
-  const handleFileUpload = async (files: FileList | null) => {
-    // ✅ OPTION A : Permettre les uploads anonymes (user_id peut être NULL)
+  const handleFileUpload = async (files: FileList | null, folderIdOverride?: string | null) => {
     if (!files) return;
+
+    const filesArray = Array.from(files);
+    const validFiles: File[] = [];
+    const errors: string[] = [];
+
+    for (const file of filesArray) {
+      const err = validateFileForUpload(file);
+      if (err) errors.push(`${file.name} : ${err}`);
+      else validFiles.push(file);
+    }
+
+    if (errors.length > 0) {
+      toast.error(errors.length === 1 ? errors[0] : `${errors.length} fichier(s) refusé(s)`, {
+        description: errors.slice(0, 3).join(' — ') + (errors.length > 3 ? ` et ${errors.length - 3} autre(s).` : ''),
+        duration: 6000,
+      });
+    }
+    if (validFiles.length === 0) return;
 
     setIsUploading(true);
     setUploadProgress(0);
-    const totalFiles = files.length;
-    let successfulUploads = 0; // ✅ Compteur pour valider les succès réels
-    
-    // Toast de chargement
+    const totalFiles = validFiles.length;
+    const targetFolderId = folderIdOverride !== undefined ? folderIdOverride : selectedFolderForGeneralUpload;
+    let successfulUploads = 0;
     const loadingToastId = toast.loading(`Upload de ${totalFiles} fichier(s) en cours...`);
 
     try {
-      // Importer les services d'extraction
       const { extractText } = await import('../services/textExtractor');
 
       for (let i = 0; i < totalFiles; i++) {
-        const file = Array.from(files)[i];
+        const file = validFiles[i];
         
         // Mettre à jour la progression
         const progress = ((i + 1) / totalFiles) * 100;
@@ -812,7 +923,7 @@ export function Library() {
           storage_path: uploadData.path, // ✅ CRITIQUE [cite: 2025-12-27] : Chemin exact retourné par Storage
           user_id: user?.id || null, // ✅ NULL si non connecté pour éviter erreur 400 [cite: 2025-12-27]
           file_type: fileType,
-          folder_id: selectedFolderForGeneralUpload || null,
+          folder_id: targetFolderId ?? null,
           processing_status: 'pending' // ✅ Statut pour l'extraction IA
         };
 
@@ -937,7 +1048,8 @@ export function Library() {
       }
       
       setShowUploadModal(false);
-      setSelectedFolderForGeneralUpload(null); // ✅ Réinitialiser la sélection
+      setSelectedFolderForGeneralUpload(null);
+      setPendingUploadFiles([]);
       
     } catch (error) {
       console.error('❌ Erreur générale:', error);
@@ -972,7 +1084,7 @@ export function Library() {
     setUploadProgress(0);
 
     let successCount = 0;
-    let errorCount = 0;
+    const errorCount = 0;
 
     try {
       for (let i = 0; i < totalFiles; i++) {
@@ -1389,8 +1501,21 @@ export function Library() {
     
     // ✅ Filtrage par favoris
     const matchesFavorites = !showOnlyFavorites || doc.is_favorite === true;
-    
-    return matchesSearch && matchesFilter && matchesFolder && matchesFavorites;
+
+    // Filtre par date (client-side si nécessaire)
+    const matchesDate = (() => {
+      if (!selectedDateFilter || selectedDateFilter === 'all') return true;
+      if (!doc.created_at) return false;
+      const created = new Date(doc.created_at);
+      const now = new Date();
+      if (selectedDateFilter === '24h') return created >= new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      if (selectedDateFilter === '7d') return created >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      if (selectedDateFilter === '30d') return created >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      if (selectedDateFilter === 'year') return created >= new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+      return true;
+    })();
+
+    return matchesSearch && matchesFilter && matchesFolder && matchesFavorites && matchesDate;
   });
 
   // ✅ Filtrer les dossiers également pour la recherche
@@ -1477,6 +1602,14 @@ export function Library() {
             <Upload size={20} />
             Ajouter documents
           </button>
+          <button
+            onClick={handleAddLink}
+            className="px-4 py-2 bg-yellow-600 text-white rounded-xl hover:bg-yellow-700 transition-colors flex items-center gap-2"
+            title="Ajouter un lien externe"
+          >
+            <LinkIcon size={20} />
+            Ajouter lien
+          </button>
           {/* ✅ Bouton Supprimer Tout */}
           {documents.length > 0 && (
             <button
@@ -1543,6 +1676,41 @@ export function Library() {
               </button>
             )}
           </div>
+          {/* Breadcrumb navigation */}
+          {folderPath.length > 0 && (
+            <nav className="mt-2 text-sm text-gray-700 flex items-center gap-2">
+              {currentFolder?.parent_id && (
+                <button
+                  onClick={() => setSelectedFolder(currentFolder.parent_id!)}
+                  className="text-gray-500 hover:text-gray-700"
+                  title="Dossier parent"
+                >
+                  ←
+                </button>
+              )}
+              <button
+                onClick={() => setSelectedFolder(null)}
+                className="hover:underline"
+              >
+                Racine
+              </button>
+              {folderPath.map((f, idx) => (
+                <span key={f.id} className="inline-flex items-center gap-1">
+                  <span>/</span>
+                  {idx === folderPath.length - 1 ? (
+                    <span className="font-medium">{f.name}</span>
+                  ) : (
+                    <button
+                      onClick={() => setSelectedFolder(f.id)}
+                      className="hover:underline"
+                    >
+                      {f.name}
+                    </button>
+                  )}
+                </span>
+              ))}
+            </nav>
+          )}
           {/* Badge contextuel de recherche et favoris */}
           <div className="mt-2 flex items-center gap-2 text-xs text-gray-600">
             {showOnlyFavorites && (
@@ -1624,10 +1792,42 @@ export function Library() {
           <option value="txt">Texte</option>
           <option value="image">Images</option>
         </select>
+        <select
+          value={selectedDateFilter}
+          onChange={(e) => setSelectedDateFilter(e.target.value)}
+          className="px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500"
+          title="Filtrer par date"
+        >
+          <option value="all">Tous les temps</option>
+          <option value="24h">Dernières 24h</option>
+          <option value="7d">7 jours</option>
+          <option value="30d">30 jours</option>
+          <option value="year">1 an</option>
+        </select>
       </div>
 
-      {/* Documents Grid/List */}
-      <div className="flex-1 overflow-auto">
+      {/* Documents Grid/List — zone de glisser-déposer (Phase 1.1 Roadmap) */}
+      <div
+        className={`flex-1 overflow-auto relative transition-colors ${isDraggingOverLibrary ? 'ring-2 ring-teal-500 ring-inset bg-teal-50/50 rounded-xl' : ''}`}
+        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingOverLibrary(true); }}
+        onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingOverLibrary(false); }}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsDraggingOverLibrary(false);
+          if (e.dataTransfer.files?.length) {
+            handleFileUpload(e.dataTransfer.files, selectedFolder);
+          }
+        }}
+      >
+        {isDraggingOverLibrary && (
+          <div className="absolute inset-0 flex items-center justify-center bg-teal-100/80 rounded-xl z-10 pointer-events-none">
+            <div className="bg-white rounded-2xl shadow-xl px-8 py-6 border-2 border-teal-400 flex items-center gap-4">
+              <Upload size={40} className="text-teal-600" />
+              <span className="text-lg font-medium text-teal-800">Déposez les fichiers ici</span>
+            </div>
+          </div>
+        )}
         {filteredDocuments.length === 0 && filteredFolders.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-gray-500">
             {searchQuery ? (
@@ -1676,7 +1876,9 @@ export function Library() {
         ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {/* ✅ Afficher les dossiers en premier */}
-            {selectedFolder === null && filteredFolders.map((folder) => (
+            {filteredFolders
+              .filter(f => f.parent_id === selectedFolder)    /* show only direct children */
+              .map((folder) => (
               <div
                 key={folder.id}
                 className="bg-gradient-to-br from-teal-50 to-teal-100 border-2 border-teal-200 rounded-xl overflow-hidden hover:shadow-lg transition-all group cursor-pointer"
@@ -2001,6 +2203,7 @@ export function Library() {
                 onClick={() => {
                   setShowUploadModal(false);
                   setSelectedFolderForGeneralUpload(null);
+                  setPendingUploadFiles([]);
                 }}
                 className="p-2 hover:bg-gray-100 rounded-lg"
               >
@@ -2008,7 +2211,7 @@ export function Library() {
               </button>
             </div>
             <div className="p-6">
-              {/* ✅ Sélecteur de dossier */}
+              {/* Sélecteur de dossier */}
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Dossier de destination
@@ -2024,18 +2227,86 @@ export function Library() {
                 ref={fileInputRef}
                 type="file"
                 multiple
-                onChange={(e) => handleFileUpload(e.target.files)}
+                onChange={(e) => {
+                  const list = e.target.files;
+                  if (list?.length) setPendingUploadFiles(Array.from(list));
+                  e.target.value = '';
+                }}
                 className="hidden"
               />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full p-8 border-2 border-dashed border-gray-300 rounded-xl hover:border-teal-500 hover:bg-teal-50 transition-all"
-              >
-                <Upload size={48} className="mx-auto mb-4 text-gray-400" />
-                <p className="text-sm text-gray-600">
-                  Cliquez pour sélectionner des fichiers
-                </p>
-              </button>
+
+              {pendingUploadFiles.length > 0 ? (
+                /* Prévisualisation avant validation (Phase 1.1) */
+                <div className="space-y-4">
+                  <p className="text-sm text-gray-600">
+                    Taille max {MAX_UPLOAD_FILE_SIZE_BYTES / (1024 * 1024)} Mo par fichier. Types : PDF, Word, Excel, PowerPoint, TXT, images, vidéo, audio.
+                  </p>
+                  <ul className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                    {pendingUploadFiles.map((file, i) => {
+                      const err = validateFileForUpload(file);
+                      return (
+                        <li key={i} className={`flex items-center justify-between px-3 py-2 text-sm ${err ? 'bg-red-50 text-red-800' : 'bg-gray-50'}`}>
+                          <span className="truncate flex-1">{file.name}</span>
+                          <span className="text-gray-500 ml-2 flex-shrink-0">{(file.size / 1024).toFixed(0)} Ko</span>
+                          {err && <span className="text-xs text-red-600 ml-2 flex-shrink-0">{err}</span>}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const valid = pendingUploadFiles.filter(f => !validateFileForUpload(f));
+                        if (valid.length === 0) {
+                          toast.error('Aucun fichier valide à envoyer.');
+                          return;
+                        }
+                        const dt = new DataTransfer();
+                        valid.forEach(f => dt.items.add(f));
+                        handleFileUpload(dt.files);
+                        setPendingUploadFiles([]);
+                      }}
+                      disabled={!pendingUploadFiles.some(f => !validateFileForUpload(f)) || isUploading}
+                      className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Confirmer l&apos;upload
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPendingUploadFiles([])}
+                      className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                    >
+                      Tout effacer
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => fileInputRef.current?.click()}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInputRef.current?.click(); } }}
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingOverModal(true); }}
+                  onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingOverModal(false); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDraggingOverModal(false);
+                    if (e.dataTransfer.files?.length) setPendingUploadFiles(Array.from(e.dataTransfer.files));
+                  }}
+                  className={`w-full p-8 border-2 border-dashed rounded-xl transition-all cursor-pointer ${
+                    isDraggingOverModal
+                      ? 'border-teal-500 bg-teal-100'
+                      : 'border-gray-300 hover:border-teal-500 hover:bg-teal-50'
+                  }`}
+                >
+                  <Upload size={48} className={`mx-auto mb-4 ${isDraggingOverModal ? 'text-teal-600' : 'text-gray-400'}`} />
+                  <p className="text-sm text-gray-600">
+                    {isDraggingOverModal ? 'Déposez les fichiers ici' : 'Cliquez ou glissez-déposez des fichiers'}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -2127,6 +2398,7 @@ export function Library() {
       <NewFolderModal
         isOpen={showNewFolderModal}
         onClose={() => setShowNewFolderModal(false)}
+        folders={folders}
         onCreateFolder={handleCreateFolder}
       />
 

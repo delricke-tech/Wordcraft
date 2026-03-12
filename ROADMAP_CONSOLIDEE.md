@@ -347,4 +347,3 @@ Les 3 dernières features ont été implémentées :
 ---
 
 *Cette roadmap consolidée est votre feuille de route pour atteindre l'excellence absolue.*
-    

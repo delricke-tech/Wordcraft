@@ -777,5 +777,834 @@ export const getBookmarkStats = (userId: string) =>
 export const searchBookmarks = (query: string, userId: string, options?: Partial<BookmarkOptions>) => 
   bookmarksService.searchBookmarks(query, userId, options);
 
+// NOUVELLES FONCTIONNALITÉS AVANCÉES
+
+/**
+ * Options de recherche et filtrage avancées pour les bookmarks
+ */
+export interface AdvancedBookmarkOptions {
+  userId: string;
+  query?: string;
+  tags?: string[];
+  category?: string;
+  type?: BookmarkType;
+  targetType?: string;
+  priority?: 'low' | 'medium' | 'high';
+  isPinned?: boolean;
+  isPublic?: boolean;
+  dateRange?: {
+    from: Date;
+    to: Date;
+  };
+  sortBy?: 'createdAt' | 'updatedAt' | 'lastAccessed' | 'accessCount' | 'title' | 'priority';
+  sortOrder?: 'asc' | 'desc';
+  limit?: number;
+  offset?: number;
+  includeMetadata?: boolean;
+  includeSuggestions?: boolean;
+}
+
+/**
+ * Résultat de recherche de bookmarks avec suggestions
+ */
+export interface BookmarkSearchResult {
+  bookmarks: Bookmark[];
+  totalCount: number;
+  suggestions: string[];
+  categories: Array<{ name: string; count: number }>;
+  tags: Array<{ name: string; count: number }>;
+  statistics: {
+    totalBookmarks: number;
+    pinnedBookmarks: number;
+    recentBookmarks: number;
+    mostAccessed: Bookmark | null;
+    averageAccessCount: number;
+  };
+}
+
+/**
+ * Bookmark intelligent avec IA et recommandations
+ */
+export interface IntelligentBookmark extends Bookmark {
+  relevanceScore?: number;
+  suggestedTags?: string[];
+  suggestedCategory?: string;
+  relatedBookmarks?: string[];
+  accessPattern?: {
+    frequency: 'daily' | 'weekly' | 'monthly' | 'rarely';
+    bestTimeOfDay?: string;
+    lastAccessPattern?: string;
+  };
+  aiSummary?: string;
+  quickActions?: string[];
+}
+
+/**
+ * Recherche avancée de bookmarks avec IA
+ */
+export async function advancedBookmarkSearch(options: AdvancedBookmarkOptions): Promise<BookmarkSearchResult> {
+  try {
+    // Récupérer tous les bookmarks de l'utilisateur
+    const baseBookmarks = await getBookmarks({ 
+      userId: options.userId, 
+      includeMetadata: true 
+    });
+    
+    let filteredBookmarks = [...baseBookmarks];
+    
+    // Filtrage par texte
+    if (options.query) {
+      const searchTerms = options.query.toLowerCase().split(' ');
+      filteredBookmarks = filteredBookmarks.filter(bookmark => {
+        const searchableText = [
+          bookmark.title,
+          bookmark.description,
+          bookmark.tags.join(' '),
+          bookmark.category,
+          bookmark.metadata.excerpt || ''
+        ].join(' ').toLowerCase();
+        
+        return searchTerms.every(term => searchableText.includes(term));
+      });
+    }
+    
+    // Filtrage par tags
+    if (options.tags && options.tags.length > 0) {
+      filteredBookmarks = filteredBookmarks.filter(bookmark => 
+        options.tags!.some(tag => bookmark.tags.includes(tag))
+      );
+    }
+    
+    // Filtrage par catégorie
+    if (options.category) {
+      filteredBookmarks = filteredBookmarks.filter(bookmark => 
+        bookmark.category === options.category
+      );
+    }
+    
+    // Filtrage par type
+    if (options.type) {
+      filteredBookmarks = filteredBookmarks.filter(bookmark => 
+        bookmark.type === options.type
+      );
+    }
+    
+    // Filtrage par targetType
+    if (options.targetType) {
+      filteredBookmarks = filteredBookmarks.filter(bookmark => 
+        bookmark.targetType === options.targetType
+      );
+    }
+    
+    // Filtrage par priorité
+    if (options.priority) {
+      filteredBookmarks = filteredBookmarks.filter(bookmark => 
+        bookmark.priority === options.priority
+      );
+    }
+    
+    // Filtrage par épinglé
+    if (options.isPinned !== undefined) {
+      filteredBookmarks = filteredBookmarks.filter(bookmark => 
+        bookmark.isPinned === options.isPinned
+      );
+    }
+    
+    // Filtrage par public
+    if (options.isPublic !== undefined) {
+      filteredBookmarks = filteredBookmarks.filter(bookmark => 
+        bookmark.isPublic === options.isPublic
+      );
+    }
+    
+    // Filtrage par plage de dates
+    if (options.dateRange) {
+      filteredBookmarks = filteredBookmarks.filter(bookmark => {
+        const bookmarkDate = new Date(bookmark.createdAt);
+        return bookmarkDate >= options.dateRange!.from && bookmarkDate <= options.dateRange!.to;
+      });
+    }
+    
+    // Tri
+    if (options.sortBy) {
+      filteredBookmarks.sort((a, b) => {
+        let aValue: any, bValue: any;
+        
+        switch (options.sortBy) {
+          case 'createdAt':
+          case 'updatedAt':
+          case 'lastAccessed':
+            aValue = new Date(a[options.sortBy]);
+            bValue = new Date(b[options.sortBy]);
+            break;
+          case 'accessCount':
+            aValue = a.accessCount;
+            bValue = b.accessCount;
+            break;
+          case 'priority':
+            const priorityOrder = { high: 3, medium: 2, low: 1 };
+            aValue = priorityOrder[a.priority];
+            bValue = priorityOrder[b.priority];
+            break;
+          default:
+            aValue = a[options.sortBy];
+            bValue = b[options.sortBy];
+        }
+        
+        if (options.sortOrder === 'desc') {
+          return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+        } else {
+          return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
+        }
+      });
+    }
+    
+    // Pagination
+    const totalCount = filteredBookmarks.length;
+    const startIndex = options.offset || 0;
+    const endIndex = startIndex + (options.limit || filteredBookmarks.length);
+    const paginatedBookmarks = filteredBookmarks.slice(startIndex, endIndex);
+    
+    // Générer des suggestions
+    const suggestions = generateBookmarkSuggestions(paginatedBookmarks, options.query);
+    
+    // Générer les statistiques
+    const statistics = generateBookmarkStatistics(baseBookmarks);
+    
+    // Extraire les catégories et tags uniques
+    const categories = extractCategories(baseBookmarks);
+    const tags = extractTags(baseBookmarks);
+    
+    return {
+      bookmarks: paginatedBookmarks,
+      totalCount,
+      suggestions,
+      categories,
+      tags,
+      statistics
+    };
+    
+  } catch (error) {
+    console.error('❌ Erreur recherche avancée bookmarks:', error);
+    throw new Error('Erreur lors de la recherche avancée des bookmarks');
+  }
+}
+
+/**
+ * Génère des suggestions basées sur les bookmarks existants
+ */
+function generateBookmarkSuggestions(bookmarks: Bookmark[], query?: string): string[] {
+  const suggestions: string[] = [];
+  
+  if (query) {
+    // Suggestions basées sur la requête
+    const queryLower = query.toLowerCase();
+    
+    // Suggérer des tags similaires
+    const allTags = bookmarks.flatMap(b => b.tags);
+    const similarTags = allTags.filter(tag => 
+      tag.toLowerCase().includes(queryLower) || queryLower.includes(tag.toLowerCase())
+    );
+    suggestions.push(...similarTags.slice(0, 3));
+    
+    // Suggérer des catégories similaires
+    const categories = bookmarks
+      .map(b => b.category)
+      .filter(Boolean) as string[];
+    const similarCategories = categories.filter(cat => 
+      cat.toLowerCase().includes(queryLower) || queryLower.includes(cat.toLowerCase())
+    );
+    suggestions.push(...similarCategories.slice(0, 2));
+  } else {
+    // Suggestions générales basées sur l'usage
+    const mostUsedTags = getMostUsedTags(bookmarks, 5);
+    suggestions.push(...mostUsedTags);
+    
+    const mostUsedCategories = getMostUsedCategories(bookmarks, 3);
+    suggestions.push(...mostUsedCategories);
+  }
+  
+  return [...new Set(suggestions)].slice(0, 8); // Éliminer les doublons et limiter à 8
+}
+
+/**
+ * Génère les statistiques des bookmarks
+ */
+function generateBookmarkStatistics(bookmarks: Bookmark[]) {
+  const totalBookmarks = bookmarks.length;
+  const pinnedBookmarks = bookmarks.filter(b => b.isPinned).length;
+  const recentBookmarks = bookmarks.filter(b => {
+    const daysSinceCreation = (Date.now() - new Date(b.createdAt).getTime()) / (1000 * 60 * 60 * 24);
+    return daysSinceCreation <= 7;
+  }).length;
+  
+  const mostAccessed = bookmarks.reduce((prev, current) => 
+    current.accessCount > (prev?.accessCount || 0) ? current : prev, null as Bookmark | null
+  );
+  
+  const averageAccessCount = totalBookmarks > 0 
+    ? bookmarks.reduce((sum, b) => sum + b.accessCount, 0) / totalBookmarks 
+    : 0;
+  
+  return {
+    totalBookmarks,
+    pinnedBookmarks,
+    recentBookmarks,
+    mostAccessed,
+    averageAccessCount
+  };
+}
+
+/**
+ * Extrait les catégories uniques avec leur nombre d'occurrences
+ */
+function extractCategories(bookmarks: Bookmark[]): Array<{ name: string; count: number }> {
+  const categoryCount: Record<string, number> = {};
+  
+  bookmarks.forEach(bookmark => {
+    if (bookmark.category) {
+      categoryCount[bookmark.category] = (categoryCount[bookmark.category] || 0) + 1;
+    }
+  });
+  
+  return Object.entries(categoryCount)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+/**
+ * Extrait les tags uniques avec leur nombre d'occurrences
+ */
+function extractTags(bookmarks: Bookmark[]): Array<{ name: string; count: number }> {
+  const tagCount: Record<string, number> = {};
+  
+  bookmarks.forEach(bookmark => {
+    bookmark.tags.forEach(tag => {
+      tagCount[tag] = (tagCount[tag] || 0) + 1;
+    });
+  });
+  
+  return Object.entries(tagCount)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+/**
+ * Récupère les tags les plus utilisés
+ */
+function getMostUsedTags(bookmarks: Bookmark[], limit: number): string[] {
+  const tagCount: Record<string, number> = {};
+  
+  bookmarks.forEach(bookmark => {
+    bookmark.tags.forEach(tag => {
+      tagCount[tag] = (tagCount[tag] || 0) + 1;
+    });
+  });
+  
+  return Object.entries(tagCount)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, limit)
+    .map(([tag]) => tag);
+}
+
+/**
+ * Récupère les catégories les plus utilisées
+ */
+function getMostUsedCategories(bookmarks: Bookmark[], limit: number): string[] {
+  const categoryCount: Record<string, number> = {};
+  
+  bookmarks.forEach(bookmark => {
+    if (bookmark.category) {
+      categoryCount[bookmark.category] = (categoryCount[bookmark.category] || 0) + 1;
+    }
+  });
+  
+  return Object.entries(categoryCount)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, limit)
+    .map(([category]) => category);
+}
+
+/**
+ * Crée un bookmark intelligent avec suggestions IA
+ */
+export async function createIntelligentBookmark(
+  bookmarkData: Omit<Bookmark, 'id' | 'createdAt' | 'updatedAt' | 'accessCount'>,
+  userId: string
+): Promise<IntelligentBookmark> {
+  try {
+    // Créer le bookmark de base
+    const bookmark = await createBookmark({
+      ...bookmarkData,
+      accessCount: 0
+    });
+    
+    // Enrichir avec des fonctionnalités intelligentes
+    const intelligentBookmark: IntelligentBookmark = {
+      ...bookmark,
+      relevanceScore: calculateBookmarkRelevance(bookmark),
+      suggestedTags: generateSuggestedTags(bookmark),
+      suggestedCategory: generateSuggestedCategory(bookmark),
+      relatedBookmarks: findRelatedBookmarks(bookmark, userId),
+      accessPattern: analyzeAccessPattern(bookmark),
+      aiSummary: await generateAISummary(bookmark),
+      quickActions: generateQuickActions(bookmark)
+    };
+    
+    return intelligentBookmark;
+  } catch (error) {
+    console.error('❌ Erreur création bookmark intelligent:', error);
+    throw new Error('Erreur lors de la création du bookmark intelligent');
+  }
+}
+
+/**
+ * Calcule le score de pertinence d'un bookmark
+ */
+function calculateBookmarkRelevance(bookmark: Bookmark): number {
+  let score = 0;
+  
+  // Score basé sur l'accès récent
+  if (bookmark.lastAccessed) {
+    const daysSinceAccess = (Date.now() - new Date(bookmark.lastAccessed).getTime()) / (1000 * 60 * 60 * 24);
+    score += Math.max(0, 1 - daysSinceAccess / 30) * 0.3; // Décroît sur 30 jours
+  }
+  
+  // Score basé sur la fréquence d'accès
+  score += Math.min(bookmark.accessCount / 10, 1) * 0.25;
+  
+  // Score basé sur les tags (plus de tags = plus pertinent)
+  score += Math.min(bookmark.tags.length / 5, 1) * 0.15;
+  
+  // Score basé sur la priorité
+  const priorityScore = { high: 1, medium: 0.6, low: 0.3 };
+  score += priorityScore[bookmark.priority] * 0.15;
+  
+  // Score basé sur l'épinglage
+  if (bookmark.isPinned) score += 0.1;
+  
+  // Score basé sur la description (plus de détails = plus pertinent)
+  if (bookmark.description && bookmark.description.length > 20) {
+    score += 0.05;
+  }
+  
+  return Math.min(score, 1);
+}
+
+/**
+ * Génère des tags suggérés basés sur le contenu
+ */
+function generateSuggestedTags(bookmark: Bookmark): string[] {
+  const suggestions: string[] = [];
+  const content = [
+    bookmark.title,
+    bookmark.description,
+    bookmark.metadata.excerpt || ''
+  ].join(' ').toLowerCase();
+  
+  // Tags basés sur le type
+  const typeTags: Record<BookmarkType, string[]> = {
+    document: ['document', 'fichier', 'ressource'],
+    note: ['note', 'mémo', 'idée', 'pense'],
+    conversation: ['chat', 'discussion', 'ia', 'conversation'],
+    flashcard: ['carte', 'révision', 'étude', 'mémoire'],
+    quiz: ['quiz', 'test', 'examen', 'évaluation'],
+    folder: ['dossier', 'collection', 'groupe'],
+    website: ['site', 'web', 'lien', 'url'],
+    article: ['article', 'lecture', 'info', 'actualité'],
+    video: ['vidéo', 'multimédia', 'visual'],
+    tool: ['outil', 'utilitaire', 'service'],
+    resource: ['ressource', 'aide', 'guide']
+  };
+  
+  if (typeTags[bookmark.type]) {
+    suggestions.push(...typeTags[bookmark.type]);
+  }
+  
+  // Tags basés sur les mots-clés dans le contenu
+  const keywords = ['important', 'urgent', 'à suivre', 'référence', 'favori', 'projet', 'travail', 'personnel'];
+  keywords.forEach(keyword => {
+    if (content.includes(keyword)) {
+      suggestions.push(keyword);
+    }
+  });
+  
+  return [...new Set(suggestions)].slice(0, 5);
+}
+
+/**
+ * Génère une catégorie suggérée
+ */
+function generateSuggestedCategory(bookmark: Bookmark): string {
+  const content = bookmark.title.toLowerCase();
+  
+  // Catégories basées sur les mots-clés
+  const categoryKeywords: Record<string, string[]> = {
+    'Travail': ['projet', 'travail', 'professionnel', 'bureau', 'meeting'],
+    'Personnel': ['personnel', 'privé', 'maison', 'famille', 'vie'],
+    'Études': ['étude', 'cours', 'formation', 'apprentissage', 'éducation'],
+    'Loisirs': ['loisir', 'hobby', 'divertissement', 'jeu', 'passion'],
+    'Technologie': ['tech', 'programmation', 'développement', 'code', 'software'],
+    'Santé': ['santé', 'médical', 'bien-être', 'sport', 'exercice'],
+    'Finance': ['argent', 'budget', 'finance', 'investissement', 'épargne'],
+    'Voyage': ['voyage', 'destination', 'hôtel', 'avion', 'vacances'],
+    'Recettes': ['recette', 'cuisine', 'nourriture', 'restaurant', 'plat'],
+    'Actualités': ['actualité', 'news', 'info', 'journal', 'média']
+  };
+  
+  for (const [category, keywords] of Object.entries(categoryKeywords)) {
+    if (keywords.some(keyword => content.includes(keyword))) {
+      return category;
+    }
+  }
+  
+  return 'Général';
+}
+
+/**
+ * Trouve des bookmarks similaires
+ */
+async function findRelatedBookmarks(bookmark: Bookmark, userId: string): Promise<string[]> {
+  try {
+    const userBookmarks = await getBookmarks({ userId });
+    
+    const relatedBookmarks = userBookmarks
+      .filter(b => b.id !== bookmark.id)
+      .filter(b => {
+        // Mêmes tags
+        const commonTags = b.tags.filter(tag => bookmark.tags.includes(tag));
+        if (commonTags.length >= 2) return true;
+        
+        // Même type
+        if (b.type === bookmark.type && b.targetType === bookmark.targetType) return true;
+        
+        // Même catégorie
+        if (b.category === bookmark.category) return true;
+        
+        // Titre similaire
+        const titleSimilarity = calculateStringSimilarity(b.title, bookmark.title);
+        if (titleSimilarity > 0.7) return true;
+        
+        return false;
+      })
+      .slice(0, 5)
+      .map(b => b.id);
+    
+    return relatedBookmarks;
+  } catch (error) {
+    console.error('❌ Erreur recherche bookmarks similaires:', error);
+    return [];
+  }
+}
+
+/**
+ * Calcule la similarité entre deux chaînes
+ */
+function calculateStringSimilarity(str1: string, str2: string): number {
+  const s1 = str1.toLowerCase();
+  const s2 = str2.toLowerCase();
+  const longer = s1.length > s2.length ? s1 : s2;
+  const shorter = s1.length > s2.length ? s2 : s1;
+  
+  if (longer.length === 0) return 1;
+  
+  const editDistance = levenshteinDistance(longer, shorter);
+  return (longer.length - editDistance) / longer.length;
+}
+
+/**
+ * Distance de Levenshtein simplifiée
+ */
+function levenshteinDistance(str1: string, str2: string): number {
+  const matrix = [];
+  
+  for (let i = 0; i <= str2.length; i++) {
+    matrix[i] = [i];
+  }
+  
+  for (let j = 0; j <= str1.length; j++) {
+    matrix[0][j] = j;
+  }
+  
+  for (let i = 1; i <= str2.length; i++) {
+    for (let j = 1; j <= str1.length; j++) {
+      if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+  
+  return matrix[str2.length][str1.length];
+}
+
+/**
+ * Analyse le pattern d'accès d'un bookmark
+ */
+function analyzeAccessPattern(bookmark: Bookmark): IntelligentBookmark['accessPattern'] {
+  const pattern: IntelligentBookmark['accessPattern'] = {
+    frequency: 'rarely',
+    bestTimeOfDay: undefined,
+    lastAccessPattern: undefined
+  };
+  
+  // Analyser la fréquence d'accès
+  if (bookmark.lastAccessed) {
+    const daysSinceCreation = (Date.now() - new Date(bookmark.createdAt).getTime()) / (1000 * 60 * 60 * 24);
+    const daysSinceLastAccess = (Date.now() - new Date(bookmark.lastAccessed).getTime()) / (1000 * 60 * 60 * 24);
+    
+    if (daysSinceCreation > 0) {
+      const averageDaysBetweenAccess = daysSinceCreation / bookmark.accessCount;
+      
+      if (averageDaysBetweenAccess < 1) pattern.frequency = 'daily';
+      else if (averageDaysBetweenAccess < 7) pattern.frequency = 'weekly';
+      else if (averageDaysBetweenAccess < 30) pattern.frequency = 'monthly';
+      else pattern.frequency = 'rarely';
+    }
+    
+    // Heure d'accès optimale (basée sur le dernier accès)
+    const lastAccessHour = new Date(bookmark.lastAccessed).getHours();
+    if (lastAccessHour >= 9 && lastAccessHour <= 11) pattern.bestTimeOfDay = 'morning';
+    else if (lastAccessHour >= 14 && lastAccessHour <= 16) pattern.bestTimeOfDay = 'afternoon';
+    else if (lastAccessHour >= 19 && lastAccessHour <= 21) pattern.bestTimeOfDay = 'evening';
+  }
+  
+  return pattern;
+}
+
+/**
+ * Génère un résumé IA (placeholder pour l'intégration avec une vraie IA)
+ */
+async function generateAISummary(bookmark: Bookmark): Promise<string> {
+  // Placeholder pour l'intégration avec ChatGPT ou Claude
+  // Dans une vraie implémentation, on enverrait le contenu à l'IA
+  
+  const summary = `Bookmark: ${bookmark.title}`;
+  
+  if (bookmark.description) {
+    return `${summary}\n${bookmark.description}`;
+  }
+  
+  if (bookmark.metadata.excerpt) {
+    const excerpt = bookmark.metadata.excerpt.substring(0, 200);
+    return `${summary}\n${excerpt}${bookmark.metadata.excerpt.length > 200 ? '...' : ''}`;
+  }
+  
+  return summary;
+}
+
+/**
+ * Génère des actions rapides pour un bookmark
+ */
+function generateQuickActions(bookmark: Bookmark): string[] {
+  const actions: string[] = [];
+  
+  // Actions basées sur le type
+  switch (bookmark.type) {
+    case 'document':
+      actions.push('Ouvrir le document', 'Télécharger', 'Partager');
+      break;
+    case 'website':
+      actions.push('Visiter le site', 'Ajouter aux favoris du navigateur');
+      break;
+    case 'video':
+      actions.push('Lire la vidéo', 'Ajouter à regarder plus tard');
+      break;
+    case 'article':
+      actions.push('Lire l\'article', 'Enregistrer pour plus tard');
+      break;
+    default:
+      actions.push('Ouvrir', 'Partager', 'Modifier');
+  }
+  
+  // Actions basées sur les métadonnées
+  if (bookmark.url) {
+    actions.push('Copier le lien');
+  }
+  
+  if (bookmark.tags.includes('important')) {
+    actions.push('Ajouter rappel');
+  }
+  
+  return actions.slice(0, 4);
+}
+
+/**
+ * Exporte les bookmarks en multiple formats
+ */
+export function exportBookmarks(
+  bookmarks: Bookmark[],
+  format: 'json' | 'csv' | 'html' | 'md',
+  includeMetadata: boolean = true
+): string {
+  switch (format) {
+    case 'json':
+      return JSON.stringify({
+        bookmarks,
+        exportedAt: new Date().toISOString(),
+        totalCount: bookmarks.length,
+        includeMetadata
+      }, null, 2);
+    
+    case 'csv':
+      return exportBookmarksToCSV(bookmarks, includeMetadata);
+    
+    case 'html':
+      return exportBookmarksToHTML(bookmarks, includeMetadata);
+    
+    case 'md':
+      return exportBookmarksToMarkdown(bookmarks, includeMetadata);
+    
+    default:
+      return JSON.stringify(bookmarks, null, 2);
+  }
+}
+
+/**
+ * Export CSV des bookmarks
+ */
+function exportBookmarksToCSV(bookmarks: Bookmark[], includeMetadata: boolean): string {
+  const headers = [
+    'Titre',
+    'Description',
+    'URL',
+    'Type',
+    'Type Cible',
+    'Tags',
+    'Catégorie',
+    'Priorité',
+    'Épinglé',
+    'Public',
+    'Créé le',
+    'Dernier accès',
+    'Nombre d\'accès'
+  ];
+  
+  if (includeMetadata) {
+    headers.push('Extrait', 'Nombre de mots');
+  }
+  
+  const csvContent = [
+    headers.join(','),
+    ...bookmarks.map(bookmark => [
+      `"${bookmark.title}"`,
+      `"${bookmark.description || ''}"`,
+      `"${bookmark.url || ''}"`,
+      bookmark.type,
+      bookmark.targetType,
+      `"${bookmark.tags.join(';')}"`,
+      `"${bookmark.category || ''}"`,
+      bookmark.priority,
+      bookmark.isPinned ? 'Oui' : 'Non',
+      bookmark.isPublic ? 'Oui' : 'Non',
+      bookmark.createdAt,
+      bookmark.lastAccessed || '',
+      bookmark.accessCount,
+      ...(includeMetadata ? [
+        `"${(bookmark.metadata.excerpt || '').substring(0, 100).replace(/"/g, '""')}"`,
+        bookmark.metadata.wordCount || ''
+      ] : [])
+    ].join(','))
+  ].join('\n');
+  
+  return csvContent;
+}
+
+/**
+ * Export HTML des bookmarks
+ */
+function exportBookmarksToHTML(bookmarks: Bookmark[], includeMetadata: boolean): string {
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Export Bookmarks</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    .bookmark { border: 1px solid #ddd; margin: 10px 0; padding: 15px; border-radius: 5px; }
+    .title { font-weight: bold; color: #333; }
+    .description { color: #666; margin: 5px 0; }
+    .metadata { font-size: 0.9em; color: #888; }
+    .tags { margin: 10px 0; }
+    .tag { background: #e1e1e1; padding: 2px 6px; border-radius: 3px; margin-right: 5px; font-size: 0.8em; }
+  </style>
+</head>
+<body>
+  <h1>Mes Bookmarks (${bookmarks.length})</h1>
+  <p>Exporté le ${new Date().toLocaleString('fr-FR')}</p>
+  ${bookmarks.map(bookmark => `
+    <div class="bookmark">
+      <div class="title">${bookmark.title}</div>
+      ${bookmark.description ? `<div class="description">${bookmark.description}</div>` : ''}
+      ${bookmark.url ? `<div class="metadata"><a href="${bookmark.url}" target="_blank">${bookmark.url}</a></div>` : ''}
+      <div class="metadata">
+        Type: ${bookmark.type} | Catégorie: ${bookmark.category || 'Non définie'} | Priorité: ${bookmark.priority}
+        ${bookmark.isPinned ? ' | 📌 Épinglé' : ''}
+      </div>
+      ${bookmark.tags.length > 0 ? `
+        <div class="tags">
+          ${bookmark.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+        </div>
+      ` : ''}
+      ${includeMetadata && bookmark.metadata.excerpt ? `
+        <div class="metadata">
+          <strong>Extrait:</strong> ${bookmark.metadata.excerpt.substring(0, 200)}${bookmark.metadata.excerpt.length > 200 ? '...' : ''}
+        </div>
+      ` : ''}
+    </div>
+  `).join('')}
+</body>
+</html>`;
+  
+  return html;
+}
+
+/**
+ * Export Markdown des bookmarks
+ */
+function exportBookmarksToMarkdown(bookmarks: Bookmark[], includeMetadata: boolean): string {
+  let markdown = `# Mes Bookmarks (${bookmarks.length})\n\n`;
+  markdown += `Exporté le ${new Date().toLocaleString('fr-FR')}\n\n`;
+  
+  bookmarks.forEach((bookmark, index) => {
+    markdown += `## ${index + 1}. ${bookmark.title}\n\n`;
+    
+    if (bookmark.description) {
+      markdown += `**Description:** ${bookmark.description}\n\n`;
+    }
+    
+    if (bookmark.url) {
+      markdown += `**Lien:** [${bookmark.url}](${bookmark.url})\n\n`;
+    }
+    
+    markdown += `**Type:** ${bookmark.type}\n`;
+    markdown += `**Catégorie:** ${bookmark.category || 'Non définie'}\n`;
+    markdown += `**Priorité:** ${bookmark.priority}\n`;
+    markdown += `**Accès:** ${bookmark.accessCount}\n`;
+    
+    if (bookmark.tags.length > 0) {
+      markdown += `**Tags:** ${bookmark.tags.join(', ')}\n`;
+    }
+    
+    if (bookmark.isPinned) {
+      markdown += `📌 Épinglé\n`;
+    }
+    
+    if (includeMetadata && bookmark.metadata.excerpt) {
+      markdown += `\n**Extrait:**\n> ${bookmark.metadata.excerpt.substring(0, 200)}${bookmark.metadata.excerpt.length > 200 ? '...' : ''}\n`;
+    }
+    
+    markdown += '\n---\n\n';
+  });
+  
+  return markdown;
+}
+
 export const getBookmarkSuggestions = (userId: string, limit?: number) => 
   bookmarksService.getBookmarkSuggestions(userId, limit);

@@ -16,15 +16,33 @@ import {
   Check,
   Upload,
 } from 'lucide-react';
+import { ThemeSettingsPanel } from '../components/ThemeSettingsPanel';
+import { OfflineSettingsPanel } from '../components/OfflineSettingsPanel';
+import { LanguageSelectorPanel } from '../components/LanguageSelectorPanel';
+import { ImageOptimizationPanel } from '../components/ImageOptimizationPanel';
+import { OAuthProvidersPanel } from '../components/OAuthProvidersPanel';
+import { RedisCachePanel } from '../components/RedisCachePanel';
+import { BookmarksPanel } from '../components/BookmarksPanel';
+import { AcademicCitationPanel } from '../components/AcademicCitationPanel';
+import { CompressionPanel } from '../components/CompressionPanel';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, uploadFile } from '../lib/supabase';
 import { toast } from 'sonner';
 
-type SettingsSection = 'profile' | 'notifications' | 'security' | 'preferences';
+type SettingsSection = 'profile' | 'notifications' | 'security' | 'preferences' | 'appearance' | 'offline' | 'language' | 'advanced';
 
 export function Settings() {
   const { profile, updateProfile } = useAuth();
   const [activeSection, setActiveSection] = useState<SettingsSection>('profile');
+  const [showThemePanel, setShowThemePanel] = useState(false);
+  const [showOfflinePanel, setShowOfflinePanel] = useState(false);
+  const [showLanguagePanel, setShowLanguagePanel] = useState(false);
+  const [showImageOptimizationPanel, setShowImageOptimizationPanel] = useState(false);
+  const [showOAuthProvidersPanel, setShowOAuthProvidersPanel] = useState(false);
+  const [showRedisCachePanel, setShowRedisCachePanel] = useState(false);
+  const [showBookmarksPanel, setShowBookmarksPanel] = useState(false);
+  const [showAcademicCitationPanel, setShowAcademicCitationPanel] = useState(false);
+  const [showCompressionPanel, setShowCompressionPanel] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -122,8 +140,12 @@ export function Settings() {
   const sections = [
     { id: 'profile', label: 'Profil', icon: User },
     { id: 'notifications', label: 'Notifications', icon: Bell },
-    { id: 'security', label: 'Securite', icon: Shield },
-    { id: 'preferences', label: 'Preferences', icon: Palette },
+    { id: 'security', label: 'Sécurité', icon: Shield },
+    { id: 'preferences', label: 'Préférences', icon: Palette },
+    { id: 'appearance', label: 'Apparence', icon: Moon },
+    { id: 'offline', label: 'Hors Ligne', icon: Smartphone },
+    { id: 'language', label: 'Langue', icon: Globe },
+    { id: 'advanced', label: 'Avancé', icon: Key },
   ];
 
   return (
@@ -448,6 +470,217 @@ export function Settings() {
               </div>
             </div>
           )}
+
+          {activeSection === 'appearance' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">Apparence avancee</h3>
+                <p className="text-sm text-gray-500">Personnalisez l'interface utilisateur</p>
+              </div>
+              <div className="space-y-4">
+                <div className="p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl border border-purple-100">
+                  <h4 className="font-medium text-gray-900 mb-2">Theme et accessibilite</h4>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Ouvrez le panneau complet pour acceder aux options de theme, taille de police, et accessibilite.
+                  </p>
+                  <button
+                    onClick={() => setShowThemePanel(true)}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                  >
+                    Ouvrir les parametres d'apparence
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeSection === 'offline' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">Mode hors ligne</h3>
+                <p className="text-sm text-gray-500">Gerez les parametres PWA et hors ligne</p>
+              </div>
+              <div className="space-y-4">
+                <div className="p-4 bg-gradient-to-r from-teal-50 to-blue-50 rounded-xl border border-teal-100">
+                  <h4 className="font-medium text-gray-900 mb-2">PWA et synchronisation</h4>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Installez l'application, gerez le cache et configurez les notifications push.
+                  </p>
+                  <button
+                    onClick={() => setShowOfflinePanel(true)}
+                    className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+                  >
+                    Ouvrir les parametres hors ligne
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeSection === 'language' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">Langue et region</h3>
+                <p className="text-sm text-gray-500">Personnalisez la langue de l'interface</p>
+              </div>
+              <div className="space-y-4">
+                <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
+                  <h4 className="font-medium text-gray-900 mb-2">Selection de la langue</h4>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Choisissez votre langue preferee parmi FR, EN, ES et configurez les formats de date/nombre.
+                  </p>
+                  <button
+                    onClick={() => setShowLanguagePanel(true)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Choisir la langue
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeSection === 'advanced' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">Paramètres avancés</h3>
+                <p className="text-sm text-gray-500">Configuration technique et optimisations</p>
+              </div>
+              <div className="space-y-4">
+                <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-100">
+                  <h4 className="font-medium text-gray-900 mb-2">Optimisation des images</h4>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Configurez la compression WebP, la qualité et le lazy loading.
+                  </p>
+                  <button
+                    onClick={() => setShowImageOptimizationPanel(true)}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    Configurer les images
+                  </button>
+                </div>
+
+                <div className="p-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border border-blue-100">
+                  <h4 className="font-medium text-gray-900 mb-2">Comptes connectés</h4>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Connectez Google, Facebook, Microsoft pour importer des documents.
+                  </p>
+                  <button
+                    onClick={() => setShowOAuthProvidersPanel(true)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Gérer les connexions
+                  </button>
+                </div>
+
+                <div className="p-4 bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl border border-orange-100">
+                  <h4 className="font-medium text-gray-900 mb-2">Cache Redis</h4>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Monitoring du cache, statistiques de performance et gestion.
+                  </p>
+                  <button
+                    onClick={() => setShowRedisCachePanel(true)}
+                    className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+                  >
+                    Voir le monitoring
+                  </button>
+                </div>
+
+                <div className="p-4 bg-gradient-to-r from-yellow-50 to-amber-50 rounded-xl border border-yellow-100">
+                  <h4 className="font-medium text-gray-900 mb-2">Bookmarks</h4>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Gérez vos bookmarks, collections et catégories.
+                  </p>
+                  <button
+                    onClick={() => setShowBookmarksPanel(true)}
+                    className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors"
+                  >
+                    Gérer les bookmarks
+                  </button>
+                </div>
+
+                <div className="p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-100">
+                  <h4 className="font-medium text-gray-900 mb-2">Citations Académiques</h4>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Gérez les citations APA, MLA, Chicago et exportez.
+                  </p>
+                  <button
+                    onClick={() => setShowAcademicCitationPanel(true)}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                  >
+                    Gérer les citations
+                  </button>
+                </div>
+
+                <div className="p-4 bg-gradient-to-r from-teal-50 to-green-50 rounded-xl border border-teal-100">
+                  <h4 className="font-medium text-gray-900 mb-2">Compression</h4>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Compressez fichiers avec GZIP, Brotli, LZ4.
+                  </p>
+                  <button
+                    onClick={() => setShowCompressionPanel(true)}
+                    className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+                  >
+                    Compresser des fichiers
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Theme Settings Panel */}
+          <ThemeSettingsPanel
+            isOpen={showThemePanel}
+            onClose={() => setShowThemePanel(false)}
+          />
+
+          {/* Offline Settings Panel */}
+          <OfflineSettingsPanel
+            isOpen={showOfflinePanel}
+            onClose={() => setShowOfflinePanel(false)}
+          />
+
+          {/* Language Selector Panel */}
+          <LanguageSelectorPanel
+            isOpen={showLanguagePanel}
+            onClose={() => setShowLanguagePanel(false)}
+          />
+
+          {/* Image Optimization Panel */}
+          <ImageOptimizationPanel
+            isOpen={showImageOptimizationPanel}
+            onClose={() => setShowImageOptimizationPanel(false)}
+          />
+
+          {/* OAuth Providers Panel */}
+          <OAuthProvidersPanel
+            isOpen={showOAuthProvidersPanel}
+            onClose={() => setShowOAuthProvidersPanel(false)}
+          />
+
+          {/* Redis Cache Panel */}
+          <RedisCachePanel
+            isOpen={showRedisCachePanel}
+            onClose={() => setShowRedisCachePanel(false)}
+          />
+
+          {/* Bookmarks Panel */}
+          <BookmarksPanel
+            isOpen={showBookmarksPanel}
+            onClose={() => setShowBookmarksPanel(false)}
+          />
+
+          {/* Academic Citation Panel */}
+          <AcademicCitationPanel
+            isOpen={showAcademicCitationPanel}
+            onClose={() => setShowAcademicCitationPanel(false)}
+          />
+
+          {/* Compression Panel */}
+          <CompressionPanel
+            isOpen={showCompressionPanel}
+            onClose={() => setShowCompressionPanel(false)}
+          />
         </div>
       </div>
     </div>

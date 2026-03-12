@@ -927,5 +927,781 @@ export const sendChatMessage = (
 export const getSessionParticipants = (sessionId: string) => 
   realtimeCollaborationService.getSessionParticipants(sessionId);
 
+// NOUVELLES FONCTIONNALITÉS AVANCÉES
+
+/**
+ * Interface pour les opérations avancées de collaboration
+ */
+export interface AdvancedCollaborationFeatures {
+  versionControl: boolean;
+  conflictResolution: 'manual' | 'auto' | 'merge';
+  presenceIndicators: boolean;
+  voiceChat: boolean;
+  videoChat: boolean;
+  screenSharing: boolean;
+  annotationTools: boolean;
+  commentSystem: boolean;
+  taskManagement: boolean;
+  fileSharing: boolean;
+}
+
+/**
+ * Contrôle de version pour les documents collaboratifs
+ */
+export interface DocumentVersion {
+  id: string;
+  sessionId: string;
+  version: number;
+  content: string;
+  changes: DocumentChange[];
+  authorId: string;
+  authorName: string;
+  timestamp: Date;
+  description?: string;
+  isAutoSave: boolean;
+  checksum: string;
+}
+
+/**
+ * Changement dans le document
+ */
+export interface DocumentChange {
+  id: string;
+  type: 'insert' | 'delete' | 'replace' | 'format';
+  position: CursorPosition;
+  content?: string;
+  oldContent?: string;
+  authorId: string;
+  timestamp: Date;
+  applied: boolean;
+}
+
+/**
+ * Résolution de conflit
+ */
+export interface ConflictResolution {
+  conflictId: string;
+  sessionId: string;
+  changes: DocumentChange[];
+  conflictingChanges: DocumentChange[];
+  resolution: 'accept' | 'reject' | 'merge' | 'pending';
+  resolvedBy?: string;
+  resolvedAt?: Date;
+  resolutionMethod: string;
+}
+
+/**
+ * Annotation collaborative
+ */
+export interface CollaborativeAnnotation {
+  id: string;
+  sessionId: string;
+  authorId: string;
+  authorName: string;
+  type: 'comment' | 'highlight' | 'drawing' | 'suggestion';
+  position: {
+    x: number;
+    y: number;
+    width?: number;
+    height?: number;
+  };
+  content?: string;
+  color: string;
+  isResolved: boolean;
+  replies: AnnotationReply[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * Réponse à une annotation
+ */
+export interface AnnotationReply {
+  id: string;
+  authorId: string;
+  authorName: string;
+  content: string;
+  createdAt: Date;
+}
+
+/**
+ * Tâche collaborative
+ */
+export interface CollaborativeTask {
+  id: string;
+  sessionId: string;
+  title: string;
+  description?: string;
+  assigneeId?: string;
+  assigneeName?: string;
+  creatorId: string;
+  creatorName: string;
+  status: 'todo' | 'in_progress' | 'review' | 'done';
+  priority: 'low' | 'medium' | 'high';
+  dueDate?: Date;
+  tags: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * Fichier partagé dans la collaboration
+ */
+export interface SharedFile {
+  id: string;
+  sessionId: string;
+  fileName: string;
+  fileSize: number;
+  fileType: string;
+  fileUrl: string;
+  uploadedBy: string;
+  uploadedByName: string;
+  uploadedAt: Date;
+  isPublic: boolean;
+  downloadCount: number;
+}
+
+/**
+ * Session de chat vocal
+ */
+export interface VoiceChatSession {
+  id: string;
+  sessionId: string;
+  participants: string[];
+  isActive: boolean;
+  startedAt: Date;
+  endedAt?: Date;
+  recordingUrl?: string;
+}
+
+/**
+ * Crée une nouvelle version de document
+ */
+export async function createDocumentVersion(
+  sessionId: string,
+  content: string,
+  changes: DocumentChange[],
+  authorId: string,
+  authorName: string,
+  description?: string,
+  isAutoSave: boolean = false
+): Promise<DocumentVersion> {
+  try {
+    const checksum = generateContentChecksum(content);
+    
+    const versionData = {
+      session_id: sessionId,
+      version: await getNextVersionNumber(sessionId),
+      content,
+      changes: changes.map(c => ({
+        ...c,
+        timestamp: c.timestamp.toISOString(),
+        position: {
+          line: c.position.line,
+          column: c.position.column,
+          length: c.position.length
+        }
+      })),
+      author_id: authorId,
+      author_name: authorName,
+      timestamp: new Date().toISOString(),
+      description: description || (isAutoSave ? 'Sauvegarde automatique' : 'Modification manuelle'),
+      is_auto_save: isAutoSave,
+      checksum
+    };
+
+    const { data, error } = await supabase
+      .from('document_versions')
+      .insert([versionData])
+      .select()
+      .single();
+
+    if (error) throw error;
+    if (!data) throw new Error('Échec de la création de version');
+
+    return mapVersionFromDB(data);
+  } catch (error) {
+    console.error('❌ Erreur création version document:', error);
+    throw new Error('Erreur lors de la création de la version du document');
+  }
+}
+
+/**
+ * Récupère l'historique des versions d'un document
+ */
+export async function getDocumentVersions(
+  sessionId: string,
+  limit: number = 50
+): Promise<DocumentVersion[]> {
+  try {
+    const { data, error } = await supabase
+      .from('document_versions')
+      .select('*')
+      .eq('session_id', sessionId)
+      .order('version', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    if (!data) return [];
+
+    return data.map(mapVersionFromDB);
+  } catch (error) {
+    console.error('❌ Erreur récupération versions document:', error);
+    throw new Error('Erreur lors de la récupération des versions du document');
+  }
+}
+
+/**
+ * Détecte et résout les conflits de collaboration
+ */
+export async function detectAndResolveConflicts(
+  sessionId: string,
+  changes: DocumentChange[],
+  resolutionMode: 'manual' | 'auto' | 'merge' = 'auto'
+): Promise<ConflictResolution[]> {
+  try {
+    const conflicts: ConflictResolution[] = [];
+    
+    // Récupérer les changements récents
+    const { data: recentChanges, error: changesError } = await supabase
+      .from('document_changes')
+      .select('*')
+      .eq('session_id', sessionId)
+      .eq('applied', false)
+      .order('timestamp', { ascending: true });
+
+    if (changesError) throw changesError;
+
+    // Détecter les conflits
+    for (const change of changes) {
+      const conflictingChanges = recentChanges?.filter(rc => 
+        isPositionConflicting(rc.position, change.position) && rc.author_id !== change.authorId
+      ) || [];
+
+      if (conflictingChanges.length > 0) {
+        const conflict: ConflictResolution = {
+          conflictId: generateConflictId(),
+          sessionId,
+          changes: [change],
+          conflictingChanges,
+          resolution: resolutionMode === 'auto' ? 'accept' : 'pending',
+          resolutionMethod: resolutionMode
+        };
+
+        if (resolutionMode === 'auto') {
+          await applyConflictResolution(conflict);
+        }
+
+        conflicts.push(conflict);
+      }
+    }
+
+    return conflicts;
+  } catch (error) {
+    console.error('❌ Erreur détection conflits:', error);
+    throw new Error('Erreur lors de la détection des conflits');
+  }
+}
+
+/**
+ * Vérifie si deux positions sont en conflit
+ */
+function isPositionConflicting(pos1: any, pos2: CursorPosition): boolean {
+  const line1 = pos1.line;
+  const col1 = pos1.column;
+  const line2 = pos2.line;
+  const col2 = pos2.column;
+
+  if (line1 !== line2) return false;
+  
+  const length1 = pos1.length || 1;
+  const length2 = pos2.length || 1;
+  
+  return !(col1 + length1 <= col2 || col2 + length2 <= col1);
+}
+
+/**
+ * Applique une résolution de conflit
+ */
+async function applyConflictResolution(conflict: ConflictResolution): Promise<void> {
+  try {
+    const resolutionData = {
+      conflict_id: conflict.conflictId,
+      session_id: conflict.sessionId,
+      changes: conflict.changes.map(c => ({
+        ...c,
+        timestamp: c.timestamp.toISOString(),
+        position: {
+          line: c.position.line,
+          column: c.position.column,
+          length: c.position.length
+        }
+      })),
+      conflicting_changes: conflict.conflictingChanges.map(c => ({
+        ...c,
+        timestamp: c.timestamp.toISOString(),
+        position: {
+          line: c.position.line,
+          column: c.position.column,
+          length: c.position.length
+        }
+      })),
+      resolution: conflict.resolution,
+      resolved_at: new Date().toISOString(),
+      resolution_method: conflict.resolutionMethod
+    };
+
+    const { error } = await supabase
+      .from('conflict_resolutions')
+      .insert([resolutionData]);
+
+    if (error) throw error;
+
+    // Marquer les changements comme appliqués
+    await markChangesAsApplied(conflict.changes.map(c => c.id));
+  } catch (error) {
+    console.error('❌ Erreur application résolution conflit:', error);
+    throw error;
+  }
+}
+
+/**
+ * Marque les changements comme appliqués
+ */
+async function markChangesAsApplied(changeIds: string[]): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('document_changes')
+      .update({ applied: true })
+      .in('id', changeIds);
+
+    if (error) throw error;
+  } catch (error) {
+    console.error('❌ Erreur marquage changements appliqués:', error);
+  }
+}
+
+/**
+ * Crée une annotation collaborative
+ */
+export async function createCollaborativeAnnotation(
+  sessionId: string,
+  authorId: string,
+  authorName: string,
+  type: 'comment' | 'highlight' | 'drawing' | 'suggestion',
+  position: { x: number; y: number; width?: number; height?: number },
+  content?: string,
+  color: string = '#FF5722'
+): Promise<CollaborativeAnnotation> {
+  try {
+    const annotationData = {
+      session_id: sessionId,
+      author_id: authorId,
+      author_name: authorName,
+      type,
+      position,
+      content: content || null,
+      color,
+      is_resolved: false,
+      replies: [],
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
+      .from('collaborative_annotations')
+      .insert([annotationData])
+      .select()
+      .single();
+
+    if (error) throw error;
+    if (!data) throw new Error('Échec de la création d\'annotation');
+
+    return mapAnnotationFromDB(data);
+  } catch (error) {
+    console.error('❌ Erreur création annotation:', error);
+    throw new Error('Erreur lors de la création de l\'annotation');
+  }
+}
+
+/**
+ * Récupère les annotations d'une session
+ */
+export async function getSessionAnnotations(
+  sessionId: string,
+  includeResolved: boolean = false
+): Promise<CollaborativeAnnotation[]> {
+  try {
+    let query = supabase
+      .from('collaborative_annotations')
+      .select('*')
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: false });
+
+    if (!includeResolved) {
+      query = query.eq('is_resolved', false);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+    if (!data) return [];
+
+    return data.map(mapAnnotationFromDB);
+  } catch (error) {
+    console.error('❌ Erreur récupération annotations:', error);
+    throw new Error('Erreur lors de la récupération des annotations');
+  }
+}
+
+/**
+ * Ajoute une réponse à une annotation
+ */
+export async function addAnnotationReply(
+  annotationId: string,
+  authorId: string,
+  authorName: string,
+  content: string
+): Promise<void> {
+  try {
+    const replyData = {
+      id: generateReplyId(),
+      author_id: authorId,
+      author_name: authorName,
+      content,
+      created_at: new Date().toISOString()
+    };
+
+    const { error } = await supabase.rpc('add_annotation_reply', {
+      annotation_id: annotationId,
+      reply: replyData
+    });
+
+    if (error) throw error;
+  } catch (error) {
+    console.error('❌ Erreur ajout réponse annotation:', error);
+    throw new Error('Erreur lors de l\'ajout de la réponse à l\'annotation');
+  }
+}
+
+/**
+ * Crée une tâche collaborative
+ */
+export async function createCollaborativeTask(
+  sessionId: string,
+  title: string,
+  description?: string,
+  creatorId: string,
+  creatorName: string,
+  assigneeId?: string,
+  assigneeName?: string,
+  priority: 'low' | 'medium' | 'high' = 'medium',
+  dueDate?: Date
+): Promise<CollaborativeTask> {
+  try {
+    const taskData = {
+      session_id: sessionId,
+      title,
+      description: description || null,
+      assignee_id: assigneeId || null,
+      assignee_name: assigneeName || null,
+      creator_id: creatorId,
+      creator_name: creatorName,
+      status: 'todo',
+      priority,
+      due_date: dueDate?.toISOString() || null,
+      tags: [],
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
+      .from('collaborative_tasks')
+      .insert([taskData])
+      .select()
+      .single();
+
+    if (error) throw error;
+    if (!data) throw new Error('Échec de la création de tâche');
+
+    return mapTaskFromDB(data);
+  } catch (error) {
+    console.error('❌ Erreur création tâche collaborative:', error);
+    throw new Error('Erreur lors de la création de la tâche collaborative');
+  }
+}
+
+/**
+ * Récupère les tâches d'une session
+ */
+export async function getSessionTasks(
+  sessionId: string,
+  status?: 'todo' | 'in_progress' | 'review' | 'done'
+): Promise<CollaborativeTask[]> {
+  try {
+    let query = supabase
+      .from('collaborative_tasks')
+      .select('*')
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: false });
+
+    if (status) {
+      query = query.eq('status', status);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+    if (!data) return [];
+
+    return data.map(mapTaskFromDB);
+  } catch (error) {
+    console.error('❌ Erreur récupération tâches:', error);
+    throw new Error('Erreur lors de la récupération des tâches collaboratives');
+  }
+}
+
+/**
+ * Met à jour le statut d'une tâche
+ */
+export async function updateTaskStatus(
+  taskId: string,
+  status: 'todo' | 'in_progress' | 'review' | 'done'
+): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('collaborative_tasks')
+      .update({ 
+        status,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', taskId);
+
+    if (error) throw error;
+  } catch (error) {
+    console.error('❌ Erreur mise à jour statut tâche:', error);
+    throw new Error('Erreur lors de la mise à jour du statut de la tâche');
+  }
+}
+
+/**
+ * Partage un fichier dans une session collaborative
+ */
+export async function shareFileInSession(
+  sessionId: string,
+  fileName: string,
+  fileSize: number,
+  fileType: string,
+  fileUrl: string,
+  uploadedBy: string,
+  uploadedByName: string,
+  isPublic: boolean = false
+): Promise<SharedFile> {
+  try {
+    const fileData = {
+      session_id: sessionId,
+      file_name: fileName,
+      file_size: fileSize,
+      file_type: fileType,
+      file_url: fileUrl,
+      uploaded_by: uploadedBy,
+      uploaded_by_name: uploadedByName,
+      is_public: isPublic,
+      download_count: 0,
+      uploaded_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
+      .from('shared_files')
+      .insert([fileData])
+      .select()
+      .single();
+
+    if (error) throw error;
+    if (!data) throw new Error('Échec du partage de fichier');
+
+    return mapFileFromDB(data);
+  } catch (error) {
+    console.error('❌ Erreur partage fichier:', error);
+    throw new Error('Erreur lors du partage du fichier');
+  }
+}
+
+/**
+ * Récupère les fichiers partagés d'une session
+ */
+export async function getSessionSharedFiles(sessionId: string): Promise<SharedFile[]> {
+  try {
+    const { data, error } = await supabase
+      .from('shared_files')
+      .select('*')
+      .eq('session_id', sessionId)
+      .order('uploaded_at', { ascending: false });
+
+    if (error) throw error;
+    if (!data) return [];
+
+    return data.map(mapFileFromDB);
+  } catch (error) {
+    console.error('❌ Erreur récupération fichiers partagés:', error);
+    throw new Error('Erreur lors de la récupération des fichiers partagés');
+  }
+}
+
+/**
+ * Démarre une session de chat vocal
+ */
+export async function startVoiceChatSession(
+  sessionId: string,
+  participants: string[]
+): Promise<VoiceChatSession> {
+  try {
+    const voiceChatData = {
+      session_id: sessionId,
+      participants,
+      is_active: true,
+      started_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
+      .from('voice_chat_sessions')
+      .insert([voiceChatData])
+      .select()
+      .single();
+
+    if (error) throw error;
+    if (!data) throw new Error('Échec du démarrage du chat vocal');
+
+    return mapVoiceChatFromDB(data);
+  } catch (error) {
+    console.error('❌ Erreur démarrage chat vocal:', error);
+    throw new Error('Erreur lors du démarrage de la session de chat vocal');
+  }
+}
+
+/**
+ * Fonctions utilitaires
+ */
+function generateContentChecksum(content: string): string {
+  // Simple checksum - dans une vraie implémentation, utiliser un algorithme plus robuste
+  let hash = 0;
+  for (let i = 0; i < content.length; i++) {
+    const char = content.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convertir en 32-bit integer
+  }
+  return hash.toString(16);
+}
+
+async function getNextVersionNumber(sessionId: string): Promise<number> {
+  try {
+    const { data, error } = await supabase
+      .from('document_versions')
+      .select('version')
+      .eq('session_id', sessionId)
+      .order('version', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error || !data) return 1;
+    return data.version + 1;
+  } catch (error) {
+    return 1;
+  }
+}
+
+function generateConflictId(): string {
+  return `conflict_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
+function generateReplyId(): string {
+  return `reply_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
+// Fonctions de mapping depuis la base de données
+function mapVersionFromDB(data: any): DocumentVersion {
+  return {
+    id: data.id,
+    sessionId: data.session_id,
+    version: data.version,
+    content: data.content,
+    changes: data.changes.map((c: any) => ({
+      ...c,
+      timestamp: new Date(c.timestamp),
+      position: c.position
+    })),
+    authorId: data.author_id,
+    authorName: data.author_name,
+    timestamp: new Date(data.timestamp),
+    description: data.description,
+    isAutoSave: data.is_auto_save,
+    checksum: data.checksum
+  };
+}
+
+function mapAnnotationFromDB(data: any): CollaborativeAnnotation {
+  return {
+    id: data.id,
+    sessionId: data.session_id,
+    authorId: data.author_id,
+    authorName: data.author_name,
+    type: data.type,
+    position: data.position,
+    content: data.content,
+    color: data.color,
+    isResolved: data.is_resolved,
+    replies: data.replies || [],
+    createdAt: new Date(data.created_at),
+    updatedAt: new Date(data.updated_at)
+  };
+}
+
+function mapTaskFromDB(data: any): CollaborativeTask {
+  return {
+    id: data.id,
+    sessionId: data.session_id,
+    title: data.title,
+    description: data.description,
+    assigneeId: data.assignee_id,
+    assigneeName: data.assignee_name,
+    creatorId: data.creator_id,
+    creatorName: data.creator_name,
+    status: data.status,
+    priority: data.priority,
+    dueDate: data.due_date ? new Date(data.due_date) : undefined,
+    tags: data.tags || [],
+    createdAt: new Date(data.created_at),
+    updatedAt: new Date(data.updated_at)
+  };
+}
+
+function mapFileFromDB(data: any): SharedFile {
+  return {
+    id: data.id,
+    sessionId: data.session_id,
+    fileName: data.file_name,
+    fileSize: data.file_size,
+    fileType: data.file_type,
+    fileUrl: data.file_url,
+    uploadedBy: data.uploaded_by,
+    uploadedByName: data.uploaded_by_name,
+    uploadedAt: new Date(data.uploaded_at),
+    isPublic: data.is_public,
+    downloadCount: data.download_count
+  };
+}
+
+function mapVoiceChatFromDB(data: any): VoiceChatSession {
+  return {
+    id: data.id,
+    sessionId: data.session_id,
+    participants: data.participants,
+    isActive: data.is_active,
+    startedAt: new Date(data.started_at),
+    endedAt: data.ended_at ? new Date(data.ended_at) : undefined,
+    recordingUrl: data.recording_url
+  };
+}
+
 export const getSessionMessages = (sessionId: string, limit?: number) => 
   realtimeCollaborationService.getSessionMessages(sessionId, limit);

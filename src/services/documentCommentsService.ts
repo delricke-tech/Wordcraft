@@ -998,3 +998,679 @@ export const searchComments = (
 
 export const getCommentStats = (targetId?: string, targetType?: string) => 
   documentCommentsService.getCommentStats(targetId, targetType);
+
+// NOUVELLES FONCTIONNALITÉS AVANCÉES
+
+/**
+ * Interface pour les commentaires avancés avec IA
+ */
+export interface AdvancedComment extends DocumentComment {
+  sentiment?: CommentSentiment;
+  aiSummary?: string;
+  suggestedActions?: string[];
+  autoTagged: boolean;
+  priorityScore: number;
+  engagement: CommentEngagement;
+  moderation?: CommentModeration;
+}
+
+/**
+ * Analyse de sentiment pour les commentaires
+ */
+export interface CommentSentiment {
+  score: number; // -1 à 1
+  label: 'positive' | 'neutral' | 'negative';
+  confidence: number; // 0 à 1
+  emotions: {
+    joy: number;
+    anger: number;
+    fear: number;
+    sadness: number;
+    surprise: number;
+    disgust: number;
+  };
+}
+
+/**
+ * Engagement d'un commentaire
+ */
+export interface CommentEngagement {
+  totalViews: number;
+  uniqueViewers: number;
+  averageReadTime: number;
+  responseTime: number; // temps moyen de réponse
+  threadDepth: number;
+  participantCount: number;
+  shareCount: number;
+}
+
+/**
+ * Modération de commentaire
+ */
+export interface CommentModeration {
+  isFlagged: boolean;
+  flags: CommentFlag[];
+  autoModerated: boolean;
+  moderationReason?: string;
+  moderatedAt?: Date;
+  moderatedBy?: string;
+  appealStatus?: 'pending' | 'approved' | 'rejected';
+}
+
+/**
+ * Signalement de commentaire
+ */
+export interface CommentFlag {
+  id: string;
+  reason: 'spam' | 'inappropriate' | 'harassment' | 'offensive' | 'off_topic' | 'other';
+  description?: string;
+  reporterId: string;
+  reporterName: string;
+  createdAt: Date;
+  reviewedAt?: Date;
+  reviewedBy?: string;
+  status: 'pending' | 'reviewed' | 'resolved' | 'dismissed';
+  resolution?: string;
+}
+
+/**
+ * Template de commentaire
+ */
+export interface CommentTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  content: string;
+  variables: CommentTemplateVariable[];
+  tags: string[];
+  category: string;
+  isPublic: boolean;
+  createdBy: string;
+  createdAt: Date;
+  usageCount: number;
+}
+
+/**
+ * Variable de template
+ */
+export interface CommentTemplateVariable {
+  name: string;
+  type: 'text' | 'date' | 'user' | 'custom';
+  defaultValue?: string;
+  required: boolean;
+  description?: string;
+}
+
+/**
+ * Analyse de commentaire avec IA
+ */
+export async function analyzeCommentWithAI(comment: DocumentComment): Promise<AdvancedComment> {
+  try {
+    // Analyse de sentiment (placeholder pour intégration IA)
+    const sentiment = await analyzeSentiment(comment.content);
+    
+    // Résumé IA (placeholder)
+    const aiSummary = await generateAISummary(comment.content);
+    
+    // Actions suggérées (placeholder)
+    const suggestedActions = await generateSuggestedActions(comment, sentiment);
+    
+    // Auto-tagging basé sur le contenu
+    const autoTags = await generateAutoTags(comment.content);
+    
+    // Calcul du score de priorité
+    const priorityScore = calculatePriorityScore(comment, sentiment);
+    
+    // Analyse d'engagement
+    const engagement = await analyzeCommentEngagement(comment.id);
+    
+    // Vérification de modération automatique
+    const moderation = await autoModerateComment(comment);
+    
+    const advancedComment: AdvancedComment = {
+      ...comment,
+      sentiment,
+      aiSummary,
+      suggestedActions,
+      autoTagged: autoTags.length > 0,
+      priorityScore,
+      engagement,
+      moderation
+    };
+    
+    return advancedComment;
+  } catch (error) {
+    console.error('❌ Erreur analyse IA commentaire:', error);
+    throw new Error('Erreur lors de l\'analyse IA du commentaire');
+  }
+}
+
+/**
+ * Analyse de sentiment du contenu
+ */
+async function analyzeSentiment(content: string): Promise<CommentSentiment> {
+  // Placeholder pour intégration avec une vraie IA
+  // Dans une vraie implémentation, on utiliserait une API comme OpenAI ou Claude
+  
+  const sentimentKeywords = {
+    positive: ['excellent', 'super', 'génial', 'parfait', 'bravo', 'bien', 'bon', 'merci', 'félicitations'],
+    negative: ['mauvais', 'horrible', 'terrible', 'décevant', 'problème', 'erreur', 'échec', 'frustrant', 'inacceptable']
+  };
+  
+  let score = 0;
+  const words = content.toLowerCase().split(/\s+/);
+  
+  words.forEach(word => {
+    if (sentimentKeywords.positive.includes(word)) score += 0.2;
+    if (sentimentKeywords.negative.includes(word)) score -= 0.2;
+  });
+  
+  score = Math.max(-1, Math.min(1, score));
+  
+  let label: 'positive' | 'neutral' | 'negative';
+  if (score > 0.1) label = 'positive';
+  else if (score < -0.1) label = 'negative';
+  else label = 'neutral';
+  
+  return {
+    score,
+    label,
+    confidence: Math.abs(score),
+    emotions: {
+      joy: Math.max(0, score),
+      anger: Math.max(0, -score),
+      fear: 0,
+      sadness: Math.max(0, -score * 0.5),
+      surprise: 0,
+      disgust: 0
+    }
+  };
+}
+
+/**
+ * Génère un résumé IA du commentaire
+ */
+async function generateAISummary(content: string): Promise<string> {
+  // Placeholder pour intégration IA
+  const words = content.split(/\s+/);
+  if (words.length <= 20) return content;
+  
+  // Simple résumé basé sur les premières phrases
+  const sentences = content.split(/[.!?]+/);
+  return sentences.slice(0, 2).join('. ') + (sentences.length > 2 ? '...' : '');
+}
+
+/**
+ * Génère des actions suggérées
+ */
+async function generateSuggestedActions(comment: DocumentComment, sentiment: CommentSentiment): Promise<string[]> {
+  const actions: string[] = [];
+  
+  // Actions basées sur le sentiment
+  if (sentiment.label === 'negative') {
+    actions.push('Répondre rapidement pour apaiser la situation');
+    actions.push('Identifier les points de friction');
+    actions.push('Proposer une solution');
+  } else if (sentiment.label === 'positive') {
+    actions.push('Remercier pour le feedback positif');
+    actions.push('Partager avec l\'équipe');
+    actions.push('Utiliser comme témoignage');
+  }
+  
+  // Actions basées sur la priorité
+  if (comment.priority === 'high') {
+    actions.push('Traiter en priorité');
+    actions.push('Notifier les responsables');
+  }
+  
+  // Actions basées sur le type de contenu
+  if (comment.content.includes('?')) {
+    actions.push('Répondre à la question');
+  }
+  
+  if (comment.mentions.length > 0) {
+    actions.push('Notifier les personnes mentionnées');
+  }
+  
+  return actions.slice(0, 3);
+}
+
+/**
+ * Génère des tags automatiques
+ */
+async function generateAutoTags(content: string): Promise<string[]> {
+  const tags: string[] = [];
+  const contentLower = content.toLowerCase();
+  
+  // Tags basés sur les mots-clés
+  const keywordTags = {
+    'bug': ['bug', 'erreur', 'problème'],
+    'feature': ['fonctionnalité', 'feature', 'ajout'],
+    'improvement': ['amélioration', 'améliorer', 'optimiser'],
+    'question': ['?', 'question', 'comment', 'pourquoi'],
+    'urgent': ['urgent', 'rapidement', 'immédiatement'],
+    'feedback': ['feedback', 'avis', 'suggestion'],
+    'documentation': ['documentation', 'doc', 'manuel', 'guide']
+  };
+  
+  Object.entries(keywordTags).forEach(([tag, keywords]) => {
+    if (keywords.some(keyword => contentLower.includes(keyword))) {
+      tags.push(tag);
+    }
+  });
+  
+  return [...new Set(tags)];
+}
+
+/**
+ * Calcule le score de priorité
+ */
+function calculatePriorityScore(comment: DocumentComment, sentiment: CommentSentiment): number {
+  let score = 0;
+  
+  // Score basé sur la priorité existante
+  const priorityScores = { high: 0.8, medium: 0.5, low: 0.2 };
+  score += priorityScores[comment.priority];
+  
+  // Score basé sur le sentiment (négatif = plus prioritaire)
+  if (sentiment.label === 'negative') score += 0.3;
+  else if (sentiment.label === 'positive') score -= 0.1;
+  
+  // Score basé sur les mentions (plus de mentions = plus prioritaire)
+  score += Math.min(comment.mentions.length * 0.1, 0.3);
+  
+  // Score basé sur la longueur (plus long = potentiellement plus important)
+  if (comment.content.length > 200) score += 0.1;
+  
+  // Score basé sur les réactions (plus de réactions = plus important)
+  score += Math.min(comment.reactions.length * 0.05, 0.2);
+  
+  return Math.min(1, Math.max(0, score));
+}
+
+/**
+ * Analyse l'engagement d'un commentaire
+ */
+async function analyzeCommentEngagement(commentId: string): Promise<CommentEngagement> {
+  try {
+    // Récupérer les statistiques d'engagement
+    const { data, error } = await supabase
+      .from('comment_engagement')
+      .select('*')
+      .eq('comment_id', commentId)
+      .single();
+
+    if (error) {
+      // Valeurs par défaut si pas de données
+      return {
+        totalViews: 0,
+        uniqueViewers: 0,
+        averageReadTime: 0,
+        responseTime: 0,
+        threadDepth: 0,
+        participantCount: 0,
+        shareCount: 0
+      };
+    }
+
+    return {
+      totalViews: data.total_views || 0,
+      uniqueViewers: data.unique_viewers || 0,
+      averageReadTime: data.average_read_time || 0,
+      responseTime: data.response_time || 0,
+      threadDepth: data.thread_depth || 0,
+      participantCount: data.participant_count || 0,
+      shareCount: data.share_count || 0
+    };
+  } catch (error) {
+    console.error('❌ Erreur analyse engagement commentaire:', error);
+    return {
+      totalViews: 0,
+      uniqueViewers: 0,
+      averageReadTime: 0,
+      responseTime: 0,
+      threadDepth: 0,
+      participantCount: 0,
+      shareCount: 0
+    };
+  }
+}
+
+/**
+ * Modération automatique de commentaire
+ */
+async function autoModerateComment(comment: DocumentComment): Promise<CommentModeration | undefined> {
+  try {
+    const contentLower = comment.content.toLowerCase();
+    const flaggedWords = ['insulte', 'vulgaire', 'haine', 'menace', 'violence'];
+    const suspiciousPatterns = ['http://', 'https://', '@', 'tel:', 'email:'];
+    
+    const hasInappropriateContent = flaggedWords.some(word => contentLower.includes(word));
+    const hasSuspiciousLinks = suspiciousPatterns.some(pattern => contentLower.includes(pattern));
+    
+    if (hasInappropriateContent || hasSuspiciousLinks) {
+      return {
+        isFlagged: true,
+        flags: [{
+          id: `auto_flag_${Date.now()}`,
+          reason: hasInappropriateContent ? 'inappropriate' : 'spam',
+          reporterId: 'system',
+          reporterName: 'Auto-modération',
+          createdAt: new Date(),
+          status: 'pending'
+        }],
+        autoModerated: true,
+        moderationReason: hasInappropriateContent ? 'Contenu inapproprié détecté' : 'Contenu suspect détecté'
+      };
+    }
+    
+    return undefined;
+  } catch (error) {
+    console.error('❌ Erreur modération automatique:', error);
+    return undefined;
+  }
+}
+
+/**
+ * Crée un template de commentaire
+ */
+export async function createCommentTemplate(
+  name: string,
+  content: string,
+  description?: string,
+  variables: CommentTemplateVariable[] = [],
+  tags: string[] = [],
+  category: string = 'général',
+  isPublic: boolean = false,
+  userId: string
+): Promise<CommentTemplate> {
+  try {
+    const templateData = {
+      name,
+      description: description || null,
+      content,
+      variables,
+      tags,
+      category,
+      is_public: isPublic,
+      created_by: userId,
+      created_at: new Date().toISOString(),
+      usage_count: 0
+    };
+
+    const { data, error } = await supabase
+      .from('comment_templates')
+      .insert([templateData])
+      .select()
+      .single();
+
+    if (error) throw error;
+    if (!data) throw new Error('Échec de la création du template');
+
+    return mapTemplateFromDB(data);
+  } catch (error) {
+    console.error('❌ Erreur création template commentaire:', error);
+    throw new Error('Erreur lors de la création du template de commentaire');
+  }
+}
+
+/**
+ * Applique un template de commentaire
+ */
+export async function applyCommentTemplate(
+  templateId: string,
+  variables: Record<string, string> = {},
+  userId: string
+): Promise<string> {
+  try {
+    const { data: template, error } = await supabase
+      .from('comment_templates')
+      .select('*')
+      .eq('id', templateId)
+      .single();
+
+    if (error) throw error;
+    if (!template) throw new Error('Template non trouvé');
+
+    // Incrémenter le compteur d'utilisation
+    await supabase
+      .from('comment_templates')
+      .update({ usage_count: template.usage_count + 1 })
+      .eq('id', templateId);
+
+    // Remplacer les variables
+    let content = template.content;
+    template.variables.forEach(variable => {
+      const value = variables[variable.name] || variable.defaultValue || `[${variable.name}]`;
+      content = content.replace(new RegExp(`\\{${variable.name}\\}`, 'g'), value);
+    });
+
+    return content;
+  } catch (error) {
+    console.error('❌ Erreur application template commentaire:', error);
+    throw new Error('Erreur lors de l\'application du template de commentaire');
+  }
+}
+
+/**
+ * Récupère les templates de commentaire
+ */
+export async function getCommentTemplates(
+  userId?: string,
+  category?: string,
+  isPublic?: boolean
+): Promise<CommentTemplate[]> {
+  try {
+    let query = supabase
+      .from('comment_templates')
+      .select('*')
+      .order('usage_count', { ascending: false });
+
+    if (userId) {
+      query = query.or(`created_by.eq.${userId},is_public.eq.true`);
+    } else if (isPublic !== undefined) {
+      query = query.eq('is_public', isPublic);
+    }
+
+    if (category) {
+      query = query.eq('category', category);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+    if (!data) return [];
+
+    return data.map(mapTemplateFromDB);
+  } catch (error) {
+    console.error('❌ Erreur récupération templates commentaire:', error);
+    throw new Error('Erreur lors de la récupération des templates de commentaire');
+  }
+}
+
+/**
+ * Signale un commentaire
+ */
+export async function flagComment(
+  commentId: string,
+  reason: 'spam' | 'inappropriate' | 'harassment' | 'offensive' | 'off_topic' | 'other',
+  description?: string,
+  reporterId: string,
+  reporterName: string
+): Promise<void> {
+  try {
+    const flagData = {
+      comment_id: commentId,
+      reason,
+      description: description || null,
+      reporter_id: reporterId,
+      reporter_name: reporterName,
+      created_at: new Date().toISOString(),
+      status: 'pending'
+    };
+
+    const { error } = await supabase
+      .from('comment_flags')
+      .insert([flagData]);
+
+    if (error) throw error;
+
+    // Mettre à jour le statut de modération du commentaire
+    await supabase
+      .from('document_comments')
+      .update({ 
+        is_flagged: true,
+        flagged_at: new Date().toISOString()
+      })
+      .eq('id', commentId);
+  } catch (error) {
+    console.error('❌ Erreur signalement commentaire:', error);
+    throw new Error('Erreur lors du signalement du commentaire');
+  }
+}
+
+/**
+ * Modère un commentaire
+ */
+export async function moderateComment(
+  commentId: string,
+  moderatorId: string,
+  action: 'approve' | 'hide' | 'delete' | 'warn',
+  reason?: string
+): Promise<void> {
+  try {
+    const moderationData = {
+      comment_id: commentId,
+      action,
+      reason: reason || null,
+      moderator_id: moderatorId,
+      moderated_at: new Date().toISOString()
+    };
+
+    const { error } = await supabase
+      .from('comment_moderations')
+      .insert([moderationData]);
+
+    if (error) throw error;
+
+    // Mettre à jour le statut du commentaire selon l'action
+    let updateData: any = {};
+    switch (action) {
+      case 'hide':
+        updateData = { is_hidden: true, hidden_at: new Date().toISOString() };
+        break;
+      case 'delete':
+        updateData = { deleted_at: new Date().toISOString(), deleted_by: moderatorId };
+        break;
+      case 'approve':
+        updateData = { is_flagged: false, flagged_at: null };
+        break;
+      case 'warn':
+        updateData = { warning_sent: true, warning_sent_at: new Date().toISOString() };
+        break;
+    }
+
+    if (Object.keys(updateData).length > 0) {
+      await supabase
+        .from('document_comments')
+        .update(updateData)
+        .eq('id', commentId);
+    }
+  } catch (error) {
+    console.error('❌ Erreur modération commentaire:', error);
+    throw new Error('Erreur lors de la modération du commentaire');
+  }
+}
+
+/**
+ * Exporte les commentaires avec analyses avancées
+ */
+export function exportAdvancedComments(
+  comments: AdvancedComment[],
+  format: 'json' | 'csv' | 'xlsx'
+): string {
+  switch (format) {
+    case 'json':
+      return JSON.stringify({
+        comments,
+        exportedAt: new Date().toISOString(),
+        totalCount: comments.length,
+        includesAIAnalysis: true
+      }, null, 2);
+    
+    case 'csv':
+      return exportAdvancedCommentsToCSV(comments);
+    
+    case 'xlsx':
+      // Placeholder pour export Excel
+      return JSON.stringify(comments, null, 2);
+    
+    default:
+      return JSON.stringify(comments, null, 2);
+  }
+}
+
+/**
+ * Export CSV des commentaires avancés
+ */
+function exportAdvancedCommentsToCSV(comments: AdvancedComment[]): string {
+  const headers = [
+    'ID',
+    'Contenu',
+    'Auteur',
+    'Date de création',
+    'Priorité',
+    'Statut',
+    'Score de sentiment',
+    'Label de sentiment',
+    'Score de priorité',
+    'Nombre de vues',
+    'Temps de lecture moyen',
+    'Profondeur de thread',
+    'Nombre de participants',
+    'Auto-tagué',
+    'Modéré automatiquement'
+  ];
+
+  const csvContent = [
+    headers.join(','),
+    ...comments.map(comment => [
+      comment.id,
+      `"${comment.content.replace(/"/g, '""')}"`,
+      comment.authorName,
+      comment.createdAt,
+      comment.priority,
+      comment.status,
+      comment.sentiment?.score || 0,
+      comment.sentiment?.label || 'neutral',
+      comment.priorityScore,
+      comment.engagement.totalViews,
+      comment.engagement.averageReadTime,
+      comment.engagement.threadDepth,
+      comment.engagement.participantCount,
+      comment.autoTagged ? 'Oui' : 'Non',
+      comment.moderation?.autoModerated ? 'Oui' : 'Non'
+    ].join(','))
+  ].join('\n');
+
+  return csvContent;
+}
+
+/**
+ * Fonctions utilitaires
+ */
+function mapTemplateFromDB(data: any): CommentTemplate {
+  return {
+    id: data.id,
+    name: data.name,
+    description: data.description,
+    content: data.content,
+    variables: data.variables || [],
+    tags: data.tags || [],
+    category: data.category,
+    isPublic: data.is_public,
+    createdBy: data.created_by,
+    createdAt: new Date(data.created_at),
+    usageCount: data.usage_count
+  };
+}

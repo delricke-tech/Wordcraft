@@ -14,15 +14,18 @@ import {
   ClipboardList,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { NotificationsPanel, useNotifications } from '../NotificationsPanel';
 
 export function Header() {
   const { user, profile, signOut } = useAuth();
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showCreateMenu, setShowCreateMenu] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const userMenuRef = useRef<HTMLDivElement>(null);
   const createMenuRef = useRef<HTMLDivElement>(null);
+  const { unreadCount } = useNotifications();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -98,13 +101,22 @@ export function Header() {
           )}
         </div>
 
-        <Link
-          to="/notifications"
+        <button
+          onClick={() => setShowNotifications(true)}
           className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
         >
           <Bell size={20} />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
-        </Link>
+          {unreadCount > 0 && (
+            <span className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+        </button>
+
+        <NotificationsPanel
+          isOpen={showNotifications}
+          onClose={() => setShowNotifications(false)}
+        />
 
         <div className="relative" ref={userMenuRef}>
           <button

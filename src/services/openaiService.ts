@@ -30,6 +30,20 @@ import {
   type DocumentChunk,
   type ChunkingOptions 
 } from './documentChunkingService';
+import { 
+  detectAndScrapeUrls, 
+  formatWebContentForAI, 
+  type ScrapedContent 
+} from './webScrapingService';
+import { 
+  detectAndExtractYouTube, 
+  formatYouTubeContentForAI, 
+  type YouTubeTranscript 
+} from './youtubeService';
+import { 
+  analyzePPTXFile, 
+  isPPTXFile 
+} from './pptxService';
 
 // Configuration du proxy (activer si CORS bloque) - Désactivé
 // const USE_PROXY = false;
@@ -290,6 +304,43 @@ export async function sendChatMessage(
     console.log('  - Recherche web:', options?.useWebSearch ? 'Activée' : 'Désactivée');
     console.log('  - Chunking:', options?.enableChunking ? 'Activé' : 'Désactivé');
     
+    // 🌐 DÉTECTION AUTOMATIQUE DES URLS ET WEB SCRAPING
+    let processedMessage = message;
+    let scrapedContents: ScrapedContent[] = [];
+    let youtubeContents: YouTubeTranscript[] = [];
+    
+    try {
+      // Détecter et scraper les URLs web
+      const scrapingResult = await detectAndScrapeUrls(message);
+      processedMessage = scrapingResult.processedMessage;
+      scrapedContents = scrapingResult.scrapedContents;
+      
+      if (scrapedContents.length > 0) {
+        console.log(`🌐 ${scrapedContents.length} URL(s) web scrapée(s) avec succès`);
+        scrapedContents.forEach((content, index) => {
+          console.log(`  - URL ${index + 1}: ${content.title} (${content.content.length} caractères)`);
+        });
+      }
+    } catch (scrapingError) {
+      console.warn('⚠️ Erreur lors du scraping automatique:', scrapingError);
+    }
+
+    try {
+      // Détecter et extraire les vidéos YouTube
+      const youtubeResult = await detectAndExtractYouTube(processedMessage);
+      processedMessage = youtubeResult.processedMessage;
+      youtubeContents = youtubeResult.youtubeContents;
+      
+      if (youtubeContents.length > 0) {
+        console.log(`🎬 ${youtubeContents.length} vidéo(s) YouTube extraite(s) avec succès`);
+        youtubeContents.forEach((content, index) => {
+          console.log(`  - YouTube ${index + 1}: ${content.metadata.title} (${content.transcript.length} caractères)`);
+        });
+      }
+    } catch (youtubeError) {
+      console.warn('⚠️ Erreur lors de l\'extraction YouTube:', youtubeError);
+    }
+    
     // Gestion du chunking pour documents longs
     const contextText = context.extractedText || '';
     let chunks: DocumentChunk[] = [];
@@ -398,6 +449,38 @@ ${detailLevel === 'détaillé' ? '- Réponse exhaustive avec explications approf
 OBJECTIF : Rendre l'étudiant EXPERT sur le sujet abordé !`;
 
     // Construire les messages pour OpenAI avec prompt amélioré et cohérence
+    let userMessageContent = `QUESTION: ${processedMessage}
+
+${webContext ? `INFORMATIONS WEB SUPPLÉMENTAIRES:
+${webContext}
+
+` : ''}`;
+
+// 🌐 AJOUT DU CONTENU WEB SCRAPÉ
+if (scrapedContents.length > 0) {
+  userMessageContent += `CONTENU WEB EXTRAIT DES URLS:
+${scrapedContents.map(content => formatWebContentForAI(content)).join('\n\n')}
+
+`;
+}
+
+// 🎬 AJOUT DU CONTENU YOUTUBE EXTRAIT
+if (youtubeContents.length > 0) {
+  userMessageContent += `CONTENU YOUTUBE EXTRAIT:
+${youtubeContents.map(content => formatYouTubeContentForAI(content)).join('\n\n')}
+
+`;
+}
+
+userMessageContent += `CONTEXTE DOCUMENTAIRE:
+${contextForPrompt}
+
+INSTRUCTIONS:
+Réponds en te basant UNIQUEMENT sur les informations fournies ci-dessus.
+Si une information n'est pas dans le contexte, dis-le clairement.
+Vérifie la cohérence de ta réponse avant de l'envoyer.`;
+
+    // Construire les messages pour OpenAI
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       {
         role: 'system',
@@ -405,20 +488,7 @@ OBJECTIF : Rendre l'étudiant EXPERT sur le sujet abordé !`;
       },
       {
         role: 'user',
-        content: `QUESTION: ${message}
-
-${webContext ? `INFORMATIONS WEB SUPPLÉMENTAIRES:
-${webContext}
-
-` : ''}
-
-CONTEXTE DOCUMENTAIRE:
-${contextForPrompt}
-
-INSTRUCTIONS:
-Réponds en te basant UNIQUEMENT sur les informations fournies ci-dessus.
-Si une information n'est pas dans le contexte, dis-le clairement.
-Vérifie la cohérence de ta réponse avant de l'envoyer.`
+        content: userMessageContent
       }
     ];
 
@@ -486,30 +556,40 @@ export async function analyzeUploadedDocument(file: File): Promise<string> {
   try {
     console.log('📎 Analyse du fichier uploadé:', file.name);
 
-    // Vérifier que c'est un PDF
-    if (file.type !== 'application/pdf') {
-      throw new Error('Seuls les fichiers PDF sont supportés pour l\'instant.');
+    // Support PDF
+    if (file.type === 'application/pdf') {
+      // Extraire le texte du fichier PDF
+      const arrayBuffer = await file.arrayBuffer();
+      const pdfjsLib = await import('pdfjs-dist');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      let fullText = '';
+
+      for (let i = 1; i <= Math.min(pdf.numPages, 10); i++) { // Limiter à 10 pages pour les fichiers uploadés
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items
+          .map((item: any) => item.str)
+          .join(' ');
+        fullText += pageText + '\n\n';
+      }
+
+      console.log('✅ Texte PDF extrait du fichier uploadé');
+      return fullText;
     }
-
-    // Extraire le texte du fichier
-    const arrayBuffer = await file.arrayBuffer();
-    const pdfjsLib = await import('pdfjs-dist');
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
-
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    let fullText = '';
-
-    for (let i = 1; i <= Math.min(pdf.numPages, 10); i++) { // Limiter à 10 pages pour les fichiers uploadés
-      const page = await pdf.getPage(i);
-      const textContent = await page.getTextContent();
-      const pageText = textContent.items
-        .map((item: any) => item.str)
-        .join(' ');
-      fullText += pageText + '\n\n';
+    
+    // Support PPTX
+    else if (isPPTXFile(file)) {
+      console.log('📊 Détection fichier PPTX, extraction en cours...');
+      const pptxContent = await analyzePPTXFile(file);
+      console.log('✅ Contenu PPTX extrait du fichier uploadé');
+      return pptxContent;
     }
-
-    console.log('✅ Texte extrait du fichier uploadé');
-    return fullText.trim();
+    
+    else {
+      throw new Error('Type de fichier non supporté. Formats supportés: PDF, PPTX');
+    }
   } catch (error: any) {
     console.error('💥 Erreur lors de l\'analyse du fichier:', error);
     throw new Error(`Impossible d'analyser le fichier: ${error.message}`);

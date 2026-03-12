@@ -1,13 +1,41 @@
 /**
- * Composant de filtres avancés (multi-critères combinés)
+ * Composant de filtres avancés (multi-critères combinés) - VERSION AMÉLIORÉE
  * 
  * Ce composant permet de créer et gérer des filtres complexes avec
  * combinaison de multiples critères pour une recherche précise
  * 
- * Date: 11 mars 2026
+ * Date: 11 mars 2026 - Mis à jour: 12 mars 2026
  */
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  Filter, 
+  Search, 
+  Settings, 
+  Download, 
+  Save, 
+  Trash2,
+  Plus,
+  X,
+  ChevronDown,
+  ChevronUp,
+  Check,
+  FileText,
+  Calendar,
+  Hash,
+  Users,
+  Globe,
+  Star,
+  Share2,
+  Tag,
+  Folder,
+  BarChart3,
+  Zap,
+  AlertCircle,
+  RefreshCw
+} from 'lucide-react';
+import { toast } from 'sonner';
 import { 
   applyFilters,
   saveFilterGroup,
@@ -19,6 +47,13 @@ import {
   validateFilterGroup,
   validateCriterion,
   applyFiltersLocal,
+  // NOUVELLES IMPORTATIONS
+  createPresetFilters,
+  generateAdvancedFacets,
+  generateSmartSuggestions,
+  exportFilterResults,
+  quickSearchWithRelevance,
+  analyzeFilterPerformanceDetailed,
   type FilterGroup,
   type FilterCriterion,
   type FilterPreset,
@@ -26,7 +61,8 @@ import {
   type FilterOperator,
   type ValueType,
   type FilterOptions,
-  type FilterResult
+  type FilterResult,
+  type Document
 } from '../services/advancedFiltersService';
 import type { User } from '../contexts/AuthContext';
 

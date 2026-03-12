@@ -8,13 +8,17 @@ import {
   ArrowLeft,
   BookOpen,
   CheckCircle,
-  Info
+  Info,
+  FileDown,
+  Share2
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Document } from '../lib/supabase';
 import { extractPDFFromStorage, ExtractedPDFResult } from '../services/pdfExtractor';
 import { generateQuizFromText, GeneratedQuiz } from '../services/quizGenerator';
 import { QuizPlayer } from '../components/quiz/QuizPlayer';
+import { DocumentExportPanel } from '../components/DocumentExportPanel';
+import { DocumentSharingPanel } from '../components/DocumentSharingPanel';
 
 // Type compatible avec l'ancien ExtractedDocument
 type ExtractedDocument = ExtractedPDFResult;
@@ -31,6 +35,8 @@ export function DocumentView() {
   const [extractedDocument, setExtractedDocument] = useState<ExtractedDocument | null>(null);
   const [generatedQuiz, setGeneratedQuiz] = useState<GeneratedQuiz | null>(null);
   const [showQuiz, setShowQuiz] = useState(false);
+  const [showExportPanel, setShowExportPanel] = useState(false);
+  const [showSharingPanel, setShowSharingPanel] = useState(false);
 
   // Charger le document
   useState(() => {
@@ -195,6 +201,15 @@ export function DocumentView() {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Bouton Partager */}
+          <button
+            onClick={() => setShowSharingPanel(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Share2 size={18} />
+            Partager
+          </button>
+          
           {document.storage_path && (
             <a
               href={supabase.storage.from('documents').getPublicUrl(document.storage_path).data.publicUrl}
@@ -266,6 +281,19 @@ export function DocumentView() {
               <p className="text-sm text-gray-500">Bientôt disponible</p>
             </div>
           </button>
+
+          {/* Exporter le document */}
+          <button
+            onClick={() => setShowExportPanel(true)}
+            disabled={!extractedDocument}
+            className="flex flex-col items-center gap-3 p-6 border-2 border-dashed border-gray-300 rounded-xl hover:border-green-500 hover:bg-green-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <FileDown className="w-8 h-8 text-green-600" />
+            <div className="text-center">
+              <p className="font-medium text-gray-900">Exporter</p>
+              <p className="text-sm text-gray-500">Markdown, Word, PDF</p>
+            </div>
+          </button>
         </div>
       </div>
 
@@ -333,6 +361,25 @@ export function DocumentView() {
           </div>
           <QuizPlayer quiz={generatedQuiz} />
         </div>
+      )}
+
+      {/* Export Panel */}
+      <DocumentExportPanel
+        isOpen={showExportPanel}
+        onClose={() => setShowExportPanel(false)}
+        documentId={id}
+        documentTitle={document?.name}
+        documentContent={extractedDocument?.cleanText}
+      />
+
+      {/* Sharing Panel */}
+      {id && (
+        <DocumentSharingPanel
+          isOpen={showSharingPanel}
+          onClose={() => setShowSharingPanel(false)}
+          documentId={id}
+          documentTitle={document?.name}
+        />
       )}
     </div>
   );

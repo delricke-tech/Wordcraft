@@ -29,6 +29,7 @@ import {
   CheckSquare,
   Square,
   Type,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Document, Folder as FolderType, uploadFile } from '../lib/supabase';
@@ -48,6 +49,8 @@ import { QuizPlayer } from '../components/quiz/QuizPlayer';
 import { generateQuizFromText, GeneratedQuiz } from '../services/quizGenerator';
 import { generateFlashcardsFromText, GeneratedFlashcards } from '../services/flashcardGenerator';
 import { extractText } from '../services/textExtractor';
+import { AdvancedFiltersPanel } from '../components/AdvancedFiltersPanel';
+import { FilterCriterion, SortCriterion } from '../services/advancedFiltersService';
 
 export function Library() {
   const { user } = useAuth();
@@ -141,6 +144,15 @@ export function Library() {
   // États pour la sélection multiple des fiches
   const [selectedCards, setSelectedCards] = useState<number[]>([]);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
+
+  // États pour le panneau de filtres avancés (Tier B #58-60)
+  const [showAdvancedFiltersPanel, setShowAdvancedFiltersPanel] = useState(false);
+  const [activeFilters, setActiveFilters] = useState<FilterCriterion[]>([]);
+  const [activeSortCriteria, setActiveSortCriteria] = useState<SortCriterion[]>([
+    { field: 'created_at', direction: 'desc', algorithm: 'date' }
+  ]);
+  const [sortField, setSortField] = useState<string>('created_at');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   useEffect(() => {
     fetchData();
@@ -1259,6 +1271,24 @@ export function Library() {
     }
   };
 
+  // ✅ Fonctions pour les filtres avancés et le tri (Tier B #58-60)
+  const handleApplyFilters = (filters: FilterCriterion[]) => {
+    setActiveFilters(filters);
+    // Les filtres sont appliqués via le useEffect sur activeFilters
+  };
+
+  const handleApplySort = (criteria: SortCriterion[]) => {
+    setActiveSortCriteria(criteria);
+    if (criteria.length > 0) {
+      setSortField(criteria[0].field);
+      setSortDirection(criteria[0].direction);
+    }
+  };
+
+  const handleShowFavorites = (show: boolean) => {
+    setShowOnlyFavorites(show);
+  };
+
   // ✅ Fonction pour générer un quiz à partir d'un PDF
   const handleGenerateQuiz = async (doc: Document) => {
     if (!user) {
@@ -1763,6 +1793,24 @@ export function Library() {
             <List size={20} />
           </button>
         </div>
+        {/* Bouton Filtres Avancés (Tier B #58-60) */}
+        <button
+          onClick={() => setShowAdvancedFiltersPanel(true)}
+          className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 ${
+            showAdvancedFiltersPanel || activeFilters.length > 0
+              ? 'bg-teal-100 text-teal-700 border border-teal-300' 
+              : 'bg-white border border-gray-200 text-gray-700 hover:bg-teal-50'
+          }`}
+          title="Filtres avancés, tri et favoris"
+        >
+          <SlidersHorizontal size={18} />
+          <span className="hidden sm:inline">Filtres</span>
+          {activeFilters.length > 0 && (
+            <span className="ml-1 px-2 py-0.5 text-xs bg-teal-200 text-teal-900 rounded-full">
+              {activeFilters.length}
+            </span>
+          )}
+        </button>
         {/* Bouton Favoris */}
         <button
           onClick={() => setShowOnlyFavorites(!showOnlyFavorites)}
@@ -2724,6 +2772,18 @@ export function Library() {
           </div>
         </div>
       )}
+
+      {/* Advanced Filters Panel (Tier B #58-60) */}
+      <AdvancedFiltersPanel
+        isOpen={showAdvancedFiltersPanel}
+        onClose={() => setShowAdvancedFiltersPanel(false)}
+        onApplyFilters={handleApplyFilters}
+        onApplySort={handleApplySort}
+        onShowFavorites={handleShowFavorites}
+        showFavorites={showOnlyFavorites}
+        documentCount={documents.length}
+        filteredCount={filteredDocuments.length}
+      />
     </div>
   );
 }

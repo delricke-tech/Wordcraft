@@ -21,7 +21,11 @@ import {
   ChevronLeft,
   FileText,
   Loader2,
-  Brain
+  Brain,
+  BookOpen,
+  MessageSquare,
+  Download,
+  GraduationCap
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -45,6 +49,15 @@ import {
 import { supabase } from '../lib/supabase';
 import { DocumentSelector } from './DocumentSelector';
 import { ContentGenerator } from './ContentGenerator';
+import { URLInput } from './URLInput';
+import { YouTubeInput } from './YouTubeInput';
+import { CitationsDisplay } from './CitationsDisplay';
+import { StudyGuideGenerator } from './StudyGuideGenerator';
+import { ContextualQuestions } from './ContextualQuestions';
+import { ExportMarkdown } from './ExportMarkdown';
+import { ExportDOCX } from './ExportDOCX';
+import { ExportPDF } from './ExportPDF';
+import { AcademicCitations } from './AcademicCitations';
 import { toast } from 'sonner';
 
 interface ChatPanelProps {
@@ -76,6 +89,15 @@ export function ChatPanel({ documentContext, isOpen, onToggle, isExtractingText 
   const [showConversationList, setShowConversationList] = useState(false);
   const [isMultiDocumentMode, setIsMultiDocumentMode] = useState(false);
   const [showContentGenerator, setShowContentGenerator] = useState(false);
+  const [scrapedUrls, setScrapedUrls] = useState<any[]>([]); // Contenu web scrapé
+  const [youtubeContents, setYoutubeContents] = useState<any[]>([]); // Contenu YouTube
+  const [messageCitations, setMessageCitations] = useState<Record<string, any[]>>({}); // Citations par message
+  const [showStudyGuide, setShowStudyGuide] = useState(false); // Guide d'étude
+  const [showContextualQuestions, setShowContextualQuestions] = useState(false); // Questions suggérées
+  const [showExportMarkdown, setShowExportMarkdown] = useState(false); // Export Markdown
+  const [showExportDOCX, setShowExportDOCX] = useState(false); // Export DOCX
+  const [showExportPDF, setShowExportPDF] = useState(false); // Export PDF
+  const [showAcademicCitations, setShowAcademicCitations] = useState(false); // Citations académiques
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -306,10 +328,19 @@ N'hésitez pas à me poser des questions !`,
       const assistantMessage: ChatMessage = {
         role: 'assistant',
         content: response.response, // Utiliser la propriété response
-        timestamp: new Date()
+        timestamp: new Date(),
+        citations: response.citations // Ajouter les citations au message
       };
 
       setMessages(prev => [...prev, assistantMessage]);
+
+      // Sauvegarder les citations pour l'affichage
+      if (response.citations) {
+        setMessageCitations(prev => ({
+          ...prev,
+          [assistantMessage.timestamp?.getTime() || Date.now()]: response.citations
+        }));
+      }
 
       // Sauvegarder la réponse dans la conversation
       if (conversation) {
@@ -411,7 +442,7 @@ N'hésitez pas à me poser des questions !`,
 
       const fileMessage: ChatMessage = {
         role: 'assistant',
-        content: `📎 **Fichier analysé : ${file.name}**\n\nJ'ai extrait le contenu de ce document. Vous pouvez maintenant me poser des questions dessus !`,
+        content: `📎 **${file.name.endsWith('.pptx') ? 'Présentation' : 'Document'} analysé : ${file.name}**\n\nJ'ai extrait le contenu de ce ${file.name.endsWith('.pptx') ? 'fichier PowerPoint' : 'document'}. Vous pouvez maintenant me poser des questions dessus !`,
         timestamp: new Date()
       };
 
@@ -568,6 +599,18 @@ N'hésitez pas à me poser des questions !`,
                 className="mb-4"
               />
 
+              {/* Gestionnaire d'URLs */}
+              <URLInput
+                onUrlsChange={setScrapedUrls}
+                className="mb-4"
+              />
+
+              {/* Gestionnaire YouTube */}
+              <YouTubeInput
+                onYouTubeChange={setYoutubeContents}
+                className="mb-4"
+              />
+
               {/* Sélecteur de niveau de détail */}
               <div className="mb-3">
                 <label className="text-xs text-white/70 mb-2 block">📊 Niveau de détail :</label>
@@ -627,6 +670,60 @@ N'hésitez pas à me poser des questions !`,
                 </button>
 
                 <button
+                  onClick={() => setShowStudyGuide(!showStudyGuide)}
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-500/80 to-indigo-500/80 hover:from-purple-600/80 hover:to-indigo-600/80 text-white rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2"
+                  style={{ border: '1px solid rgba(255, 255, 255, 0.2)' }}
+                >
+                  <BookOpen className="w-4 h-4" />
+                  Guide d'Étude
+                </button>
+
+                <button
+                  onClick={() => setShowContextualQuestions(!showContextualQuestions)}
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-orange-500/80 to-red-500/80 hover:from-orange-600/80 hover:to-red-600/80 text-white rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2"
+                  style={{ border: '1px solid rgba(255, 255, 255, 0.2)' }}
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  Questions IA
+                </button>
+
+                <button
+                  onClick={() => setShowExportMarkdown(!showExportMarkdown)}
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-teal-500/80 to-cyan-500/80 hover:from-teal-600/80 hover:to-cyan-600/80 text-white rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2"
+                  style={{ border: '1px solid rgba(255, 255, 255, 0.2)' }}
+                >
+                  <Download className="w-4 h-4" />
+                  Export MD
+                </button>
+
+                <button
+                  onClick={() => setShowExportDOCX(!showExportDOCX)}
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500/80 to-indigo-500/80 hover:from-blue-600/80 hover:to-indigo-600/80 text-white rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2"
+                  style={{ border: '1px solid rgba(255, 255, 255, 0.2)' }}
+                >
+                  <FileText className="w-4 h-4" />
+                  Export DOCX
+                </button>
+
+                <button
+                  onClick={() => setShowExportPDF(!showExportPDF)}
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-500/80 to-pink-500/80 hover:from-purple-600/80 hover:to-pink-600/80 text-white rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2"
+                  style={{ border: '1px solid rgba(255, 255, 255, 0.2)' }}
+                >
+                  <Download className="w-4 h-4" />
+                  Export PDF
+                </button>
+
+                <button
+                  onClick={() => setShowAcademicCitations(!showAcademicCitations)}
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-indigo-500/80 to-purple-500/80 hover:from-indigo-600/80 hover:to-purple-600/80 text-white rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2"
+                  style={{ border: '1px solid rgba(255, 255, 255, 0.2)' }}
+                >
+                  <GraduationCap className="w-4 h-4" />
+                  Citations
+                </button>
+
+                <button
                   onClick={() => fileInputRef.current?.click()}
                   className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium text-sm transition-all flex items-center gap-2"
                   style={{ border: '1px solid rgba(255, 255, 255, 0.2)' }}
@@ -636,7 +733,7 @@ N'hésitez pas à me poser des questions !`,
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".pdf"
+                  accept=".pdf,.pptx"
                   onChange={handleFileUpload}
                   className="hidden"
                 />
@@ -659,6 +756,101 @@ N'hésitez pas à me poser des questions !`,
                       });
                     }}
                   />
+                </motion.div>
+              )}
+
+              {/* Générateur de guide d'étude */}
+              {showStudyGuide && selectedDocuments.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-4"
+                >
+                  <StudyGuideGenerator
+                    documentTitle={selectedDocuments[0].name}
+                    documentContent={selectedDocuments[0].extracted_text || ''}
+                    onGenerated={(guide) => {
+                      toast.success('Guide d\'étude généré', {
+                        description: `${guide.sections.length} sections • ${guide.estimatedDuration} minutes`
+                      });
+                    }}
+                  />
+                </motion.div>
+              )}
+
+              {/* Générateur de questions contextuelles */}
+              {showContextualQuestions && selectedDocuments.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-4"
+                >
+                  <ContextualQuestions
+                    documentTitle={selectedDocuments[0].name}
+                    documentContent={selectedDocuments[0].extracted_text || ''}
+                    conversationHistory={messages.map(msg => ({ role: msg.role, content: msg.content }))}
+                    lastResponse={messages.length > 0 ? messages[messages.length - 1].content : undefined}
+                    onQuestionClick={(question) => {
+                      // Ajouter la question comme message utilisateur
+                      handleSendMessage(question.question);
+                    }}
+                  />
+                </motion.div>
+              )}
+
+              {/* Export Markdown */}
+              {showExportMarkdown && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-4"
+                >
+                  <ExportMarkdown
+                    messages={messages}
+                    documentContent={selectedDocuments.length > 0 ? selectedDocuments[0].extracted_text || '' : undefined}
+                    documentTitle={selectedDocuments.length > 0 ? selectedDocuments[0].name : 'Conversation WordCraft IA'}
+                  />
+                </motion.div>
+              )}
+
+              {/* Export DOCX */}
+              {showExportDOCX && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-4"
+                >
+                  <ExportDOCX
+                    messages={messages}
+                    documentContent={selectedDocuments.length > 0 ? selectedDocuments[0].extracted_text || '' : undefined}
+                    documentTitle={selectedDocuments.length > 0 ? selectedDocuments[0].name : 'Conversation WordCraft IA'}
+                  />
+                </motion.div>
+              )}
+
+              {/* Export PDF */}
+              {showExportPDF && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-4"
+                >
+                  <ExportPDF
+                    messages={messages}
+                    documentContent={selectedDocuments.length > 0 ? selectedDocuments[0].extracted_text || '' : undefined}
+                    documentTitle={selectedDocuments.length > 0 ? selectedDocuments[0].name : 'Conversation WordCraft IA'}
+                  />
+                </motion.div>
+              )}
+
+              {/* Citations académiques */}
+              {showAcademicCitations && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-4"
+                >
+                  <AcademicCitations messages={messages} />
                 </motion.div>
               )}
             </div>
@@ -749,6 +941,16 @@ N'hésitez pas à me poser des questions !`,
                     <p className="text-xs opacity-60 mt-2">
                       {msg.timestamp?.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                     </p>
+                    
+                    {/* Afficher les citations pour les messages de l'assistant */}
+                    {msg.role === 'assistant' && msg.citations && msg.citations.length > 0 && (
+                      <div className="mt-3">
+                        <CitationsDisplay 
+                          citations={msg.citations} 
+                          className="text-xs"
+                        />
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               ))}

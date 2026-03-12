@@ -1,10 +1,10 @@
 /**
- * Service de filtres avancés (multi-critères combinés)
+ * Service de filtres avancés (multi-critères combinés) - VERSION AMÉLIORÉE
  * 
  * Ce service permet de créer et gérer des filtres complexes avec
  * combinaison de multiples critères pour une recherche précise
  * 
- * Date: 11 mars 2026
+ * Date: 11 mars 2026 - Mis à jour: 12 mars 2026
  */
 
 import { supabase } from '../lib/supabase';
@@ -16,6 +16,11 @@ export interface FilterCriterion {
   value: any;
   valueType: ValueType;
   label?: string;
+  enabled?: boolean;
+  options?: Array<{ label: string; value: any; count?: number }>;
+  placeholder?: string;
+  min?: number;
+  max?: number;
 }
 
 export type FilterOperator = 
@@ -45,9 +50,58 @@ export type ValueType =
   | 'boolean'
   | 'array'
   | 'select'
-  | 'multiselect';
+  | 'multiselect'
+  | 'range';
 
 export interface FilterGroup {
+  id: string;
+  name: string;
+  criteria: FilterCriterion[];
+  logic: 'AND' | 'OR';
+  enabled: boolean;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  limit?: number;
+  offset?: number;
+}
+
+export interface FilterResult {
+  items: any[];
+  totalCount: number;
+  filteredCount: number;
+  facets: Record<string, Array<{ value: string; count: number }>>;
+  suggestions?: string[];
+  performance?: {
+    executionTime: number;
+    efficiency: number;
+    recommendations: string[];
+  };
+}
+
+export interface Document {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  createdAt: Date;
+  updatedAt: Date;
+  content?: string;
+  tags?: string[];
+  author?: string;
+  folder?: string;
+  isFavorite?: boolean;
+  isShared?: boolean;
+  sharedWith?: string[];
+  metadata?: Record<string, any>;
+  excerpt?: string;
+  wordCount?: number;
+  pageCount?: number;
+  language?: string;
+  status?: 'draft' | 'published' | 'archived';
+  priority?: 'low' | 'medium' | 'high';
+}
+
+export interface SavedFilter {
   id: string;
   name: string;
   description?: string;
@@ -821,3 +875,576 @@ export const applyFiltersLocal = <T extends Record<string, any>>(
   items: T[],
   filterGroup: FilterGroup
 ) => advancedFiltersService.applyFiltersLocal(items, filterGroup);
+
+// NOUVELLES FONCTIONNALITÉS AVANCÉES
+
+/**
+ * Crée les filtres prédéfinis pour les documents avec options étendues
+ */
+export function createPresetFilters(): FilterCriterion[] {
+  return [
+    {
+      id: 'name',
+      field: 'name',
+      operator: 'contains',
+      value: '',
+      valueType: 'text',
+      label: 'Nom du document',
+      placeholder: 'Rechercher par nom...',
+      enabled: false
+    },
+    {
+      id: 'type',
+      field: 'type',
+      operator: 'in',
+      value: [],
+      valueType: 'multiselect',
+      label: 'Type de fichier',
+      options: [
+        { label: 'PDF', value: 'pdf' },
+        { label: 'Word', value: 'docx' },
+        { label: 'PowerPoint', value: 'pptx' },
+        { label: 'Excel', value: 'xlsx' },
+        { label: 'Image', value: 'jpg,png,gif' },
+        { label: 'Texte', value: 'txt,md' },
+        { label: 'Vidéo', value: 'mp4,avi,mov' },
+        { label: 'Audio', value: 'mp3,wav' }
+      ],
+      enabled: false
+    },
+    {
+      id: 'tags',
+      field: 'tags',
+      operator: 'in',
+      value: [],
+      valueType: 'multiselect',
+      label: 'Tags',
+      options: [],
+      placeholder: 'Sélectionner des tags...',
+      enabled: false
+    },
+    {
+      id: 'author',
+      field: 'author',
+      operator: 'contains',
+      value: '',
+      valueType: 'text',
+      label: 'Auteur',
+      placeholder: 'Rechercher par auteur...',
+      enabled: false
+    },
+    {
+      id: 'folder',
+      field: 'folder',
+      operator: 'equals',
+      value: '',
+      valueType: 'select',
+      label: 'Dossier',
+      options: [],
+      placeholder: 'Sélectionner un dossier...',
+      enabled: false
+    },
+    {
+      id: 'size',
+      field: 'size',
+      operator: 'between',
+      value: [0, 1000],
+      valueType: 'range',
+      label: 'Taille (Mo)',
+      min: 0,
+      max: 1000,
+      enabled: false
+    },
+    {
+      id: 'dateCreated',
+      field: 'createdAt',
+      operator: 'between',
+      value: [],
+      valueType: 'date',
+      label: 'Date de création',
+      enabled: false
+    },
+    {
+      id: 'dateUpdated',
+      field: 'updatedAt',
+      operator: 'between',
+      value: [],
+      valueType: 'date',
+      label: 'Date de modification',
+      enabled: false
+    },
+    {
+      id: 'wordCount',
+      field: 'wordCount',
+      operator: 'between',
+      value: [0, 100000],
+      valueType: 'range',
+      label: 'Nombre de mots',
+      min: 0,
+      max: 100000,
+      enabled: false
+    },
+    {
+      id: 'pageCount',
+      field: 'pageCount',
+      operator: 'between',
+      value: [0, 1000],
+      valueType: 'range',
+      label: 'Nombre de pages',
+      min: 0,
+      max: 1000,
+      enabled: false
+    },
+    {
+      id: 'language',
+      field: 'language',
+      operator: 'equals',
+      value: '',
+      valueType: 'select',
+      label: 'Langue',
+      options: [
+        { label: 'Français', value: 'fr' },
+        { label: 'Anglais', value: 'en' },
+        { label: 'Espagnol', value: 'es' },
+        { label: 'Allemand', value: 'de' },
+        { label: 'Italien', value: 'it' },
+        { label: 'Portugais', value: 'pt' },
+        { label: 'Chinois', value: 'zh' },
+        { label: 'Japonais', value: 'ja' }
+      ],
+      enabled: false
+    },
+    {
+      id: 'status',
+      field: 'status',
+      operator: 'equals',
+      value: '',
+      valueType: 'select',
+      label: 'Statut',
+      options: [
+        { label: 'Brouillon', value: 'draft' },
+        { label: 'Publié', value: 'published' },
+        { label: 'Archivé', value: 'archived' }
+      ],
+      enabled: false
+    },
+    {
+      id: 'priority',
+      field: 'priority',
+      operator: 'equals',
+      value: '',
+      valueType: 'select',
+      label: 'Priorité',
+      options: [
+        { label: 'Basse', value: 'low' },
+        { label: 'Moyenne', value: 'medium' },
+        { label: 'Haute', value: 'high' }
+      ],
+      enabled: false
+    },
+    {
+      id: 'isFavorite',
+      field: 'isFavorite',
+      operator: 'equals',
+      value: false,
+      valueType: 'boolean',
+      label: 'Favoris uniquement',
+      enabled: false
+    },
+    {
+      id: 'isShared',
+      field: 'isShared',
+      operator: 'equals',
+      value: false,
+      valueType: 'boolean',
+      label: 'Partagés uniquement',
+      enabled: false
+    },
+    {
+      id: 'content',
+      field: 'content',
+      operator: 'contains',
+      value: '',
+      valueType: 'text',
+      label: 'Contenu du document',
+      placeholder: 'Rechercher dans le contenu...',
+      enabled: false
+    }
+  ];
+}
+
+/**
+ * Génère des facettes améliorées avec statistiques détaillées
+ */
+export function generateAdvancedFacets(documents: Document[]): Record<string, Array<{ value: string; count: number; percentage?: number }>> {
+  const facets: Record<string, Array<{ value: string; count: number; percentage?: number }>> = {};
+  const total = documents.length;
+  
+  // Facette par type de fichier avec pourcentages
+  const typeFacet: Record<string, number> = {};
+  documents.forEach(doc => {
+    const type = doc.type || 'unknown';
+    typeFacet[type] = (typeFacet[type] || 0) + 1;
+  });
+  facets.type = Object.entries(typeFacet).map(([value, count]) => ({ 
+    value, 
+    count, 
+    percentage: Math.round((count / total) * 100) 
+  }));
+  
+  // Facette par tags avec pourcentages
+  const tagFacet: Record<string, number> = {};
+  documents.forEach(doc => {
+    if (doc.tags) {
+      doc.tags.forEach(tag => {
+        tagFacet[tag] = (tagFacet[tag] || 0) + 1;
+      });
+    }
+  });
+  facets.tags = Object.entries(tagFacet).map(([value, count]) => ({ 
+    value, 
+    count, 
+    percentage: Math.round((count / total) * 100) 
+  }));
+  
+  // Facette par auteur avec pourcentages
+  const authorFacet: Record<string, number> = {};
+  documents.forEach(doc => {
+    const author = doc.author || 'unknown';
+    authorFacet[author] = (authorFacet[author] || 0) + 1;
+  });
+  facets.author = Object.entries(authorFacet).map(([value, count]) => ({ 
+    value, 
+    count, 
+    percentage: Math.round((count / total) * 100) 
+  }));
+  
+  // Facette par statut avec pourcentages
+  const statusFacet: Record<string, number> = {};
+  documents.forEach(doc => {
+    const status = doc.status || 'unknown';
+    statusFacet[status] = (statusFacet[status] || 0) + 1;
+  });
+  facets.status = Object.entries(statusFacet).map(([value, count]) => ({ 
+    value, 
+    count, 
+    percentage: Math.round((count / total) * 100) 
+  }));
+  
+  // Facette par langue avec pourcentages
+  const languageFacet: Record<string, number> = {};
+  documents.forEach(doc => {
+    const language = doc.language || 'unknown';
+    languageFacet[language] = (languageFacet[language] || 0) + 1;
+  });
+  facets.language = Object.entries(languageFacet).map(([value, count]) => ({ 
+    value, 
+    count, 
+    percentage: Math.round((count / total) * 100) 
+  }));
+  
+  // Facette par priorité avec pourcentages
+  const priorityFacet: Record<string, number> = {};
+  documents.forEach(doc => {
+    const priority = doc.priority || 'unknown';
+    priorityFacet[priority] = (priorityFacet[priority] || 0) + 1;
+  });
+  facets.priority = Object.entries(priorityFacet).map(([value, count]) => ({ 
+    value, 
+    count, 
+    percentage: Math.round((count / total) * 100) 
+  }));
+  
+  return facets;
+}
+
+/**
+ * Génère des suggestions intelligentes basées sur les résultats filtrés
+ */
+export function generateSmartSuggestions(documents: Document[], filter: FilterGroup): string[] {
+  const suggestions: string[] = [];
+  const activeCriteria = filter.criteria.filter(c => c.enabled);
+  
+  if (activeCriteria.length === 0) {
+    // Suggestions pour les filtres les plus utiles
+    if (documents.length > 50) {
+      suggestions.push('Filtrer par type de fichier pour réduire les résultats');
+    }
+    
+    const hasFavorites = documents.some(d => d.isFavorite);
+    if (hasFavorites) {
+      suggestions.push('Afficher uniquement les favoris pour un accès rapide');
+    }
+    
+    const hasShared = documents.some(d => d.isShared);
+    if (hasShared) {
+      suggestions.push('Filtrer les documents partagés pour la collaboration');
+    }
+    
+    const hasRecent = documents.some(d => {
+      const daysDiff = (Date.now() - d.updatedAt.getTime()) / (1000 * 60 * 60 * 24);
+      return daysDiff < 7;
+    });
+    if (hasRecent) {
+      suggestions.push('Afficher les documents modifiés récemment');
+    }
+  } else {
+    // Suggestions basées sur les filtres actifs
+    const filteredCount = documents.length;
+    
+    if (filteredCount === 0) {
+      suggestions.push('Aucun document trouvé. Essayez d\'élargir vos critères ou de vérifier l\'orthographe.');
+      suggestions.push('Utilisez la recherche rapide pour trouver des documents similaires.');
+    } else if (filteredCount < 5) {
+      suggestions.push('Résultats très précis. Essayez d\'ajouter plus de documents ou d\'élargir les critères.');
+    } else if (filteredCount > 100) {
+      suggestions.push('Beaucoup de résultats. Ajoutez des critères pour affiner la recherche.');
+    }
+    
+    // Suggérer des filtres complémentaires
+    if (!activeCriteria.some(c => c.field === 'tags')) {
+      suggestions.push('Ajouter un filtre par tags pour plus de précision');
+    }
+    
+    if (!activeCriteria.some(c => c.field === 'createdAt')) {
+      suggestions.push('Filtrer par date de création pour trouver les documents récents');
+    }
+    
+    if (!activeCriteria.some(c => c.field === 'type')) {
+      suggestions.push('Filtrer par type de fichier pour cibler un format spécifique');
+    }
+  }
+  
+  return suggestions;
+}
+
+/**
+ * Exporte les résultats de filtre en multiple formats
+ */
+export function exportFilterResults(documents: Document[], format: 'csv' | 'json' | 'xlsx' | 'pdf'): string {
+  switch (format) {
+    case 'csv':
+      return exportToCSV(documents);
+    case 'json':
+      return JSON.stringify(documents, null, 2);
+    case 'xlsx':
+      // Placeholder pour export Excel avancé
+      return exportToCSV(documents);
+    case 'pdf':
+      // Placeholder pour export PDF
+      return exportToCSV(documents);
+    default:
+      return exportToCSV(documents);
+  }
+}
+
+/**
+ * Export CSV amélioré avec plus de métadonnées
+ */
+function exportToCSV(documents: Document[]): string {
+  const headers = [
+    'ID', 'Nom', 'Type', 'Taille (octets)', 'Taille (Mo)', 'Date de création', 'Date de modification',
+    'Auteur', 'Dossier', 'Tags', 'Favori', 'Partagé', 'Langue', 'Statut', 'Priorité',
+    'Nombre de mots', 'Nombre de pages', 'Extrait'
+  ];
+  
+  const csvContent = [
+    headers.join(','),
+    ...documents.map(doc => [
+      doc.id,
+      `"${doc.name}"`,
+      doc.type,
+      doc.size,
+      (doc.size / (1024 * 1024)).toFixed(2),
+      doc.createdAt.toISOString(),
+      doc.updatedAt.toISOString(),
+      `"${doc.author || ''}"`,
+      `"${doc.folder || ''}"`,
+      `"${(doc.tags || []).join(';')}"`,
+      doc.isFavorite ? 'Oui' : 'Non',
+      doc.isShared ? 'Oui' : 'Non',
+      doc.language || '',
+      doc.status || '',
+      doc.priority || '',
+      doc.wordCount || 0,
+      doc.pageCount || 0,
+      `"${(doc.excerpt || '').substring(0, 100).replace(/"/g, '""')}"`
+    ].join(','))
+  ].join('\n');
+  
+  return csvContent;
+}
+
+/**
+ * Recherche rapide avec suggestions et pertinence
+ */
+export function quickSearchWithRelevance(
+  documents: Document[],
+  query: string,
+  fields: string[] = ['name', 'content', 'author', 'tags']
+): { results: Document[]; suggestions: string[] } {
+  if (!query || query.trim().length === 0) {
+    return { results: documents, suggestions: [] };
+  }
+  
+  const searchTerms = query.toLowerCase().split(' ');
+  const scoredResults: { document: Document; score: number }[] = [];
+  
+  documents.forEach(doc => {
+    let score = 0;
+    let matchedFields = 0;
+    
+    fields.forEach(field => {
+      const value = getNestedValue(doc, field);
+      if (!value) return;
+      
+      if (Array.isArray(value)) {
+        value.forEach(v => {
+          const fieldValue = String(v).toLowerCase();
+          searchTerms.forEach(term => {
+            if (fieldValue.includes(term)) {
+              score += fieldValue === term ? 10 : 5; // Exact match > Partial match
+              matchedFields++;
+            }
+          });
+        });
+      } else {
+        const fieldValue = String(value).toLowerCase();
+        searchTerms.forEach(term => {
+          if (fieldValue.includes(term)) {
+            score += fieldValue === term ? 10 : 5;
+            matchedFields++;
+          }
+        });
+      }
+    });
+    
+    if (score > 0) {
+      scoredResults.push({ document: doc, score });
+    }
+  });
+  
+  // Trier par score de pertinence
+  scoredResults.sort((a, b) => b.score - a.score);
+  
+  // Générer des suggestions basées sur les résultats
+  const suggestions = generateSearchSuggestions(scoredResults.slice(0, 5), query);
+  
+  return {
+    results: scoredResults.map(sr => sr.document),
+    suggestions
+  };
+}
+
+/**
+ * Génère des suggestions de recherche
+ */
+function generateSearchSuggestions(results: { document: Document; score: number }[], query: string): string[] {
+  const suggestions: string[] = [];
+  const terms = new Set<string>();
+  
+  results.forEach(({ document }) => {
+    // Extraire des mots-clés des noms de documents
+    const words = document.name.toLowerCase().split(/\s+/);
+    words.forEach(word => {
+      if (word.length > 2 && !word.includes(query.toLowerCase())) {
+        terms.add(word);
+      }
+    });
+    
+    // Extraire des tags pertinents
+    if (document.tags) {
+      document.tags.forEach(tag => {
+        if (tag.toLowerCase().includes(query.toLowerCase()) || query.toLowerCase().includes(tag.toLowerCase())) {
+          terms.add(tag);
+        }
+      });
+    }
+  });
+  
+  return Array.from(terms).slice(0, 5);
+}
+
+/**
+ * Récupère une valeur imbriquée dans un objet
+ */
+function getNestedValue(obj: any, path: string): any {
+  return path.split('.').reduce((current, key) => current?.[key], obj);
+}
+
+/**
+ * Analyse les performances des filtres avec métriques détaillées
+ */
+export function analyzeFilterPerformanceDetailed(
+  originalCount: number,
+  filteredCount: number,
+  criteriaCount: number,
+  executionTime: number
+): {
+  efficiency: number;
+  precision: number;
+  performance: 'excellent' | 'good' | 'fair' | 'poor';
+  recommendations: string[];
+  metrics: {
+    reductionRate: number;
+    averageTimePerCriterion: number;
+    complexity: 'low' | 'medium' | 'high';
+  };
+} {
+  const efficiency = originalCount > 0 ? (originalCount - filteredCount) / originalCount : 0;
+  const precision = filteredCount > 0 ? 1 / (1 + executionTime / 1000) : 0;
+  const reductionRate = originalCount > 0 ? (originalCount - filteredCount) / originalCount : 0;
+  const averageTimePerCriterion = criteriaCount > 0 ? executionTime / criteriaCount : 0;
+  
+  let performance: 'excellent' | 'good' | 'fair' | 'poor';
+  let recommendations: string[] = [];
+  let complexity: 'low' | 'medium' | 'high';
+  
+  if (criteriaCount <= 3) {
+    complexity = 'low';
+  } else if (criteriaCount <= 6) {
+    complexity = 'medium';
+  } else {
+    complexity = 'high';
+  }
+  
+  if (efficiency > 0.8 && precision > 0.8 && executionTime < 100) {
+    performance = 'excellent';
+  } else if (efficiency > 0.6 && precision > 0.6 && executionTime < 500) {
+    performance = 'good';
+    if (efficiency < 0.7) {
+      recommendations.push('Ajoutez plus de critères pour améliorer la précision');
+    }
+    if (precision < 0.7) {
+      recommendations.push('Optimisez les critères pour réduire le temps d\'exécution');
+    }
+  } else if (efficiency > 0.4 && precision > 0.4 && executionTime < 1000) {
+    performance = 'fair';
+    recommendations.push('Considérez l\'ajout de filtres plus spécifiques');
+    recommendations.push('Vérifiez l\'ordre des critères pour optimiser les performances');
+  } else {
+    performance = 'poor';
+    recommendations.push('Les filtres sont trop larges ou mal configurés');
+    recommendations.push('Simplifiez les critères ou utilisez la recherche rapide');
+  }
+  
+  if (criteriaCount > 8) {
+    recommendations.push('Trop de critères peuvent ralentir la recherche. Essayez de les combiner.');
+  }
+  
+  if (averageTimePerCriterion > 100) {
+    recommendations.push('Certains critères sont lents. Envisagez d\'optimiser les champs de recherche.');
+  }
+  
+  return {
+    efficiency,
+    precision,
+    performance,
+    recommendations,
+    metrics: {
+      reductionRate,
+      averageTimePerCriterion,
+      complexity
+    }
+  };
+}

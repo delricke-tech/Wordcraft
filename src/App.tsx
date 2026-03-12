@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { MainLayout } from './components/layout/MainLayout';
+import { KeyboardShortcutsPanel, useKeyboardShortcuts } from './components/KeyboardShortcutsPanel';
 import { LoginPage } from './pages/auth/LoginPage';
 import { RegisterPage } from './pages/auth/RegisterPage';
 import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
@@ -156,6 +157,8 @@ function AppRoutes() {
 }
 
 function App() {
+  const { showShortcutsPanel, setShowShortcutsPanel } = useKeyboardShortcuts();
+
   return (
     <BrowserRouter>
       <AuthProvider>
@@ -166,6 +169,10 @@ function App() {
           expand={false}
           closeButton
           duration={4000}
+        />
+        <KeyboardShortcutsPanel 
+          isOpen={showShortcutsPanel} 
+          onClose={() => setShowShortcutsPanel(false)} 
         />
       </AuthProvider>
     </BrowserRouter>

@@ -55,7 +55,7 @@ export function extractRelevantCitations(
   
   // Calculer le score de pertinence pour chaque phrase
   const scoredSentences = sentences.map((sentence, index) => {
-    const score = calculateRelevanceScore(sentence, keywords);
+    const score = calculateSentenceRelevanceScore(sentence, keywords);
     return {
       sentence,
       score,
@@ -133,7 +133,7 @@ function splitIntoSentences(text: string): string[] {
 /**
  * Calcule le score de pertinence d'une phrase par rapport aux mots-clés
  */
-function calculateRelevanceScore(sentence: string, keywords: string[]): number {
+function calculateSentenceRelevanceScore(sentence: string, keywords: string[]): number {
   const lowerSentence = sentence.toLowerCase();
   let score = 0;
   
@@ -177,6 +177,143 @@ export function formatCitationsForResponse(citations: Citation[]): string {
   citationsText += '---\n*Les citations sont extraites automatiquement des documents pour référence*';
   
   return citationsText;
+}
+
+/**
+ * Calcule le score de pertinence d'une citation basé sur plusieurs facteurs
+ */
+export function calculateRelevanceScore(
+  citation: Citation,
+  question: string,
+  documentContent: string
+): number {
+  let score = 0;
+  
+  // 1. Pertinence textuelle (match de mots-clés)
+  const questionWords = question.toLowerCase().split(' ').filter(w => w.length > 2);
+  const excerptWords = citation.excerpt.toLowerCase().split(' ');
+  
+  const matchingWords = questionWords.filter(word => 
+    excerptWords.some(excerptWord => excerptWord.includes(word) || word.includes(excerptWord))
+  );
+  
+  score += (matchingWords.length / questionWords.length) * 0.4; // 40% du score
+  
+  // 2. Position dans le document (plus pertinent si au début)
+  const documentPosition = citation.startIndex / documentContent.length;
+  score += (1 - documentPosition) * 0.2; // 20% du score
+  
+  // 3. Longueur de l'extrait (ni trop court, ni trop long)
+  const excerptLength = citation.excerpt.length;
+  const optimalLength = 150; // longueur optimale
+  const lengthScore = 1 - Math.abs(excerptLength - optimalLength) / optimalLength;
+  score += Math.max(0, lengthScore) * 0.2; // 20% du score
+  
+  // 4. Densité d'information (ponctuation, structure)
+  const sentences = citation.excerpt.split('.').length;
+  const densityScore = Math.min(sentences / 3, 1); // max 3 phrases
+  score += densityScore * 0.1; // 10% du score
+  
+  // 5. Contexte disponible
+  if (citation.context && citation.context.length > citation.excerpt.length) {
+    score += 0.1; // 10% du score
+  }
+  
+  return Math.min(score, 1); // Normaliser entre 0 et 1
+}
+
+/**
+ * Enrichit les citations avec des scores de pertinence calculés
+ */
+export function enrichCitationsWithScores(
+  citations: Citation[],
+  question: string,
+  documentContent: string
+): Citation[] {
+  return citations.map(citation => ({
+    ...citation,
+    relevanceScore: calculateRelevanceScore(citation, question, documentContent)
+  }));
+}
+
+/**
+ * Formate les citations avec numéros [1], [2], [3] directement dans le texte
+ * et génère une liste de références à la fin
+ */
+export function formatCitationsWithNumbers(
+  response: string,
+  citations: Citation[]
+): { formattedResponse: string; references: string } {
+  if (citations.length === 0) {
+    return { formattedResponse: response, references: '' };
+  }
+
+  let formattedResponse = response;
+  const references: string[] = [];
+
+  // Ajouter les numéros de citation dans le texte
+  citations.forEach((citation, index) => {
+    const citationNumber = index + 1;
+    const citationTag = `[${citationNumber}]`;
+    
+    // Remplacer les mentions du document par des citations numérotées
+    const documentName = citation.documentName.toLowerCase();
+    const responseLower = formattedResponse.toLowerCase();
+    
+    // Chercher des mentions du document dans la réponse
+    let found = false;
+    const words = documentName.split(' ');
+    
+    // Essayer de trouver où insérer la citation
+    for (let i = 0; i < words.length; i++) {
+      const word = words[i];
+      if (word.length > 3 && responseLower.includes(word)) {
+        // Trouver la position du mot dans la réponse originale
+        const regex = new RegExp(`\\b${word}\\b`, 'gi');
+        const match = formattedResponse.match(regex);
+        if (match && match.length > 0) {
+          const firstMatch = match[0];
+          const position = formattedResponse.indexOf(firstMatch);
+          if (position !== -1) {
+            // Insérer la citation après le mot
+            const before = formattedResponse.substring(0, position + firstMatch.length);
+            const after = formattedResponse.substring(position + firstMatch.length);
+            formattedResponse = before + citationTag + after;
+            found = true;
+            break;
+          }
+        }
+      }
+    }
+    
+    // Si aucune mention trouvée, ajouter à la fin d'une phrase pertinente
+    if (!found) {
+      // Chercher une phrase qui pourrait contenir l'information
+      const sentences = formattedResponse.split('. ');
+      for (let i = 0; i < sentences.length; i++) {
+        const sentence = sentences[i];
+        // Vérifier si la phrase contient des mots-clés de l'extrait
+        const excerptWords = citation.excerpt.toLowerCase().split(' ').filter(w => w.length > 3);
+        const matches = excerptWords.filter(word => sentence.toLowerCase().includes(word));
+        
+        if (matches.length >= 2) {
+          sentences[i] = sentence + citationTag;
+          formattedResponse = sentences.join('. ');
+          found = true;
+          break;
+        }
+      }
+    }
+    
+    // Ajouter la référence à la liste
+    references.push(`${citationNumber}. **${citation.documentName}**\n   > "${citation.excerpt}"`);
+  });
+
+  const referencesText = references.length > 0 
+    ? `\n\n---\n**Références:**\n\n${references.join('\n\n')}`
+    : '';
+
+  return { formattedResponse, references: referencesText };
 }
 
 /**
@@ -272,13 +409,16 @@ export async function enrichResponseWithCitations(
       // Prendre les meilleures citations
       const topCitations = allCitations.slice(0, maxCitations);
       
-      // Ajouter les citations à la réponse
-      const citationsText = formatCitationsForResponse(topCitations);
-      const enrichedResponse = response + citationsText;
+      // Enrichir avec les scores de pertinence calculés
+      const enrichedCitations = enrichCitationsWithScores(topCitations, question, documents[0]?.content || '');
+      
+      // Utiliser le nouveau formatage avec numéros [1], [2], [3]
+      const { formattedResponse, references } = formatCitationsWithNumbers(response, enrichedCitations);
+      const finalResponse = formattedResponse + references;
       
       return {
-        enrichedResponse,
-        citations: topCitations
+        enrichedResponse: finalResponse,
+        citations: enrichedCitations
       };
     }
   } catch (error) {

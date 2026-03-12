@@ -1,16 +1,87 @@
 <!doctype html>
-<html lang="en">
+<html lang="fr">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>WordCraft AI Collaborative Learning</title>
-    <meta property="og:image" content="https://bolt.new/static/og_default.png" />
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#3b82f6" />
+    <meta name="description" content="WordCraft IA - Plateforme d'apprentissage intelligent avec IA" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="WordCraft IA" />
+    <meta name="application-name" content="WordCraft IA" />
+    <meta name="msapplication-TileColor" content="#3b82f6" />
+    <meta name="msapplication-config" content="/browserconfig.xml" />
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+    
+    <!-- Apple Icons -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png" />
+    
+    <!-- Favicon -->
+    <link rel="shortcut icon" href="/favicon.ico" />
+    
+    <!-- Open Graph -->
+    <meta property="og:title" content="WordCraft IA - Plateforme d'apprentissage intelligent" />
+    <meta property="og:description" content="Apprenez plus efficacement avec l'IA, des fiches, quiz et conversations intelligentes" />
+    <meta property="og:image" content="/icons/og-image.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="fr_FR" />
+    
+    <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:image" content="https://bolt.new/static/og_default.png" />
+    <meta name="twitter:title" content="WordCraft IA - Plateforme d'apprentissage intelligent" />
+    <meta name="twitter:description" content="Apprenez plus efficacement avec l'IA, des fiches, quiz et conversations intelligentes" />
+    <meta name="twitter:image" content="/icons/twitter-image.png" />
+    
+    <title>WordCraft IA - Plateforme d'apprentissage intelligent</title>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- Service Worker Registration -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then((registration) => {
+              console.log('✅ Service Worker enregistré:', registration.scope);
+              
+              // Vérifier les mises à jour
+              registration.addEventListener('updatefound', () => {
+                const newWorker = registration.installing;
+                if (newWorker) {
+                  newWorker.addEventListener('statechange', () => {
+                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                      // Nouvelle version disponible
+                      if (confirm('Une nouvelle version de WordCraft IA est disponible. Voulez-vous recharger ?')) {
+                        window.location.reload();
+                      }
+                    }
+                  });
+                }
+              });
+            })
+            .catch((error) => {
+              console.error('❌ Erreur enregistrement Service Worker:', error);
+            });
+        });
+      }
+      
+      // Gérer le message de mise à jour du service worker
+      let refreshing = false;
+      navigator.serviceWorker?.addEventListener('controllerchange', () => {
+        if (!refreshing) {
+          refreshing = true;
+          window.location.reload();
+        }
+      });
+    </script>
   </body>
 </html>

@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hors ligne - WordCraft IA</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+        
+        .float-animation {
+            animation: float 3s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .pulse-animation {
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen flex items-center justify-center p-4">
+    <div class="max-w-md w-full">
+        <!-- Logo animé -->
+        <div class="text-center mb-8">
+            <div class="float-animation inline-block">
+                <div class="w-24 h-24 mx-auto bg-white rounded-2xl flex items-center justify-center shadow-2xl">
+                    <svg class="w-16 h-16 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/>
+                    </svg>
+                </div>
+            </div>
+            <h1 class="text-3xl font-bold text-white mt-4 mb-2">WordCraft IA</h1>
+            <p class="text-blue-100">Plateforme d'apprentissage intelligent</p>
+        </div>
+
+        <!-- Carte principale -->
+        <div class="glass-effect rounded-2xl p-8 text-white">
+            <!-- Icône de connexion -->
+            <div class="text-center mb-6">
+                <div class="pulse-animation inline-block">
+                    <svg class="w-16 h-16 text-yellow-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"/>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Titre et message -->
+            <h2 class="text-2xl font-semibold text-center mb-4">Vous êtes hors ligne</h2>
+            <p class="text-blue-100 text-center mb-6">
+                Vérifiez votre connexion internet pour accéder à toutes les fonctionnalités de WordCraft IA.
+            </p>
+
+            <!-- Actions disponibles hors ligne -->
+            <div class="space-y-3 mb-6">
+                <div class="flex items-center space-x-3 p-3 bg-white bg-opacity-10 rounded-lg">
+                    <svg class="w-5 h-5 text-green-300" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                    </svg>
+                    <span class="text-sm">Documents récents accessibles</span>
+                </div>
+                
+                <div class="flex items-center space-x-3 p-3 bg-white bg-opacity-10 rounded-lg">
+                    <svg class="w-5 h-5 text-green-300" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                    </svg>
+                    <span class="text-sm">Fiches et quiz en cache</span>
+                </div>
+                
+                <div class="flex items-center space-x-3 p-3 bg-white bg-opacity-10 rounded-lg">
+                    <svg class="w-5 h-5 text-green-300" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                    </svg>
+                    <span class="text-sm">Notes personnelles synchronisées</span>
+                </div>
+            </div>
+
+            <!-- Bouton de retry -->
+            <div class="text-center">
+                <button 
+                    onclick="window.location.reload()" 
+                    class="w-full bg-white text-blue-600 font-semibold py-3 px-6 rounded-lg hover:bg-blue-50 transition-colors duration-200 flex items-center justify-center space-x-2"
+                >
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    <span>Réessayer</span>
+                </button>
+            </div>
+
+            <!-- Informations supplémentaires -->
+            <div class="mt-6 pt-6 border-t border-white border-opacity-20">
+                <div class="text-center text-sm text-blue-100">
+                    <p class="mb-2">Vos données sont sauvegardées localement</p>
+                    <p class="text-xs opacity-75">La synchronisation reprendra automatiquement lorsque vous serez de nouveau connecté</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center mt-8 text-white text-sm opacity-75">
+            <p>WordCraft IA v1.0.0</p>
+            <p class="text-xs mt-1">© 2026 - Tous droits réservés</p>
+        </div>
+    </div>
+
+    <script>
+        // Vérifier périodiquement la connexion
+        let retryCount = 0;
+        const maxRetries = 5;
+        
+        function checkConnection() {
+            if (navigator.onLine) {
+                // La connexion est revenue, recharger la page
+                console.log('🌐 Connexion rétablie, rechargement...');
+                window.location.reload();
+            } else {
+                retryCount++;
+                if (retryCount < maxRetries) {
+                    // Réessayer dans 5 secondes
+                    setTimeout(checkConnection, 5000);
+                }
+            }
+        }
+        
+        // Écouter les événements de connexion
+        window.addEventListener('online', () => {
+            console.log('🌐 Connexion rétablie');
+            window.location.reload();
+        });
+        
+        window.addEventListener('offline', () => {
+            console.log('📡 Connexion perdue');
+        });
+        
+        // Démarrer la vérification périodique
+        setTimeout(checkConnection, 5000);
+        
+        // Afficher l'état de la connexion
+        function updateConnectionStatus() {
+            const statusElement = document.getElementById('connection-status');
+            if (statusElement) {
+                statusElement.textContent = navigator.onLine ? 'En ligne' : 'Hors ligne';
+                statusElement.className = navigator.onLine ? 
+                    'text-green-300' : 'text-yellow-300';
+            }
+        }
+        
+        updateConnectionStatus();
+        setInterval(updateConnectionStatus, 1000);
+    </script>
+</body>
+</html>

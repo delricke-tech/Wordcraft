@@ -807,3 +807,666 @@ export const getFieldDefinitions = (target: string) =>
 
 export const validateSortConfiguration = (config: SortConfiguration) => 
   customSortingService.validateSortConfiguration(config);
+
+// NOUVELLES FONCTIONNALITÉS AVANCÉES
+
+/**
+ * Interface pour les documents avec métadonnées étendues
+ */
+export interface DocumentWithMetadata {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  createdAt: Date;
+  updatedAt: Date;
+  content?: string;
+  tags?: string[];
+  author?: string;
+  folder?: string;
+  isFavorite?: boolean;
+  isShared?: boolean;
+  sharedWith?: string[];
+  metadata?: Record<string, any>;
+  excerpt?: string;
+  wordCount?: number;
+  pageCount?: number;
+  language?: string;
+  status?: 'draft' | 'published' | 'archived';
+  priority?: 'low' | 'medium' | 'high';
+  // Métadonnées de pertinence
+  relevanceScore?: number;
+  viewCount?: number;
+  downloadCount?: number;
+  shareCount?: number;
+  lastAccessed?: Date;
+  rating?: number;
+  reviewCount?: number;
+}
+
+/**
+ * Options de tri avancées
+ */
+export interface AdvancedSortOptions {
+  target: 'documents' | 'notes' | 'conversations' | 'flashcards' | 'quiz' | 'all';
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  customConfig?: SortConfiguration;
+  includeMetadata?: boolean;
+  limit?: number;
+  offset?: number;
+  workspaceId?: string;
+  userId?: string;
+  // Nouvelles options
+  relevanceWeights?: {
+    name?: number;
+    content?: number;
+    tags?: number;
+    author?: number;
+    date?: number;
+    size?: number;
+    popularity?: number;
+    favorites?: number;
+  };
+  multiLevelSort?: boolean;
+  groupBy?: string;
+  includeEmpty?: boolean;
+  caseSensitive?: boolean;
+  locale?: string;
+}
+
+/**
+ * Résultat de tri avec statistiques
+ */
+export interface SortResult<T = any> {
+  items: T[];
+  totalCount: number;
+  sortedCount: number;
+  groups?: Record<string, T[]>;
+  statistics: {
+    executionTime: number;
+    algorithmUsed: string;
+    comparisons: number;
+    swaps: number;
+    efficiency: number;
+  };
+  metadata?: {
+    sortFields: string[];
+    sortDirections: string[];
+    groups: string[];
+    emptyFields: string[];
+  };
+}
+
+/**
+ * Calcule le score de pertinence d'un document
+ */
+export function calculateRelevanceScore(
+  document: DocumentWithMetadata,
+  weights: AdvancedSortOptions['relevanceWeights'] = {}
+): number {
+  const defaultWeights = {
+    name: 0.3,
+    content: 0.25,
+    tags: 0.15,
+    author: 0.1,
+    date: 0.1,
+    size: 0.05,
+    popularity: 0.03,
+    favorites: 0.02
+  };
+  
+  const finalWeights = { ...defaultWeights, ...weights };
+  let score = 0;
+  
+  // Score basé sur le nom
+  if (document.name) {
+    score += finalWeights.name! * (document.name.length > 10 ? 1 : 0.8);
+  }
+  
+  // Score basé sur le contenu
+  if (document.content) {
+    const contentLength = document.content.length;
+    if (contentLength > 1000) score += finalWeights.content! * 1;
+    else if (contentLength > 500) score += finalWeights.content! * 0.8;
+    else if (contentLength > 100) score += finalWeights.content! * 0.6;
+    else score += finalWeights.content! * 0.4;
+  }
+  
+  // Score basé sur les tags
+  if (document.tags && document.tags.length > 0) {
+    score += finalWeights.tags! * Math.min(document.tags.length / 5, 1);
+  }
+  
+  // Score basé sur l'auteur
+  if (document.author) {
+    score += finalWeights.author! * 0.8;
+  }
+  
+  // Score basé sur la date (plus récent = meilleur)
+  if (document.updatedAt) {
+    const daysSinceUpdate = (Date.now() - document.updatedAt.getTime()) / (1000 * 60 * 60 * 24);
+    const recencyScore = Math.max(0, 1 - daysSinceUpdate / 365); // Décroît sur 1 an
+    score += finalWeights.date! * recencyScore;
+  }
+  
+  // Score basé sur la taille (taille modérée = meilleur)
+  if (document.size) {
+    const sizeMB = document.size / (1024 * 1024);
+    let sizeScore = 0;
+    if (sizeMB < 1) sizeScore = 0.3;
+    else if (sizeMB < 10) sizeScore = 1;
+    else if (sizeMB < 50) sizeScore = 0.8;
+    else sizeScore = 0.5;
+    score += finalWeights.size! * sizeScore;
+  }
+  
+  // Score basé sur la popularité
+  const popularity = (document.viewCount || 0) + (document.downloadCount || 0) + (document.shareCount || 0);
+  if (popularity > 0) {
+    score += finalWeights.popularity! * Math.min(popularity / 100, 1);
+  }
+  
+  // Score basé sur les favoris
+  if (document.isFavorite) {
+    score += finalWeights.favorites!;
+  }
+  
+  // Score basé sur la note
+  if (document.rating) {
+    score += (document.rating / 5) * 0.2; // Bonus pour les bonnes notes
+  }
+  
+  return Math.min(score, 1); // Normaliser entre 0 et 1
+}
+
+/**
+ * Tri avancé avec pertinence et multi-niveaux
+ */
+export function advancedSort<T extends DocumentWithMetadata>(
+  items: T[],
+  options: AdvancedSortOptions
+): SortResult<T> {
+  const startTime = Date.now();
+  let comparisons = 0;
+  let swaps = 0;
+  
+  // Calculer les scores de pertinence si nécessaire
+  if (options.sortBy === 'relevance' || options.relevanceWeights) {
+    items = items.map(item => ({
+      ...item,
+      relevanceScore: calculateRelevanceScore(item, options.relevanceWeights)
+    }));
+  }
+  
+  // Tri principal
+  let sortedItems = [...items];
+  const sortFields = options.sortBy ? [options.sortBy] : options.customConfig?.criteria.map(c => c.field) || ['updatedAt'];
+  const sortDirections = options.sortOrder ? [options.sortOrder] : options.customConfig?.criteria.map(c => c.direction) || ['desc'];
+  
+  // Tri multi-niveaux
+  if (options.multiLevelSort && sortFields.length > 1) {
+    sortedItems.sort((a, b) => {
+      for (let i = 0; i < sortFields.length; i++) {
+        const field = sortFields[i];
+        const direction = sortDirections[i] || 'asc';
+        
+        const aValue = getNestedValue(a, field);
+        const bValue = getNestedValue(b, field);
+        
+        comparisons++;
+        
+        let comparison = 0;
+        
+        if (aValue === null || aValue === undefined) comparison = -1;
+        else if (bValue === null || bValue === undefined) comparison = 1;
+        else if (typeof aValue === 'string' && typeof bValue === 'string') {
+          comparison = options.caseSensitive 
+            ? aValue.localeCompare(bValue, options.locale)
+            : aValue.toLowerCase().localeCompare(bValue.toLowerCase(), options.locale);
+        } else {
+          comparison = aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
+        }
+        
+        if (comparison !== 0) {
+          swaps++;
+          return direction === 'desc' ? -comparison : comparison;
+        }
+      }
+      return 0;
+    });
+  } else {
+    // Tri simple
+    const field = sortFields[0] || 'updatedAt';
+    const direction = sortDirections[0] || 'desc';
+    
+    sortedItems.sort((a, b) => {
+      const aValue = getNestedValue(a, field);
+      const bValue = getNestedValue(b, field);
+      
+      comparisons++;
+      
+      let comparison = 0;
+      
+      if (aValue === null || aValue === undefined) comparison = -1;
+      else if (bValue === null || bValue === undefined) comparison = 1;
+      else if (typeof aValue === 'string' && typeof bValue === 'string') {
+        comparison = options.caseSensitive 
+          ? aValue.localeCompare(bValue, options.locale)
+          : aValue.toLowerCase().localeCompare(bValue.toLowerCase(), options.locale);
+      } else {
+        comparison = aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
+      }
+      
+      if (comparison !== 0) {
+        swaps++;
+      }
+      
+      return direction === 'desc' ? -comparison : comparison;
+    });
+  }
+  
+  // Grouper les résultats si demandé
+  let groups: Record<string, T[]> | undefined;
+  if (options.groupBy) {
+    groups = sortedItems.reduce((acc, item) => {
+      const groupValue = String(getNestedValue(item, options.groupBy!) || 'unknown');
+      if (!acc[groupValue]) acc[groupValue] = [];
+      acc[groupValue].push(item);
+      return acc;
+    }, {} as Record<string, T[]>);
+  }
+  
+  const executionTime = Date.now() - startTime;
+  const efficiency = items.length > 0 ? (items.length / (comparisons + 1)) : 0;
+  
+  return {
+    items: sortedItems,
+    totalCount: items.length,
+    sortedCount: sortedItems.length,
+    groups,
+    statistics: {
+      executionTime,
+      algorithmUsed: options.multiLevelSort ? 'multi-level-quick-sort' : 'standard-sort',
+      comparisons,
+      swaps,
+      efficiency
+    },
+    metadata: {
+      sortFields,
+      sortDirections,
+      groups: options.groupBy ? Object.keys(groups || {}) : [],
+      emptyFields: sortFields.filter(field => 
+        items.every(item => getNestedValue(item, field) === null || getNestedValue(item, field) === undefined)
+      )
+    }
+  };
+}
+
+/**
+ * Tri intelligent avec apprentissage des préférences
+ */
+export function intelligentSort<T extends DocumentWithMetadata>(
+  items: T[],
+  userId: string,
+  options?: Partial<AdvancedSortOptions>
+): SortResult<T> {
+  // Récupérer les préférences de tri de l'utilisateur
+  const userPreferences = getUserSortPreferences(userId);
+  
+  // Combiner avec les options fournies
+  const finalOptions: AdvancedSortOptions = {
+    ...options,
+    sortBy: options?.sortBy || userPreferences.defaultSortField,
+    sortOrder: options?.sortOrder || userPreferences.defaultSortDirection,
+    relevanceWeights: {
+      ...userPreferences.relevanceWeights,
+      ...options?.relevanceWeights
+    },
+    multiLevelSort: options?.multiLevelSort ?? userPreferences.preferMultiLevelSort,
+    groupBy: options?.groupBy || userPreferences.defaultGroupBy
+  };
+  
+  const result = advancedSort(items, finalOptions);
+  
+  // Enregistrer l'utilisation pour améliorer les futures recommandations
+  recordSortUsage(userId, finalOptions);
+  
+  return result;
+}
+
+/**
+ * Récupère les préférences de tri d'un utilisateur
+ */
+function getUserSortPreferences(userId: string): {
+  defaultSortField: string;
+  defaultSortDirection: 'asc' | 'desc';
+  relevanceWeights: Record<string, number>;
+  preferMultiLevelSort: boolean;
+  defaultGroupBy?: string;
+} {
+  try {
+    const saved = localStorage.getItem(`sortPreferences_${userId}`);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (error) {
+    console.error('❌ Erreur chargement préférences tri:', error);
+  }
+  
+  // Préférences par défaut
+  return {
+    defaultSortField: 'updatedAt',
+    defaultSortDirection: 'desc',
+    relevanceWeights: {
+      name: 0.3,
+      content: 0.25,
+      tags: 0.15,
+      author: 0.1,
+      date: 0.1,
+      size: 0.05,
+      popularity: 0.03,
+      favorites: 0.02
+    },
+    preferMultiLevelSort: false
+  };
+}
+
+/**
+ * Enregistre l'utilisation d'un tri pour améliorer les recommandations
+ */
+function recordSortUsage(userId: string, options: AdvancedSortOptions): void {
+  try {
+    const usageKey = `sortUsage_${userId}`;
+    const existing = localStorage.getItem(usageKey);
+    const usage = existing ? JSON.parse(existing) : { history: [], frequency: {} };
+    
+    // Ajouter à l'historique
+    usage.history.unshift({
+      timestamp: new Date().toISOString(),
+      sortBy: options.sortBy,
+      sortOrder: options.sortOrder,
+      groupBy: options.groupBy,
+      multiLevelSort: options.multiLevelSort
+    });
+    
+    // Limiter l'historique à 100 entrées
+    usage.history = usage.history.slice(0, 100);
+    
+    // Mettre à jour les fréquences
+    const sortKey = `${options.sortBy}_${options.sortOrder}`;
+    usage.frequency[sortKey] = (usage.frequency[sortKey] || 0) + 1;
+    
+    localStorage.setItem(usageKey, JSON.stringify(usage));
+  } catch (error) {
+    console.error('❌ Erreur enregistrement utilisation tri:', error);
+  }
+}
+
+/**
+ * Génère des suggestions de tri basées sur l'historique
+ */
+export function generateSortSuggestions(userId: string, target: string): Array<{
+  field: string;
+  direction: 'asc' | 'desc';
+  confidence: number;
+  reason: string;
+}> {
+  try {
+    const usageKey = `sortUsage_${userId}`;
+    const existing = localStorage.getItem(usageKey);
+    
+    if (!existing) {
+      return getDefaultSuggestions(target);
+    }
+    
+    const usage = JSON.parse(existing);
+    const suggestions: Array<{
+      field: string;
+      direction: 'asc' | 'desc';
+      confidence: number;
+      reason: string;
+    }> = [];
+    
+    // Analyser les fréquences
+    const totalSorts = Object.values(usage.frequency).reduce((sum: number, count: number) => sum + count, 0);
+    
+    Object.entries(usage.frequency).forEach(([sortKey, count]) => {
+      const [field, direction] = sortKey.split('_');
+      const confidence = count / totalSorts;
+      
+      if (confidence > 0.1) { // Seulement les suggestions avec >10% d'utilisation
+        suggestions.push({
+          field,
+          direction: direction as 'asc' | 'desc',
+          confidence,
+          reason: `Utilisé ${count} fois (${Math.round(confidence * 100)}% du temps)`
+        });
+      }
+    });
+    
+    // Trier par confiance
+    suggestions.sort((a, b) => b.confidence - a.confidence);
+    
+    return suggestions.slice(0, 5); // Top 5 suggestions
+  } catch (error) {
+    console.error('❌ Erreur génération suggestions tri:', error);
+    return getDefaultSuggestions(target);
+  }
+}
+
+/**
+ * Suggestions de tri par défaut
+ */
+function getDefaultSuggestions(target: string): Array<{
+  field: string;
+  direction: 'asc' | 'desc';
+  confidence: number;
+  reason: string;
+}> {
+  const defaultSuggestions = {
+    documents: [
+      { field: 'updatedAt', direction: 'desc' as const, confidence: 0.8, reason: 'Documents récents en premier' },
+      { field: 'name', direction: 'asc' as const, confidence: 0.6, reason: 'Ordre alphabétique' },
+      { field: 'size', direction: 'desc' as const, confidence: 0.4, reason: 'Plus gros fichiers en premier' },
+      { field: 'relevanceScore', direction: 'desc' as const, confidence: 0.7, reason: 'Par pertinence' },
+      { field: 'createdAt', direction: 'desc' as const, confidence: 0.5, reason: 'Plus récents créés' }
+    ],
+    notes: [
+      { field: 'updatedAt', direction: 'desc' as const, confidence: 0.8, reason: 'Notes récentes en premier' },
+      { field: 'name', direction: 'asc' as const, confidence: 0.6, reason: 'Ordre alphabétique' },
+      { field: 'relevanceScore', direction: 'desc' as const, confidence: 0.7, reason: 'Par pertinence' }
+    ],
+    conversations: [
+      { field: 'updatedAt', direction: 'desc' as const, confidence: 0.9, reason: 'Conversations récentes' },
+      { field: 'name', direction: 'asc' as const, confidence: 0.5, reason: 'Ordre alphabétique' },
+      { field: 'relevanceScore', direction: 'desc' as const, confidence: 0.6, reason: 'Par pertinence' }
+    ],
+    flashcards: [
+      { field: 'updatedAt', direction: 'desc' as const, confidence: 0.8, reason: 'Cartes récentes' },
+      { field: 'name', direction: 'asc' as const, confidence: 0.6, reason: 'Ordre alphabétique' },
+      { field: 'relevanceScore', direction: 'desc' as const, confidence: 0.7, reason: 'Par pertinence' }
+    ],
+    quiz: [
+      { field: 'updatedAt', direction: 'desc' as const, confidence: 0.8, reason: 'Quiz récents' },
+      { field: 'name', direction: 'asc' as const, confidence: 0.6, reason: 'Ordre alphabétique' },
+      { field: 'relevanceScore', direction: 'desc' as const, confidence: 0.7, reason: 'Par pertinence' }
+    ]
+  };
+  
+  return defaultSuggestions[target as keyof typeof defaultSuggestions] || defaultSuggestions.documents;
+}
+
+/**
+ * Exporte les résultats de tri en multiple formats
+ */
+export function exportSortResults<T>(
+  result: SortResult<T>,
+  format: 'csv' | 'json' | 'xlsx'
+): string {
+  const { items, statistics, metadata } = result;
+  
+  switch (format) {
+    case 'csv':
+      return exportSortToCSV(items, statistics, metadata);
+    case 'json':
+      return JSON.stringify({
+        items,
+        statistics,
+        metadata,
+        exportedAt: new Date().toISOString()
+      }, null, 2);
+    case 'xlsx':
+      // Placeholder pour export Excel
+      return exportSortToCSV(items, statistics, metadata);
+    default:
+      return exportSortToCSV(items, statistics, metadata);
+  }
+}
+
+/**
+ * Export CSV des résultats de tri
+ */
+function exportSortToCSV<T>(
+  items: T[],
+  statistics: SortResult['statistics'],
+  metadata?: SortResult['metadata']
+): string {
+  const headers = [
+    'Position',
+    'ID',
+    'Nom',
+    'Type',
+    'Taille (octets)',
+    'Date de création',
+    'Date de modification',
+    'Score de pertinence',
+    'Tags',
+    'Auteur',
+    'Dossier',
+    'Favori',
+    'Partagé'
+  ];
+  
+  const csvContent = [
+    `# Statistiques de tri`,
+    `# Temps d'exécution: ${statistics.executionTime}ms`,
+    `# Algorithm: ${statistics.algorithmUsed}`,
+    `# Comparaisons: ${statistics.comparisons}`,
+    `# Échanges: ${statistics.swaps}`,
+    `# Efficacité: ${statistics.efficiency.toFixed(2)}`,
+    '',
+    headers.join(','),
+    ...items.map((item, index) => {
+      const doc = item as any;
+      return [
+        index + 1,
+        doc.id,
+        `"${doc.name}"`,
+        doc.type,
+        doc.size,
+        doc.createdAt?.toISOString() || '',
+        doc.updatedAt?.toISOString() || '',
+        doc.relevanceScore?.toFixed(3) || '',
+        `"${(doc.tags || []).join(';')}"`,
+        `"${doc.author || ''}"`,
+        `"${doc.folder || ''}"`,
+        doc.isFavorite ? 'Oui' : 'Non',
+        doc.isShared ? 'Oui' : 'Non'
+      ].join(',');
+    })
+  ].join('\n');
+  
+  return csvContent;
+}
+
+/**
+ * Récupère une valeur imbriquée dans un objet
+ */
+function getNestedValue(obj: any, path: string): any {
+  return path.split('.').reduce((current, key) => current?.[key], obj);
+}
+
+/**
+ * Analyse les performances de tri
+ */
+export function analyzeSortPerformance(result: SortResult): {
+  grade: 'A' | 'B' | 'C' | 'D' | 'F';
+  score: number;
+  recommendations: string[];
+  insights: {
+    efficiency: string;
+    speed: string;
+    algorithm: string;
+  };
+} {
+  const { statistics, metadata } = result;
+  const { executionTime, comparisons, swaps, efficiency } = statistics;
+  
+  let score = 0;
+  let recommendations: string[] = [];
+  
+  // Score basé sur le temps d'exécution
+  if (executionTime < 50) score += 25;
+  else if (executionTime < 200) score += 20;
+  else if (executionTime < 500) score += 15;
+  else if (executionTime < 1000) score += 10;
+  else score += 5;
+  
+  // Score basé sur l'efficacité
+  if (efficiency > 0.8) score += 25;
+  else if (efficiency > 0.6) score += 20;
+  else if (efficiency > 0.4) score += 15;
+  else if (efficiency > 0.2) score += 10;
+  else score += 5;
+  
+  // Score basé sur le ratio comparaisons/échanges
+  const swapRatio = swaps > 0 ? comparisons / swaps : comparisons;
+  if (swapRatio > 10) score += 25;
+  else if (swapRatio > 5) score += 20;
+  else if (swapRatio > 3) score += 15;
+  else if (swapRatio > 2) score += 10;
+  else score += 5;
+  
+  // Score basé sur l'algorithme utilisé
+  if (statistics.algorithmUsed.includes('multi-level')) score += 25;
+  else if (statistics.algorithmUsed.includes('quick-sort')) score += 20;
+  else if (statistics.algorithmUsed.includes('merge-sort')) score += 15;
+  else score += 10;
+  
+  // Recommandations
+  if (executionTime > 1000) {
+    recommendations.push('Le tri est lent. Envisagez d\'optimiser les critères ou d\'utiliser l\'indexation.');
+  }
+  
+  if (efficiency < 0.5) {
+    recommendations.push('L\'efficacité est faible. Vérifiez les champs de tri et les données.');
+  }
+  
+  if (swapRatio < 2) {
+    recommendations.push('Beaucoup d\'échanges. Les données peuvent être déjà presque triées.');
+  }
+  
+  if (metadata?.emptyFields && metadata.emptyFields.length > 0) {
+    recommendations.push(`Champs vides détectés: ${metadata.emptyFields.join(', ')}. Considérez les exclure du tri.`);
+  }
+  
+  // Déterminer la note
+  let grade: 'A' | 'B' | 'C' | 'D' | 'F';
+  if (score >= 90) grade = 'A';
+  else if (score >= 80) grade = 'B';
+  else if (score >= 70) grade = 'C';
+  else if (score >= 60) grade = 'D';
+  else grade = 'F';
+  
+  return {
+    grade,
+    score,
+    recommendations,
+    insights: {
+      efficiency: efficiency > 0.7 ? 'Excellente' : efficiency > 0.5 ? 'Bonne' : 'À améliorer',
+      speed: executionTime < 100 ? 'Très rapide' : executionTime < 500 ? 'Rapide' : executionTime < 1000 ? 'Modérée' : 'Lente',
+      algorithm: statistics.algorithmUsed.includes('multi-level') ? 'Avancé' : 'Standard'
+    }
+  };
+}

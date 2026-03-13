@@ -919,9 +919,9 @@ class RedisCacheService {
 
 // Instance singleton avec configuration par défaut
 const defaultConfig: RedisCacheServiceConfig = {
-  redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
-  password: process.env.REDIS_PASSWORD,
-  database: parseInt(process.env.REDIS_DB || '0'),
+  redisUrl: (typeof window !== 'undefined' ? window.location.hostname === 'localhost' ? 'redis://localhost:6379' : 'redis://localhost:6379') || 'redis://localhost:6379',
+  password: (typeof window !== 'undefined' ? undefined : process.env.REDIS_PASSWORD),
+  database: parseInt((typeof window !== 'undefined' ? '0' : process.env.REDIS_DB) || '0'),
   maxRetries: 3,
   retryDelay: 1000,
   connectTimeout: 10000,

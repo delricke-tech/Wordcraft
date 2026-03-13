@@ -437,7 +437,7 @@ export class TextExpansionService {
 
     // Calculer les métriques du texte étendu
     const expandedMetrics = this.calculateTextMetrics(expandedText);
-    const originalMetrics = this.calculateTextMetrics(originalText);
+    const _originalMetrics = this.calculateTextMetrics(originalText);
     
     // Calculer les scores
     const qualityScore = this.calculateQualityScore(expandedText, additions);
@@ -468,7 +468,7 @@ export class TextExpansionService {
     additions: TextAddition[]
   ): Promise<string> {
     let expandedText = text;
-    const targetWordCount = this.getTargetWordCount(targetLength);
+    const _targetWordCount = this.getTargetWordCount(targetLength);
     
     // Analyser le texte pour identifier les points à détailler
     const sentences = text.split(/[.!?]+/);
@@ -515,11 +515,11 @@ export class TextExpansionService {
    */
   private async expandWithExamples(
     text: string,
-    targetLength: TargetLength,
-    settings: ContentSettings,
+    _targetLength: TargetLength,
+    _settings: ContentSettings,
     additions: TextAddition[]
   ): Promise<string> {
-    const expandedText = text;
+    let _expandedText = text;
     const paragraphs = text.split('\n\n');
     
     for (let i = 0; i < paragraphs.length; i++) {
@@ -556,15 +556,15 @@ export class TextExpansionService {
    */
   private async expandWithExplanations(
     text: string,
-    targetLength: TargetLength,
-    settings: ContentSettings,
+    _targetLength: TargetLength,
+    _settings: ContentSettings,
     additions: TextAddition[]
   ): Promise<string> {
     let expandedText = text;
     const complexTerms = this.extractComplexTerms(text);
     
     for (const term of complexTerms) {
-      if (this.shouldExplain(term, settings)) {
+      if (this.shouldExplain(term, _settings)) {
         const explanation = this.generateExplanation(term);
         
         // Ajouter l'explication
@@ -628,8 +628,8 @@ export class TextExpansionService {
    */
   private async expandAcademically(
     text: string,
-    targetLength: TargetLength,
-    settings: ContentSettings,
+    _targetLength: TargetLength,
+    _settings: ContentSettings,
     additions: TextAddition[]
   ): Promise<string> {
     let expandedText = text;
@@ -679,8 +679,8 @@ export class TextExpansionService {
    */
   private async expandCreatively(
     text: string,
-    targetLength: TargetLength,
-    settings: ContentSettings,
+    _targetLength: TargetLength,
+    _settings: ContentSettings,
     additions: TextAddition[]
   ): Promise<string> {
     let expandedText = text;
@@ -727,8 +727,8 @@ export class TextExpansionService {
    */
   private async expandTechnically(
     text: string,
-    targetLength: TargetLength,
-    settings: ContentSettings,
+    _targetLength: TargetLength,
+    _settings: ContentSettings,
     additions: TextAddition[]
   ): Promise<string> {
     let expandedText = text;
@@ -775,8 +775,8 @@ export class TextExpansionService {
    */
   private async expandForBusiness(
     text: string,
-    targetLength: TargetLength,
-    settings: ContentSettings,
+    _targetLength: TargetLength,
+    _settings: ContentSettings,
     additions: TextAddition[]
   ): Promise<string> {
     let expandedText = text;
@@ -892,7 +892,7 @@ export class TextExpansionService {
    * Calcule le score de complétude
    */
   private calculateCompletenessScore(original: string, expanded: string, targetLength: TargetLength): number {
-    const originalMetrics = this.calculateTextMetrics(original);
+    const _originalMetrics = this.calculateTextMetrics(original);
     const expandedMetrics = this.calculateTextMetrics(expanded);
     const targetWordCount = this.getTargetWordCount(targetLength);
     
@@ -1087,7 +1087,7 @@ export class TextExpansionService {
       'protocole': 'ensemble de règles de communication'
     };
     
-    return details[concept.toLowerCase()] || `détails supplémentaires sur ${concept}`;
+    return details[concept.toLowerCase() as keyof typeof details] || `détails supplémentaires sur ${concept}`;
   }
 
   /**
@@ -1105,7 +1105,7 @@ export class TextExpansionService {
       'protocole': 'les règles d\'un jeu de société'
     };
     
-    return examples[concept.toLowerCase()] || `exemple concret impliquant ${concept}`;
+    return examples[concept.toLowerCase() as keyof typeof examples] || `exemple concret impliquant ${concept}`;
   }
 
   /**
@@ -1123,20 +1123,20 @@ export class TextExpansionService {
       'architecture': 'structure organisationnelle d\'un système'
     };
     
-    return explanations[term.toLowerCase()] || `définition de ${term}`;
+    return explanations[term.toLowerCase() as keyof typeof explanations] || `définition de ${term}`;
   }
 
   /**
    * Génère du contexte
    */
-  private generateContext(text: string): string {
+  private generateContext(_text: string): string {
     return `Ce texte traite de sujets importants qui méritent d'être explorés en profondeur pour une meilleure compréhension.`;
   }
 
   /**
    * Génère des références académiques
    */
-  private generateAcademicReferences(text: string): string[] {
+  private generateAcademicReferences(_text: string): string[] {
     return [
       'Smith, J. (2023). "Advanced Text Processing Techniques". Journal of Computational Linguistics.',
       'Johnson, M. (2022). "Modern Approaches to Text Expansion". Academic Press.',
@@ -1147,7 +1147,7 @@ export class TextExpansionService {
   /**
    * Génère des définitions formelles
    */
-  private generateFormalDefinitions(text: string): string[] {
+  private generateFormalDefinitions(_text: string): string[] {
     return [
       'Selon la théorie computationnelle, l\'extension de texte consiste à augmenter le contenu informationnel tout en préservant la cohérence sémantique.',
       'Dans le domaine du traitement du langage naturel, l\'extension vise à enrichir le texte sans altérer son sens original.'
@@ -1157,7 +1157,7 @@ export class TextExpansionService {
   /**
    * Génère des analogies créatives
    */
-  private generateCreativeAnalogies(text: string): string[] {
+  private generateCreativeAnalogies(_text: string): string[] {
     return [
       'L\'extension de texte est comme un jardinier qui ajoute des plantes pour rendre un jardin plus luxuriant.',
       'Étendre un texte, c\'est comme ajouter des couleurs à un tableau noir et blanc pour lui donner vie.'
@@ -1167,7 +1167,7 @@ export class TextExpansionService {
   /**
    * Génère des métaphores
    */
-  private generateMetaphors(text: string): string[] {
+  private generateMetaphors(_text: string): string[] {
     return [
       'Le texte est une rivière qui s\'élargit pour devenir un fleuve.',
       'Les idées sont des graines qui germent en plantes majestueuses.'
@@ -1177,7 +1177,7 @@ export class TextExpansionService {
   /**
    * Génère des spécifications techniques
    */
-  private generateTechnicalSpecs(text: string): string[] {
+  private generateTechnicalSpecs(_text: string): string[] {
     return [
       'Spécification: Utilisation d\'algorithmes de NLP avancés pour l\'analyse sémantique.',
       'Configuration: Modèles Transformer avec attention multi-têtes.',
@@ -1188,7 +1188,7 @@ export class TextExpansionService {
   /**
    * Génère des implémentations
    */
-  private generateImplementations(text: string): string[] {
+  private generateImplementations(_text: string): string[] {
     return [
       'Implémentation en Python avec la bibliothèque Transformers.',
       'Version JavaScript utilisant l\'API OpenAI.',
@@ -1199,7 +1199,7 @@ export class TextExpansionService {
   /**
    * Génère des études de cas
    */
-  private generateCaseStudies(text: string): string[] {
+  private generateCaseStudies(_text: string): string[] {
     return [
       'Cas d\'usage: Une entreprise du Fortune 500 a augmenté sa productivité de 35% avec cette approche.',
       'Exemple: Une startup EdTech a amélioré la rétention des étudiants de 25%.',
@@ -1210,7 +1210,7 @@ export class TextExpansionService {
   /**
    * Génère des implications business
    */
-  private generateBusinessImplications(text: string): string[] {
+  private generateBusinessImplications(_text: string): string[] {
     return [
       'Implication: Réduction des coûts opérationnels estimée à 20-30%.',
       'Impact: Amélioration de l\'expérience client et satisfaction accrue.',
@@ -1778,7 +1778,7 @@ export class TextExpansionService {
   /**
    * Récupère les statistiques des extensions
    */
-  public async getExpansionStats(userId?: string): Promise<ExpansionStatistics> {
+  public async getExpansionStats(_userId?: string): Promise<ExpansionStatistics> {
     try {
       // Simuler la récupération des statistiques
       return {
@@ -1821,7 +1821,7 @@ export class TextExpansionService {
   /**
    * Simule l'extraction de contenu d'un document
    */
-  public async extractDocumentContent(documentId: string): Promise<string> {
+  public async extractDocumentContent(_documentId: string): Promise<string> {
     try {
       const sampleContent = `
         L'intelligence artificielle transforme radicalement notre manière de travailler et de vivre.

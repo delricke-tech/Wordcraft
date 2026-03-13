@@ -169,19 +169,41 @@ class I18nService {
    */
   async getLanguages(): Promise<Language[]> {
     try {
-      const { data, error } = await supabase
-        .from('languages')
-        .select('*')
-        .eq('is_active', true)
-        .order('is_default', { ascending: false })
-        .order('name', { ascending: true });
+      // Utiliser des langues par défaut si la table n'existe pas
+      const defaultLanguages: Language[] = [
+        { code: 'fr', name: 'Français', is_default: true, is_active: true },
+        { code: 'en', name: 'English', is_default: false, is_active: true },
+        { code: 'es', name: 'Español', is_default: false, is_active: true }
+      ];
 
-      if (error) throw error;
-      return (data || []).map(this.mapLanguageFromDB);
+      try {
+        const { data, error } = await supabase
+          .from('languages')
+          .select('*')
+          .eq('is_active', true)
+          .order('is_default', { ascending: false })
+          .order('name', { ascending: true });
+
+        if (error) {
+          console.warn('⚠️ Table languages non trouvée, utilisation des langues par défaut');
+          return defaultLanguages;
+        }
+
+        return (data && data.length > 0) ? data.map(this.mapLanguageFromDB) : defaultLanguages;
+
+      } catch (tableError) {
+        console.warn('⚠️ Erreur table languages, utilisation des langues par défaut:', tableError);
+        return defaultLanguages;
+      }
 
     } catch (error) {
       console.error('❌ Erreur récupération langues:', error);
-      throw new Error(`Échec de la récupération: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
+      // Retourner les langues par défaut en cas d'erreur
+      return [
+        { code: 'fr', name: 'Français', is_default: true, is_active: true },
+        { code: 'en', name: 'English', is_default: false, is_active: true },
+        { code: 'es', name: 'Español', is_default: false, is_active: true }
+      ];
     }
   }
 

@@ -20,6 +20,7 @@ export interface Timeline {
   settings: TimelineSettings;
   metadata: TimelineMetadata;
   analytics: TimelineAnalytics;
+  status?: 'draft' | 'processing' | 'completed' | 'published';
   createdAt: string;
   updatedAt: string;
   publishedAt?: string;
@@ -766,6 +767,7 @@ class TimelineService {
       // Événements basés sur le contenu
       const baseEvents = [
         {
+          id: "event-1",
           title: "Début du projet",
           description: "Lancement officiel du projet avec définition des objectifs initiaux et constitution de l'équipe fondatrice",
           date: "2023-01-15",
@@ -782,18 +784,18 @@ class TimelineService {
           keywords: ["début", "lancement", "fondation"],
           relatedEvents: [],
           metadata: {
-            extractionMethod: 'ai',
+            extractionMethod: 'ai' as const,
             confidence: 0.95,
             relevance: 0.9,
             accuracy: 0.9,
             completeness: 0.85,
             processingTime: 1500,
-            model: settings.visualization.model || 'gpt-4',
+            model: 'gpt-4',
             temperature: 0.3,
             tokensUsed: 150,
             language: 'fr',
-            sentiment: 'positive',
-            complexity: 'medium',
+            sentiment: 'positive' as const,
+            complexity: 'medium' as const,
             readability: 0.7,
             wordCount: 25,
             characterCount: 150,
@@ -804,7 +806,7 @@ class TimelineService {
               extractedDate: "2023-01-15",
               dateFormat: "DD/MM/YYYY",
               confidence: 0.95,
-              method: 'regex',
+              method: 'regex' as const,
               timezone: 'Europe/Paris',
               isApproximate: false,
               isEstimated: false,
@@ -827,7 +829,7 @@ class TimelineService {
             backgroundColor: '#10B98120',
             borderColor: '#10B981',
             borderWidth: 2,
-            borderStyle: 'solid',
+            borderStyle: 'solid' as const,
             borderRadius: 8,
             opacity: 1,
             fontSize: 14,
@@ -844,6 +846,7 @@ class TimelineService {
           updatedAt: new Date().toISOString()
         },
         {
+          id: "event-2",
           title: "Phase de planification",
           description: "Définition des objectifs, planification des phases et allocation des ressources nécessaires",
           date: "2023-02-01",
@@ -860,18 +863,18 @@ class TimelineService {
           keywords: ["planification", "objectifs", "phase"],
           relatedEvents: [],
           metadata: {
-            extractionMethod: 'ai',
+            extractionMethod: 'ai' as const,
             confidence: 0.88,
             relevance: 0.85,
             accuracy: 0.85,
             completeness: 0.8,
             processingTime: 1200,
-            model: settings.visualization.model || 'gpt-4',
+            model: 'gpt-4',
             temperature: 0.3,
             tokensUsed: 120,
             language: 'fr',
-            sentiment: 'neutral',
-            complexity: 'medium',
+            sentiment: 'neutral' as const,
+            complexity: 'medium' as const,
             readability: 0.75,
             wordCount: 22,
             characterCount: 140,
@@ -882,7 +885,7 @@ class TimelineService {
               extractedDate: "2023-02-01",
               dateFormat: "DD/MM/YYYY",
               confidence: 0.88,
-              method: 'regex',
+              method: 'regex' as const,
               timezone: 'Europe/Paris',
               isApproximate: false,
               isEstimated: false,
@@ -905,7 +908,7 @@ class TimelineService {
             backgroundColor: '#3B82F620',
             borderColor: '#3B82F6',
             borderWidth: 2,
-            borderStyle: 'solid',
+            borderStyle: 'solid' as const,
             borderRadius: 8,
             opacity: 1,
             fontSize: 14,
@@ -922,6 +925,7 @@ class TimelineService {
           updatedAt: new Date().toISOString()
         },
         {
+          id: "event-3",
           title: "Développement Phase 1",
           description: "Développement des fonctionnalités principales avec équipe de 5 développeurs sur 3 mois",
           date: "2023-03-15",
@@ -940,18 +944,18 @@ class TimelineService {
           keywords: ["développement", "phase", "équipe"],
           relatedEvents: [],
           metadata: {
-            extractionMethod: 'ai',
+            extractionMethod: 'ai' as const,
             confidence: 0.92,
             relevance: 0.9,
             accuracy: 0.9,
             completeness: 0.85,
             processingTime: 1800,
-            model: settings.visualization.model || 'gpt-4',
+            model: 'gpt-4',
             temperature: 0.3,
             tokensUsed: 180,
             language: 'fr',
-            sentiment: 'positive',
-            complexity: 'medium',
+            sentiment: 'positive' as const,
+            complexity: 'medium' as const,
             readability: 0.7,
             wordCount: 28,
             characterCount: 180,
@@ -962,7 +966,7 @@ class TimelineService {
               extractedDate: "2023-03-15",
               dateFormat: "DD/MM/YYYY",
               confidence: 0.92,
-              method: 'regex',
+              method: 'regex' as const,
               timezone: 'Europe/Paris',
               isApproximate: false,
               isEstimated: false,
@@ -985,7 +989,7 @@ class TimelineService {
             backgroundColor: '#8B5CF620',
             borderColor: '#8B5CF6',
             borderWidth: 2,
-            borderStyle: 'solid',
+            borderStyle: 'solid' as const,
             borderRadius: 8,
             opacity: 1,
             fontSize: 14,
@@ -1002,6 +1006,7 @@ class TimelineService {
           updatedAt: new Date().toISOString()
         },
         {
+          id: "event-4",
           title: "Réunion de revue de mi-projet",
           description: "Évaluation des progrès, ajustement des objectifs et planification de la phase 2",
           date: "2023-05-01",
@@ -1019,18 +1024,18 @@ class TimelineService {
           keywords: ["réunion", "revue", "mi-projet", "évaluation"],
           relatedEvents: [],
           metadata: {
-            extractionMethod: 'ai',
+            extractionMethod: 'ai' as const,
             confidence: 0.85,
             relevance: 0.8,
             accuracy: 0.8,
             completeness: 0.75,
             processingTime: 1000,
-            model: settings.visualization.model || 'gpt-4',
+            model: 'gpt-4',
             temperature: 0.3,
             tokensUsed: 100,
             language: 'fr',
-            sentiment: 'neutral',
-            complexity: 'medium',
+            sentiment: 'neutral' as const,
+            complexity: 'medium' as const,
             readability: 0.8,
             wordCount: 24,
             characterCount: 160,
@@ -1041,7 +1046,7 @@ class TimelineService {
               extractedDate: "2023-05-01",
               dateFormat: "DD/MM/YYYY",
               confidence: 0.85,
-              method: 'regex',
+              method: 'regex' as const,
               timezone: 'Europe/Paris',
               isApproximate: false,
               isEstimated: false,
@@ -1064,7 +1069,7 @@ class TimelineService {
             backgroundColor: '#F59E0B20',
             borderColor: '#F59E0B',
             borderWidth: 2,
-            borderStyle: 'solid',
+            borderStyle: 'solid' as const,
             borderRadius: 8,
             opacity: 1,
             fontSize: 14,
@@ -1081,6 +1086,7 @@ class TimelineService {
           updatedAt: new Date().toISOString()
         },
         {
+          id: "event-5",
           title: "Lancement officiel",
           description: "Mise en production de la version 1.0 avec cérémonie de lancement et communication marketing",
           date: "2023-07-01",
@@ -1097,18 +1103,18 @@ class TimelineService {
           keywords: ["lancement", "production", "version", "officiel"],
           relatedEvents: [],
           metadata: {
-            extractionMethod: 'ai',
+            extractionMethod: 'ai' as const,
             confidence: 0.98,
             relevance: 0.95,
             accuracy: 0.95,
             completeness: 0.9,
             processingTime: 2000,
-            model: settings.visualization.model || 'gpt-4',
+            model: 'gpt-4',
             temperature: 0.3,
             tokensUsed: 200,
             language: 'fr',
-            sentiment: 'positive',
-            complexity: 'medium',
+            sentiment: 'positive' as const,
+            complexity: 'medium' as const,
             readability: 0.7,
             wordCount: 26,
             characterCount: 170,
@@ -1119,7 +1125,7 @@ class TimelineService {
               extractedDate: "2023-07-01",
               dateFormat: "DD/MM/YYYY",
               confidence: 0.98,
-              method: 'regex',
+              method: 'regex' as const,
               timezone: 'Europe/Paris',
               isApproximate: false,
               isEstimated: false,
@@ -1142,7 +1148,7 @@ class TimelineService {
             backgroundColor: '#EF444420',
             borderColor: '#EF4444',
             borderWidth: 3,
-            borderStyle: 'solid',
+            borderStyle: 'solid' as const,
             borderRadius: 8,
             opacity: 1,
             fontSize: 14,
@@ -1159,6 +1165,7 @@ class TimelineService {
           updatedAt: new Date().toISOString()
         },
         {
+          id: "event-6",
           title: "Premier retour client",
           description: "Réception des premiers retours positifs des clients avec taux de satisfaction de 85%",
           date: "2023-08-15",
@@ -1175,18 +1182,18 @@ class TimelineService {
           keywords: ["feedback", "retour", "satisfaction", "clients"],
           relatedEvents: [],
           metadata: {
-            extractionMethod: 'ai',
+            extractionMethod: 'ai' as const,
             confidence: 0.9,
             relevance: 0.85,
             accuracy: 0.85,
             completeness: 0.8,
             processingTime: 1100,
-            model: settings.visualization.model || 'gpt-4',
+            model: 'gpt-4',
             temperature: 0.3,
             tokensUsed: 110,
             language: 'fr',
-            sentiment: 'positive',
-            complexity: 'medium',
+            sentiment: 'positive' as const,
+            complexity: 'medium' as const,
             readability: 0.8,
             wordCount: 23,
             characterCount: 145,
@@ -1197,7 +1204,7 @@ class TimelineService {
               extractedDate: "2023-08-15",
               dateFormat: "DD/MM/YYYY",
               confidence: 0.9,
-              method: 'regex',
+              method: 'regex' as const,
               timezone: 'Europe/Paris',
               isApproximate: false,
               isEstimated: false,
@@ -1220,7 +1227,7 @@ class TimelineService {
             backgroundColor: '#06B6D420',
             borderColor: '#06B6D4',
             borderWidth: 2,
-            borderStyle: 'solid',
+            borderStyle: 'solid' as const,
             borderRadius: 8,
             opacity: 1,
             fontSize: 14,
@@ -1241,6 +1248,7 @@ class TimelineService {
       // Ajouter des événements spécifiques selon le contenu
       if (content.toLowerCase().includes('crise') || content.toLowerCase().includes('problème')) {
         baseEvents.push({
+          id: "event-7",
           title: "Crise majeure",
           description: "Problème technique critique nécessitant une intervention d'urgence et réorganisation",
           date: "2023-04-10",
@@ -1250,25 +1258,25 @@ class TimelineService {
           category: "Crisis",
           type: "crisis" as EventType,
           importance: "critical" as const,
-          status: "resolved" as const,
+          status: "completed" as const,
           sources: [],
           media: [],
           tags: ["crise", "problème", "urgence"],
           keywords: ["crise", "problème", "urgence", "technique"],
           relatedEvents: [],
           metadata: {
-            extractionMethod: 'ai',
+            extractionMethod: 'ai' as const,
             confidence: 0.88,
             relevance: 0.85,
             accuracy: 0.85,
             completeness: 0.8,
             processingTime: 1300,
-            model: settings.visualization.model || 'gpt-4',
+            model: 'gpt-4',
             temperature: 0.3,
             tokensUsed: 130,
             language: 'fr',
-            sentiment: 'negative',
-            complexity: 'medium',
+            sentiment: 'positive' as const,
+            complexity: 'medium' as const,
             readability: 0.7,
             wordCount: 25,
             characterCount: 160,
@@ -1279,7 +1287,7 @@ class TimelineService {
               extractedDate: "2023-04-10",
               dateFormat: "DD/MM/YYYY",
               confidence: 0.88,
-              method: 'regex',
+              method: 'regex' as const,
               timezone: 'Europe/Paris',
               isApproximate: false,
               isEstimated: false,
@@ -1302,7 +1310,7 @@ class TimelineService {
             backgroundColor: '#DC262620',
             borderColor: '#DC2626',
             borderWidth: 3,
-            borderStyle: 'solid',
+            borderStyle: 'solid' as const,
             borderRadius: 8,
             opacity: 1,
             fontSize: 14,
@@ -1404,10 +1412,10 @@ class TimelineService {
     return (
       event.title.trim().length > 3 &&
       event.description.trim().length > 10 &&
-      event.date &&
-      event.type &&
-      event.importance &&
-      event.status &&
+      !!event.date &&
+      !!event.type &&
+      !!event.importance &&
+      !!event.status &&
       event.metadata.confidence >= 0.5 &&
       event.metadata.relevance >= 0.5
     );

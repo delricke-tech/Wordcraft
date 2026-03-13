@@ -545,7 +545,7 @@ export class TextSimplificationService {
    */
   private async simplifySentences(
     text: string,
-    level: ReadingLevel,
+    _level: ReadingLevel,
     settings: SentenceSettings,
     changes: TextChange[]
   ): Promise<string> {
@@ -589,7 +589,7 @@ export class TextSimplificationService {
    */
   private async simplifyStructure(
     text: string,
-    level: ReadingLevel,
+    _level: ReadingLevel,
     settings: StructureSettings,
     changes: TextChange[]
   ): Promise<string> {
@@ -650,7 +650,7 @@ export class TextSimplificationService {
    */
   private async simplifyAcademicContent(
     text: string,
-    level: ReadingLevel,
+    _level: ReadingLevel,
     changes: TextChange[]
   ): Promise<string> {
     const academicTerms = this.getAcademicTerms();
@@ -688,7 +688,7 @@ export class TextSimplificationService {
    */
   private async simplifyBusinessContent(
     text: string,
-    level: ReadingLevel,
+    _level: ReadingLevel,
     changes: TextChange[]
   ): Promise<string> {
     const businessJargon = this.getBusinessJargon();
@@ -726,7 +726,7 @@ export class TextSimplificationService {
    */
   private async simplifyTechnicalContent(
     text: string,
-    level: ReadingLevel,
+    _level: ReadingLevel,
     changes: TextChange[]
   ): Promise<string> {
     const technicalTerms = this.getTechnicalTerms();
@@ -764,7 +764,7 @@ export class TextSimplificationService {
    */
   private async simplifyCreativeContent(
     text: string,
-    level: ReadingLevel,
+    _level: ReadingLevel,
     changes: TextChange[]
   ): Promise<string> {
     // Utiliser des analogies et des exemples créatifs
@@ -1979,7 +1979,7 @@ export class TextSimplificationService {
   /**
    * Simule l'extraction de contenu d'un document
    */
-  public async extractDocumentContent(documentId: string): Promise<string> {
+  public async extractDocumentContent(_documentId: string): Promise<string> {
     try {
       // Simuler l'extraction de contenu
       const sampleContent = `

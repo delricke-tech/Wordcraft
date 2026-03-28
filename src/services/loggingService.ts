@@ -74,6 +74,8 @@ class Logger {
   }
 
   private setupGlobalErrorHandlers(): void {
+    if (typeof window === 'undefined') return;
+
     // Capturer les erreurs non capturées
     window.addEventListener('error', (event) => {
       this.error('Global Error', event.error, {
@@ -102,14 +104,15 @@ class Logger {
       userId: this.getCurrentUserId(),
       sessionId: this.getCurrentSessionId(),
       requestId: this.getRequestId(),
-      userAgent: navigator.userAgent,
-      url: window.location.href
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+      url: typeof window !== 'undefined' ? window.location.href : undefined
     };
   }
 
   private getCurrentUserId(): string | undefined {
     // Récupérer l'ID utilisateur depuis le contexte d'auth
     try {
+      if (typeof localStorage === 'undefined') return undefined;
       const authData = localStorage.getItem('auth_data');
       if (authData) {
         const parsed = JSON.parse(authData);
@@ -123,12 +126,17 @@ class Logger {
 
   private getCurrentSessionId(): string {
     // Récupérer ou générer un ID de session
-    let sessionId = sessionStorage.getItem('session_id');
-    if (!sessionId) {
-      sessionId = Math.random().toString(36).substring(2, 15);
-      sessionStorage.setItem('session_id', sessionId);
+    try {
+      if (typeof sessionStorage === 'undefined') return this.getRequestId();
+      let sessionId = sessionStorage.getItem('session_id');
+      if (!sessionId) {
+        sessionId = Math.random().toString(36).substring(2, 15);
+        sessionStorage.setItem('session_id', sessionId);
+      }
+      return sessionId;
+    } catch {
+      return this.getRequestId();
     }
-    return sessionId;
   }
 
   private getRequestId(): string {
@@ -338,8 +346,8 @@ class Logger {
       context,
       userId: this.getCurrentUserId(),
       sessionId: this.getCurrentSessionId(),
-      userAgent: navigator.userAgent,
-      url: window.location.href,
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+      url: typeof window !== 'undefined' ? window.location.href : undefined,
       timestamp: new Date().toISOString()
     };
 

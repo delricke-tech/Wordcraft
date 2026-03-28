@@ -12,15 +12,16 @@ export interface StreamChunk {
 
 export interface StreamEvent {
   type: 'start' | 'chunk' | 'end' | 'error';
-  data: any;
+  data: unknown;
   timestamp: string;
 }
 
 export interface StreamingOptions {
   onChunk?: (chunk: StreamChunk) => void;
-  onStart?: (data: any) => void;
+  onStart?: (data: unknown) => void;
   onEnd?: () => void;
   onError?: (error: string) => void;
+  onEventSource?: (eventSource: EventSource) => void;
 }
 
 /**
@@ -63,6 +64,20 @@ export async function sendStreamingChatMessage(
     const eventSource = new EventSource(streamUrl, {
       withCredentials: true
     });
+    options.onEventSource?.(eventSource);
+
+    let closed = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const safeClose = () => {
+      if (closed) return;
+      closed = true;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      eventSource.close();
+    };
 
     eventSource.addEventListener('start', (event) => {
       try {
@@ -89,10 +104,10 @@ export async function sendStreamingChatMessage(
         const data = JSON.parse(event.data);
         console.log('✅ Fin du streaming:', data);
         options.onEnd?.();
-        eventSource.close();
+        safeClose();
       } catch (error) {
         console.error('❌ Erreur parsing event end:', error);
-        eventSource.close();
+        safeClose();
       }
     });
 
@@ -101,11 +116,11 @@ export async function sendStreamingChatMessage(
         const data = JSON.parse(event.data);
         console.error('❌ Erreur streaming:', data);
         options.onError?.(data.error);
-        eventSource.close();
+        safeClose();
       } catch (error) {
         console.error('❌ Erreur parsing event error:', error);
         options.onError?.('Erreur inconnue lors du streaming');
-        eventSource.close();
+        safeClose();
       }
     });
 
@@ -113,15 +128,15 @@ export async function sendStreamingChatMessage(
     eventSource.onerror = (error) => {
       console.error('❌ Erreur connexion EventSource:', error);
       options.onError?.('Erreur de connexion au streaming');
-      eventSource.close();
+      safeClose();
     };
 
     // Timeout après 5 minutes
-    setTimeout(() => {
+    timeoutId = setTimeout(() => {
       if (eventSource.readyState !== EventSource.CLOSED) {
         console.warn('⏰ Timeout du streaming après 5 minutes');
         options.onError?.('Timeout du streaming');
-        eventSource.close();
+        safeClose();
       }
     }, 5 * 60 * 1000);
 
@@ -246,6 +261,17 @@ export class StreamingSession {
 
     try {
       await sendStreamingChatMessage(messages, context, {
+        onEventSource: (es) => {
+          // S'assurer qu'une session suivante ne garde pas l'ancienne connexion
+          if (this.eventSource && this.eventSource !== es) {
+            try {
+              this.eventSource.close();
+            } catch {
+              // ignore
+            }
+          }
+          this.eventSource = es;
+        },
         onChunk: (chunk) => {
           this.options.onChunk?.(chunk);
         },
@@ -254,15 +280,18 @@ export class StreamingSession {
         },
         onEnd: () => {
           this.isActive = false;
+          this.eventSource = null;
           this.options.onEnd?.();
         },
         onError: (error) => {
           this.isActive = false;
+          this.eventSource = null;
           this.options.onError?.(error);
         }
       });
     } catch (error) {
       this.isActive = false;
+      this.eventSource = null;
       this.options.onError?.(error.message || 'Erreur inconnue');
     }
   }

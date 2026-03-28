@@ -1146,6 +1146,7 @@ function getUserSortPreferences(userId: string): {
   defaultGroupBy?: string;
 } {
   try {
+    if (typeof localStorage === 'undefined') throw new Error('Storage indisponible');
     const saved = localStorage.getItem(`sortPreferences_${userId}`);
     if (saved) {
       return JSON.parse(saved);
@@ -1177,6 +1178,7 @@ function getUserSortPreferences(userId: string): {
  */
 function recordSortUsage(userId: string, options: AdvancedSortOptions): void {
   try {
+    if (typeof localStorage === 'undefined') return;
     const usageKey = `sortUsage_${userId}`;
     const existing = localStorage.getItem(usageKey);
     const usage = existing ? JSON.parse(existing) : { history: [], frequency: {} };
@@ -1213,6 +1215,7 @@ export function generateSortSuggestions(userId: string, target: string): Array<{
   reason: string;
 }> {
   try {
+    if (typeof localStorage === 'undefined') return getDefaultSuggestions(target);
     const usageKey = `sortUsage_${userId}`;
     const existing = localStorage.getItem(usageKey);
     

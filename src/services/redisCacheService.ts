@@ -7,9 +7,33 @@
  * Date: 11 mars 2026
  */
 
-export interface RedisCacheEntry {
+import { handleError, AppError } from '../types/errors';
+
+// Type d'opération pour le cache Redis
+type CacheOperation = 'get' | 'set' | 'delete' | 'connect' | 'disconnect' | 'incr' | 'lpush' | 'rpush' | 'lrange' | 'exists' | 'flush';
+
+// Erreur de cache locale pour éviter les problèmes de cache TypeScript
+class LocalCacheError extends AppError {
+  constructor(
+    message: string,
+    code: string,
+    public operation: CacheOperation,
+    context?: Record<string, unknown>,
+    originalError?: unknown
+  ) {
+    super(message, code, 'medium', { ...context, operation }, originalError);
+    this.name = 'CacheError';
+  }
+}
+
+// Fonction locale pour créer des erreurs de cache
+function createLocalCacheError(operation: CacheOperation, message: string, context?: Record<string, unknown>): LocalCacheError {
+  return new LocalCacheError(message, 'CACHE_ERROR', operation, context);
+}
+
+export interface RedisCacheEntry<T = unknown> {
   key: string;
-  value: any;
+  value: T;
   ttl?: number; // en secondes
   tags?: string[];
   metadata: CacheMetadata;
@@ -34,7 +58,7 @@ export interface CacheMetadata {
   checksum: string;
   compressionAlgorithm?: string;
   encryptionAlgorithm?: string;
-  customData?: Record<string, any>;
+  customData?: Record<string, unknown>;
 }
 
 export type CachePriority = 'low' | 'normal' | 'high' | 'critical';
@@ -85,7 +109,7 @@ export interface CacheConfiguration {
   backupEnabled: boolean;
   monitoringEnabled: boolean;
   analyticsEnabled: boolean;
-  customSettings: Record<string, any>;
+  customSettings: Record<string, unknown>;
 }
 
 export type EvictionPolicy = 
@@ -135,7 +159,7 @@ export type InvalidationAction =
 
 export interface InvalidationMetadata {
   schedule?: string; // cron expression
-  conditions?: Record<string, any>;
+  conditions?: Record<string, unknown>;
   customLogic?: string;
   notifications?: boolean;
 }
@@ -173,16 +197,40 @@ export interface RedisCacheServiceConfig {
   monitoring: boolean;
 }
 
-class RedisCacheService {
-  // Redis client (utilisé pour la connexion Redis)
-  private redisClient: any = null; 
+/**
+ * Interface pour le client Redis (réel ou simulé)
+ */
+interface RedisClient {
+  connected: boolean;
+  host: string;
+  port: number;
+  get?(key: string): Promise<string | null>;
+  set?(key: string, value: string, options?: { EX?: number }): Promise<string>;
+  del?(key: string): Promise<number>;
+  exists?(key: string): Promise<number>;
+  expire?(key: string, seconds: number): Promise<boolean>;
+}
+
+/**
+ * Interface pour le client Redis simulé
+ */
+interface SimulatedRedisClient {
+  connected: boolean;
+  host: string;
+  port: number;
+}
+
+export class RedisCacheService {
+  // Redis client typé
+  private redisClient: RedisClient | SimulatedRedisClient | null = null; 
   private connectionStatus: boolean = false;
   private config: RedisCacheServiceConfig;
   private stats: CacheStats;
+  private monitoringIntervalId: ReturnType<typeof setInterval> | null = null;
   private keyPatterns: Map<string, CacheKeyPattern> = new Map();
   private invalidationRules: Map<string, CacheInvalidationRule> = new Map();
   private warmupConfig: CacheWarmupConfig;
-  private eventCallbacks: Map<string, (event: any) => void> = new Map();
+  private eventCallbacks: Map<string, (event: unknown) => void> = new Map();
 
   constructor(config: RedisCacheServiceConfig) {
     this.config = config;
@@ -219,9 +267,10 @@ class RedisCacheService {
       
       this.connectionStatus = true;
 
-    } catch (error) {
-      console.error('❌ Erreur initialisation service Redis:', error);
-      throw error;
+    } catch (error: unknown) {
+      const appError = handleError(error, { operation: 'initializeService' });
+      console.error('❌ Erreur initialisation service Redis:', appError.message, appError.code);
+      throw appError;
     }
   }
 
@@ -377,7 +426,7 @@ class RedisCacheService {
   /**
    * Définit une valeur dans le cache
    */
-  async set(key: string, value: any, options: {
+  async set<T = unknown>(key: string, value: T, options: {
     ttl?: number;
     tags?: string[];
     priority?: CachePriority;
@@ -389,9 +438,9 @@ class RedisCacheService {
       const startTime = Date.now();
       
       // Créer l'entrée de cache
-      const entry: RedisCacheEntry = {
+      const entry: RedisCacheEntry<T> = {
         key,
-        value,
+        value: value,
         ttl: options.ttl || this.getDefaultTTL(key),
         tags: options.tags || [],
         metadata: {
@@ -424,21 +473,22 @@ class RedisCacheService {
 
       console.log('🔴 Cache SET:', key);
 
-    } catch (error) {
-      console.error('❌ Erreur SET cache:', error);
-      throw error;
+    } catch (error: unknown) {
+      const appError = createLocalCacheError('set', `Erreur SET cache: ${key}`, { key, options });
+      console.error('❌ Erreur SET cache:', appError.message, appError.code);
+      throw appError;
     }
   }
 
   /**
    * Récupère une valeur du cache
    */
-  async get(key: string): Promise<any> {
+  async get<T = unknown>(key: string): Promise<T | null> {
     try {
       const startTime = Date.now();
       
       // Simuler l'opération Redis
-      const entry = await this.simulateRedisOperation('get', key);
+      const entry = await this.simulateRedisOperation<RedisCacheEntry<T>>('get', key);
       
       if (!entry) {
         this.updateStats('miss', Date.now() - startTime, 0, 'system');
@@ -455,9 +505,10 @@ class RedisCacheService {
       console.log('🔴 Cache HIT:', key);
       return entry.value;
 
-    } catch (error) {
-      console.error('❌ Erreur GET cache:', error);
-      throw error;
+    } catch (error: unknown) {
+      const appError = createLocalCacheError('get', `Erreur GET cache: ${key}`, { key });
+      console.error('❌ Erreur GET cache:', appError.message, appError.code);
+      throw appError;
     }
   }
 
@@ -469,17 +520,18 @@ class RedisCacheService {
       const startTime = Date.now();
       
       // Simuler l'opération Redis
-      const existed = await this.simulateRedisOperation('delete', key);
+      const existed = await this.simulateRedisOperation<boolean>('delete', key);
       
       const deleteTime = Date.now() - startTime;
       this.updateStats('delete', deleteTime, 0, 'system');
 
       console.log('🔴 Cache DELETE:', key, existed ? 'success' : 'not found');
-      return existed;
+      return existed || false;
 
-    } catch (error) {
-      console.error('❌ Erreur DELETE cache:', error);
-      throw error;
+    } catch (error: unknown) {
+      const appError = createLocalCacheError('delete', `Erreur DELETE cache: ${key}`, { key });
+      console.error('❌ Erreur DELETE cache:', appError.message, appError.code);
+      throw appError;
     }
   }
 
@@ -488,17 +540,19 @@ class RedisCacheService {
    */
   async exists(key: string): Promise<boolean> {
     try {
-      return await this.simulateRedisOperation('exists', key);
-    } catch (error) {
-      console.error('❌ Erreur EXISTS cache:', error);
-      throw error;
+      const result = await this.simulateRedisOperation<boolean>('exists', key);
+      return result || false;
+    } catch (error: unknown) {
+      const appError = createLocalCacheError('exists', `Erreur EXISTS cache: ${key}`, { key });
+      console.error('❌ Erreur EXISTS cache:', appError.message, appError.code);
+      throw appError;
     }
   }
 
   /**
    * Définit une valeur avec expiration
    */
-  async setex(key: string, ttl: number, value: any, options: {
+  async setex<T = unknown>(key: string, ttl: number, value: T, options: {
     tags?: string[];
     priority?: CachePriority;
     category?: CacheCategory;
@@ -529,41 +583,44 @@ class RedisCacheService {
    */
   async incr(key: string, increment: number = 1): Promise<number> {
     try {
-      const current = await this.get(key);
+      const current = await this.get<number>(key);
       const newValue = (current || 0) + increment;
       await this.set(key, newValue);
       return newValue;
-    } catch (error) {
-      console.error('❌ Erreur INCR cache:', error);
-      throw error;
+    } catch (error: unknown) {
+      const appError = createLocalCacheError('incr', `Erreur INCR cache: ${key}`, { key, increment });
+      console.error('❌ Erreur INCR cache:', appError.message, appError.code);
+      throw appError;
     }
   }
 
   /**
    * Ajoute un élément à une liste
    */
-  async lpush(key: string, value: any): Promise<number> {
+  async lpush<T = unknown>(key: string, value: T): Promise<number> {
     try {
-      const list = await this.get(key) || [];
+      const list = await this.get<T[]>(key) || [];
       list.unshift(value);
       await this.set(key, list);
       return list.length;
-    } catch (error) {
-      console.error('❌ Erreur LPUSH cache:', error);
-      throw error;
+    } catch (error: unknown) {
+      const appError = createLocalCacheError('lpush', `Erreur LPUSH cache: ${key}`, { key });
+      console.error('❌ Erreur LPUSH cache:', appError.message, appError.code);
+      throw appError;
     }
   }
 
   /**
    * Récupère une liste d'éléments
    */
-  async lrange(key: string, start: number = 0, end: number = -1): Promise<any[]> {
+  async lrange<T = unknown>(key: string, start: number = 0, end: number = -1): Promise<T[]> {
     try {
-      const list = await this.get(key) || [];
+      const list = await this.get<T[]>(key) || [];
       return list.slice(start, end === -1 ? undefined : end + 1);
-    } catch (error) {
-      console.error('❌ Erreur LRANGE cache:', error);
-      throw error;
+    } catch (error: unknown) {
+      const appError = createLocalCacheError('lrange', `Erreur LRANGE cache: ${key}`, { key, start, end });
+      console.error('❌ Erreur LRANGE cache:', appError.message, appError.code);
+      throw appError;
     }
   }
 
@@ -704,12 +761,23 @@ class RedisCacheService {
         total_commands_processed: this.stats.totalEntries * 10
       };
       
-      const systemStats = {
-        uptime: process.uptime(),
-        memory_usage: process.memoryUsage(),
-        cpu_usage: process.cpuUsage(),
-        load_average: require('os').loadavg()
-      };
+      const isBrowser = typeof window !== 'undefined';
+      const systemStats = isBrowser
+        ? {
+            // Uptime approximative (ms -> s) côté navigateur
+            uptime: typeof performance !== 'undefined' ? performance.now() / 1000 : null,
+            // Non standard; présent sur Chrome uniquement
+            memory_usage: (performance as any)?.memory ?? null,
+            cpu_usage: null,
+            load_average: null
+          }
+        : {
+            uptime: process.uptime(),
+            memory_usage: process.memoryUsage(),
+            cpu_usage: process.cpuUsage(),
+            // Dans une app front, on évite les imports node:* (peuvent casser le build Vite).
+            load_average: null
+          };
       
       return {
         cache: cacheStats,
@@ -728,21 +796,21 @@ class RedisCacheService {
   /**
    * Simule une opération Redis
    */
-  private async simulateRedisOperation(operation: string, key?: string): Promise<any> {
+  private async simulateRedisOperation<T = unknown>(operation: string, key?: string): Promise<T | null> {
     // Simuler un délai réseau
     await new Promise(resolve => setTimeout(resolve, Math.random() * 10 + 5));
     
     switch (operation) {
       case 'set':
-        return true;
+        return true as T;
       case 'get':
-        return Math.random() > 0.1 ? { value: `cached_${key}`, size: 100 } : null;
+        return Math.random() > 0.1 ? { value: `cached_${key}`, size: 100 } as T : null;
       case 'delete':
-        return Math.random() > 0.3;
+        return Math.random() > 0.3 as T;
       case 'exists':
-        return Math.random() > 0.5;
+        return Math.random() > 0.5 as T;
       case 'flush':
-        return true;
+        return true as T;
       default:
         return null;
     }
@@ -869,7 +937,9 @@ class RedisCacheService {
    * Démarre le monitoring
    */
   private startMonitoring(): void {
-    setInterval(() => {
+    if (this.monitoringIntervalId) return;
+
+    this.monitoringIntervalId = setInterval(() => {
       this.updateTrends();
       this.cleanupExpired();
       // Émettre des événements de monitoring pour démonstration

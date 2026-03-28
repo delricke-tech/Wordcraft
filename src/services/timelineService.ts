@@ -549,6 +549,7 @@ class TimelineService {
   private timelines: Map<string, Timeline> = new Map();
   private templates: Map<string, TimelineTemplate> = new Map();
   private eventCallbacks: Map<string, (event: any) => void> = new Map();
+  private monitoringTimers: Array<ReturnType<typeof setInterval>> = [];
 
   constructor() {
     this.initializeService();
@@ -2341,14 +2342,14 @@ class TimelineService {
    */
   private startMonitoring(): void {
     // Monitorer les timelines en traitement
-    setInterval(() => {
+    this.monitoringTimers.push(setInterval(() => {
       this.checkProcessingTimelines();
-    }, 60000); // Toutes les minutes
+    }, 60000)); // Toutes les minutes
 
     // Monitorer les statistiques
-    setInterval(() => {
+    this.monitoringTimers.push(setInterval(() => {
       this.updateStats();
-    }, 300000); // Toutes les 5 minutes
+    }, 300000)); // Toutes les 5 minutes
   }
 
   /**
@@ -2422,6 +2423,9 @@ class TimelineService {
    * Détruit le service de timeline
    */
   destroy(): void {
+    this.monitoringTimers.forEach(t => clearInterval(t));
+    this.monitoringTimers = [];
+
     // Vider les caches
     this.timelines.clear();
     this.templates.clear();

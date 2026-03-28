@@ -121,12 +121,14 @@ class VirtualScrollService {
   private metrics: VirtualScrollMetrics;
   private performance: VirtualScrollPerformance;
   private eventCallbacks: Map<string, (event: VirtualScrollEvent) => void> = new Map();
-  private scrollTimer: NodeJS.Timeout | null = null;
+  private scrollTimer: ReturnType<typeof setTimeout> | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private intersectionObserver: IntersectionObserver | null = null;
   private lastScrollTime: number = 0;
   private scrollVelocity: number = 0;
   private scrollDirection: 'up' | 'down' | 'left' | 'right' | null = null;
+  private monitoringIntervalIds: Array<ReturnType<typeof setInterval>> = [];
+  private monitoringRafId: number | null = null;
 
   constructor() {
     this.state = this.initializeState();
@@ -664,6 +666,9 @@ class VirtualScrollService {
    * Démarre le monitoring des performances
    */
   private startMonitoring(): void {
+    // Éviter de démarrer plusieurs fois
+    if (this.monitoringIntervalIds.length > 0 || this.monitoringRafId !== null) return;
+
     // Monitorer les FPS de scroll
     let lastFrameTime = performance.now();
     let frameCount = 0;
@@ -678,7 +683,7 @@ class VirtualScrollService {
         lastFrameTime = currentTime;
       }
       
-      requestAnimationFrame(measureRenderFPS);
+      this.monitoringRafId = requestAnimationFrame(measureRenderFPS);
     };
     
     // Monitorer l'utilisation mémoire
@@ -686,25 +691,13 @@ class VirtualScrollService {
       if ('memory' in performance) {
         const memory = (performance as any).memory;
         this.performance.memoryUsage = memory.usedJSHeapSize;
+        this.metrics.memoryUsage = memory.usedJSHeapSize;
       }
     };
     
-    setInterval(updateMemoryUsage, 5000);
-    requestAnimationFrame(measureRenderFPS);
-    
+    this.monitoringIntervalIds.push(setInterval(updateMemoryUsage, 5000));
     // Démarrer les mesures
     measureRenderFPS();
-    
-    // Mesurer l'utilisation mémoire
-    if ('memory' in performance) {
-      const updateMemoryUsage = () => {
-        const memory = (performance as any).memory;
-        this.performance.memoryUsage = memory.usedJSHeapSize;
-        this.metrics.memoryUsage = memory.usedJSHeapSize;
-      };
-      
-      setInterval(updateMemoryUsage, 5000);
-    }
   }
 
   /**
@@ -785,6 +778,13 @@ class VirtualScrollService {
     if (this.scrollTimer) {
       clearTimeout(this.scrollTimer);
       this.scrollTimer = null;
+    }
+
+    this.monitoringIntervalIds.forEach(id => clearInterval(id));
+    this.monitoringIntervalIds = [];
+    if (this.monitoringRafId !== null) {
+      cancelAnimationFrame(this.monitoringRafId);
+      this.monitoringRafId = null;
     }
     
     // Vider le cache

@@ -161,11 +161,16 @@ class KeyboardShortcutsService {
   private shortcuts: Map<string, KeyboardShortcut> = new Map();
   private userPreferences: Map<string, UserShortcutPreference> = new Map();
   private activeKeys: Set<string> = new Set();
-  private keyPressTimeouts: Map<string, NodeJS.Timeout> = new Map();
+  private keyPressTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private isListening: boolean = false;
   private conflictDetector: ConflictDetector;
   private shortcutCallbacks: Map<string, (event: KeyboardEvent) => void> = new Map();
   private usageTracker: UsageTracker;
+  private boundHandlers: {
+    keydown: (e: KeyboardEvent) => void;
+    keyup: (e: KeyboardEvent) => void;
+    blur: () => void;
+  } | null = null;
 
   constructor() {
     this.conflictDetector = new ConflictDetector();
@@ -177,11 +182,30 @@ class KeyboardShortcutsService {
    * Initialise les écouteurs d'événements clavier
    */
   private initializeEventListeners(): void {
-    if (typeof window !== 'undefined') {
-      window.addEventListener('keydown', this.handleKeyDown.bind(this));
-      window.addEventListener('keyup', this.handleKeyUp.bind(this));
-      window.addEventListener('blur', this.handleBlur.bind(this));
+    if (typeof window === 'undefined' || this.boundHandlers) return;
+
+    this.boundHandlers = {
+      keydown: this.handleKeyDown.bind(this),
+      keyup: this.handleKeyUp.bind(this),
+      blur: this.handleBlur.bind(this)
+    };
+
+    window.addEventListener('keydown', this.boundHandlers.keydown);
+    window.addEventListener('keyup', this.boundHandlers.keyup);
+    window.addEventListener('blur', this.boundHandlers.blur);
+  }
+
+  destroy(): void {
+    if (typeof window !== 'undefined' && this.boundHandlers) {
+      window.removeEventListener('keydown', this.boundHandlers.keydown);
+      window.removeEventListener('keyup', this.boundHandlers.keyup);
+      window.removeEventListener('blur', this.boundHandlers.blur);
     }
+    this.boundHandlers = null;
+    this.activeKeys.clear();
+    this.keyPressTimeouts.forEach(timeout => clearTimeout(timeout));
+    this.keyPressTimeouts.clear();
+    this.isListening = false;
   }
 
   /**
@@ -265,10 +289,11 @@ class KeyboardShortcutsService {
     if (event.metaKey) modifiers.push('meta');
 
     // Ajouter des alias pour la compatibilité
-    if (event.metaKey && navigator.platform.includes('Mac')) {
+    const platform = typeof navigator !== 'undefined' ? navigator.platform : '';
+    if (event.metaKey && platform.includes('Mac')) {
       modifiers.push('cmd');
     }
-    if (event.ctrlKey && !navigator.platform.includes('Mac')) {
+    if (event.ctrlKey && !platform.includes('Mac')) {
       modifiers.push('win');
     }
 
@@ -294,7 +319,7 @@ class KeyboardShortcutsService {
    * Obtient la plateforme actuelle
    */
   private getCurrentPlatform(): 'windows' | 'mac' | 'linux' {
-    const platform = navigator.platform.toLowerCase();
+    const platform = (typeof navigator !== 'undefined' ? navigator.platform : 'win32').toLowerCase();
     
     if (platform.includes('mac')) return 'mac';
     if (platform.includes('win')) return 'windows';
@@ -939,11 +964,11 @@ class UsageTracker {
       duration: 0,
       success: true,
       metadata: {
-        platform: navigator.platform,
-        browser: navigator.userAgent,
-        userAgent: navigator.userAgent,
-        screenResolution: `${screen.width}x${screen.height}`,
-        activeElement: document.activeElement?.tagName,
+        platform: typeof navigator !== 'undefined' ? navigator.platform : 'unknown',
+        browser: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+        screenResolution: typeof screen !== 'undefined' ? `${screen.width}x${screen.height}` : '0x0',
+        activeElement: typeof document !== 'undefined' ? document.activeElement?.tagName : undefined,
         modifiers: []
       }
     };
@@ -954,7 +979,7 @@ class UsageTracker {
 
   private getCurrentContext(): string {
     // Logique pour déterminer le contexte actuel
-    return document.title || 'unknown';
+    return typeof document !== 'undefined' ? (document.title || 'unknown') : 'unknown';
   }
 
   private async flushUsage(): Promise<void> {

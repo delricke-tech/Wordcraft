@@ -175,16 +175,42 @@ export interface NotificationSettings {
 
 class OfflineService {
   private serviceWorker: ServiceWorker | null = null;
-  private isOnline: boolean = navigator.onLine;
+  private isOnline: boolean = typeof navigator !== 'undefined' ? navigator.onLine : true;
   private capabilities: OfflineCapabilities;
   private configuration: OfflineConfiguration;
   private syncQueue: Map<string, SyncQueueItem> = new Map();
   private storage: Map<string, OfflineStorage> = new Map();
   private eventCallbacks: Map<string, (event: any) => void> = new Map();
-  private syncTimer: NodeJS.Timeout | null = null;
+  private syncTimer: ReturnType<typeof setInterval> | null = null;
   private deviceId: string;
 
   constructor() {
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+      this.capabilities = {
+        supported: false,
+        storageQuota: { used: 0, available: 0, total: 0 },
+        features: {
+          backgroundSync: false,
+          pushNotifications: false,
+          geolocation: false,
+          camera: false,
+          microphone: false,
+          bluetooth: false,
+          nfc: false
+        },
+        networkStatus: {
+          online: true,
+          effectiveType: '4g',
+          downlink: 0,
+          rtt: 0,
+          saveData: false
+        }
+      };
+      this.configuration = this.initializeConfiguration();
+      this.deviceId = 'unknown';
+      return;
+    }
+
     this.capabilities = this.initializeCapabilities();
     this.configuration = this.initializeConfiguration();
     this.deviceId = this.generateDeviceId();
@@ -221,6 +247,29 @@ class OfflineService {
    * Initialise les capacités hors ligne
    */
   private initializeCapabilities(): OfflineCapabilities {
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+      return {
+        supported: false,
+        storageQuota: { used: 0, available: 0, total: 0 },
+        features: {
+          backgroundSync: false,
+          pushNotifications: false,
+          geolocation: false,
+          camera: false,
+          microphone: false,
+          bluetooth: false,
+          nfc: false
+        },
+        networkStatus: {
+          online: true,
+          effectiveType: '4g',
+          downlink: 0,
+          rtt: 0,
+          saveData: false
+        }
+      };
+    }
+
     const connection = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
 
     return {
@@ -289,6 +338,7 @@ class OfflineService {
    * Enregistre le service worker
    */
   private async registerServiceWorker(): Promise<void> {
+    if (typeof navigator === 'undefined') return;
     if (!('serviceWorker' in navigator)) {
       console.warn('⚠️ Service Worker non supporté');
       return;
@@ -318,6 +368,8 @@ class OfflineService {
    * Initialise les écouteurs d'événements
    */
   private initializeEventListeners(): void {
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') return;
+
     // Événements réseau
     window.addEventListener('online', this.handleOnline.bind(this));
     window.addEventListener('offline', this.handleOffline.bind(this));
@@ -780,12 +832,17 @@ class OfflineService {
   }
 
   private generateDeviceId(): string {
-    let deviceId = localStorage.getItem('offline_device_id');
-    if (!deviceId) {
-      deviceId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      localStorage.setItem('offline_device_id', deviceId);
+    try {
+      if (typeof localStorage === 'undefined') return `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      let deviceId = localStorage.getItem('offline_device_id');
+      if (!deviceId) {
+        deviceId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        localStorage.setItem('offline_device_id', deviceId);
+      }
+      return deviceId;
+    } catch {
+      return `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
-    return deviceId;
   }
 
   private calculateSize(value: any): number {
@@ -832,27 +889,48 @@ class OfflineService {
 
   private async saveToIndexedDB(item: OfflineStorage): Promise<void> {
     // Simuler la sauvegarde IndexedDB
-    localStorage.setItem(`offline_${item.key}`, JSON.stringify(item));
+    try {
+      if (typeof localStorage === 'undefined') return;
+      localStorage.setItem(`offline_${item.key}`, JSON.stringify(item));
+    } catch {
+      // storage non disponible
+    }
   }
 
   private async loadFromIndexedDB(key: string): Promise<OfflineStorage | undefined> {
     // Simuler le chargement IndexedDB
-    const item = localStorage.getItem(`offline_${key}`);
-    return item ? JSON.parse(item) : undefined;
+    try {
+      if (typeof localStorage === 'undefined') return undefined;
+      const item = localStorage.getItem(`offline_${key}`);
+      return item ? JSON.parse(item) : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   private async removeFromIndexedDB(key: string): Promise<void> {
     // Simuler la suppression IndexedDB
-    localStorage.removeItem(`offline_${key}`);
+    try {
+      if (typeof localStorage === 'undefined') return;
+      localStorage.removeItem(`offline_${key}`);
+    } catch {
+      // ignore
+    }
   }
 
   private async clearIndexedDB(): Promise<void> {
     // Simuler le vidage IndexedDB
-    const keys = Object.keys(localStorage).filter(key => key.startsWith('offline_'));
-    keys.forEach(key => localStorage.removeItem(key));
+    try {
+      if (typeof localStorage === 'undefined') return;
+      const keys = Object.keys(localStorage).filter(key => key.startsWith('offline_'));
+      keys.forEach(key => localStorage.removeItem(key));
+    } catch {
+      // ignore
+    }
   }
 
   private async loadFromStorage(): Promise<void> {
+    if (typeof localStorage === 'undefined') return;
     // Charger les données depuis localStorage
     const keys = Object.keys(localStorage).filter(key => key.startsWith('offline_'));
     
@@ -882,7 +960,12 @@ class OfflineService {
 
   private async saveSyncQueue(): Promise<void> {
     const queueObject = Object.fromEntries(this.syncQueue);
-    localStorage.setItem('offline_sync_queue', JSON.stringify(queueObject));
+    try {
+      if (typeof localStorage === 'undefined') return;
+      localStorage.setItem('offline_sync_queue', JSON.stringify(queueObject));
+    } catch {
+      // ignore
+    }
   }
 
   private async getStorageQuota(): Promise<{ used: number; available: number; total: number }> {
@@ -945,8 +1028,9 @@ class OfflineService {
   }
 }
 
-// Instance singleton
-export const offlineService = new OfflineService();
+// Instance singleton (browser-only)
+export const offlineService: OfflineService | null =
+  typeof window !== 'undefined' && typeof navigator !== 'undefined' ? new OfflineService() : null;
 
 // Export des fonctions utilitaires
 export const storeOffline = (key: string, value: any, options?: {
@@ -956,15 +1040,24 @@ export const storeOffline = (key: string, value: any, options?: {
   tags?: string[];
   compress?: boolean;
   encrypt?: boolean;
-}) => offlineService.store(key, value, options);
+}) => {
+  if (!offlineService) return Promise.reject(new Error('Offline service indisponible (hors navigateur).'));
+  return offlineService.store(key, value, options);
+};
 
-export const retrieveOffline = (key: string) => offlineService.retrieve(key);
-export const removeOffline = (key: string) => offlineService.remove(key);
+export const retrieveOffline = (key: string) => {
+  if (!offlineService) return Promise.resolve(undefined);
+  return offlineService.retrieve(key);
+};
+export const removeOffline = (key: string) => {
+  if (!offlineService) return Promise.resolve();
+  return offlineService.remove(key);
+};
 export const addToSyncQueue = (operation: Omit<SyncQueueItem, 'id' | 'timestamp' | 'retryCount' | 'status'>) => 
-  offlineService.addToSyncQueue(operation);
+  offlineService ? offlineService.addToSyncQueue(operation) : Promise.reject(new Error('Offline service indisponible (hors navigateur).'));
 
-export const getOfflineStats = () => offlineService.getStats();
-export const clearOfflineCache = () => offlineService.clearCache();
-export const isOfflineSupported = () => offlineService.isSupported();
-export const isOnline = () => offlineService.isOnlineStatus();
-export const getOfflineCapabilities = () => offlineService.getCapabilities();
+export const getOfflineStats = () => offlineService ? offlineService.getStats() : Promise.reject(new Error('Offline service indisponible (hors navigateur).'));
+export const clearOfflineCache = () => offlineService ? offlineService.clearCache() : Promise.reject(new Error('Offline service indisponible (hors navigateur).'));
+export const isOfflineSupported = () => offlineService?.isSupported() ?? false;
+export const isOnline = () => offlineService?.isOnlineStatus() ?? true;
+export const getOfflineCapabilities = () => offlineService?.getCapabilities();

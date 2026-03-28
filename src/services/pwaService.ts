@@ -259,17 +259,21 @@ class PWAService {
   private serviceWorkerRegistration: ServiceWorkerRegistration | null = null;
   private deferredPrompt: any = null;
   private isInstalled: boolean = false;
-  private isOnline: boolean = navigator.onLine;
+  private isOnline: boolean = typeof navigator !== 'undefined' ? navigator.onLine : true;
   private installCallbacks: Array<(installed: boolean) => void> = [];
 
   constructor() {
-    this.initializeEventListeners();
+    if (typeof window !== 'undefined' && typeof navigator !== 'undefined') {
+      this.initializeEventListeners();
+    }
   }
 
   /**
    * Initialise les écouteurs d'événements PWA
    */
   private initializeEventListeners(): void {
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') return;
+
     // Écouter l'événement beforeinstallprompt
     window.addEventListener('beforeinstallprompt', (event) => {
       console.log('📱 Événement beforeinstallprompt détecté');
@@ -643,6 +647,19 @@ class PWAService {
    * Obtient les informations sur l'appareil
    */
   getDeviceInfo(): DeviceInfo {
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+      return {
+        userAgent: 'unknown',
+        platform: 'unknown',
+        architecture: 'unknown',
+        screenResolution: '0x0',
+        pixelRatio: 1,
+        language: 'unknown',
+        timezone: 'UTC',
+        isOnline: true
+      };
+    }
+
     const connection = (navigator as any).connection || 
                      (navigator as any).mozConnection || 
                      (navigator as any).webkitConnection;
@@ -702,6 +719,7 @@ class PWAService {
    * Détecte la plateforme
    */
   private detectPlatform(): 'web' | 'ios' | 'android' {
+    if (typeof navigator === 'undefined') return 'web';
     const userAgent = navigator.userAgent.toLowerCase();
     
     if (/iphone|ipad|ipod/.test(userAgent)) {
@@ -717,7 +735,7 @@ class PWAService {
    * Obtient la version actuelle
    */
   private getCurrentVersion(): string {
-    return process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0';
+    return (import.meta as any).env?.VITE_APP_VERSION || '1.0.0';
   }
 
   /**
@@ -896,22 +914,29 @@ class PWAService {
   }
 }
 
-// Instance singleton
-export const pwaService = new PWAService();
+// Instance singleton (browser-only)
+export const pwaService: PWAService | null =
+  typeof window !== 'undefined' && typeof navigator !== 'undefined' ? new PWAService() : null;
 
 // Export des fonctions utilitaires
-export const registerServiceWorker = () => pwaService.registerServiceWorker();
-export const canInstallPWA = () => pwaService.canInstall();
-export const showInstallPrompt = () => pwaService.showInstallPrompt();
-export const isPWAInstalled = () => pwaService.isPWAInstalled();
-export const getPWAConfig = () => pwaService.getPWAConfig();
-export const generatePWAManifest = () => pwaService.generateManifest();
-export const requestNotificationPermission = () => pwaService.requestNotificationPermission();
+export const registerServiceWorker = () => pwaService?.registerServiceWorker() ?? Promise.resolve(false);
+export const canInstallPWA = () => pwaService?.canInstall() ?? false;
+export const showInstallPrompt = () => pwaService?.showInstallPrompt() ?? Promise.resolve(false);
+export const isPWAInstalled = () => pwaService?.isPWAInstalled() ?? false;
+export const getPWAConfig = () => pwaService?.getPWAConfig();
+export const generatePWAManifest = () => pwaService?.generateManifest() ?? '';
+export const requestNotificationPermission = () => pwaService?.requestNotificationPermission() ?? Promise.resolve('denied');
 export const sendPWANotification = (
   userId: string,
   notification: Omit<PWANotification, 'id' | 'userId' | 'timestamp' | 'read' | 'readAt'>
-) => pwaService.sendNotification(userId, notification);
-export const getConnectionStatus = () => pwaService.getConnectionStatus();
-export const getDeviceInfo = () => pwaService.getDeviceInfo();
-export const onPWAInstallPrompt = (callback: (installed: boolean) => void) => pwaService.onInstallPrompt(callback);
-export const getPWAStats = () => pwaService.getPWAStats();
+) => {
+  if (!pwaService) return Promise.reject(new Error('PWA service indisponible (hors navigateur).'));
+  return pwaService.sendNotification(userId, notification);
+};
+export const getConnectionStatus = () => pwaService?.getConnectionStatus();
+export const getDeviceInfo = () => pwaService?.getDeviceInfo();
+export const onPWAInstallPrompt = (callback: (installed: boolean) => void) => pwaService?.onInstallPrompt(callback);
+export const getPWAStats = () => {
+  if (!pwaService) return Promise.reject(new Error('PWA service indisponible (hors navigateur).'));
+  return pwaService.getPWAStats();
+};

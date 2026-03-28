@@ -323,6 +323,7 @@ class ThemeService {
   private userPreference: UserThemePreference | null = null;
   private mediaQuery: MediaQueryList | null = null;
   private themeChangeCallbacks: Array<(theme: Theme) => void> = [];
+  private boundMediaQueryHandler: ((this: MediaQueryList, ev: MediaQueryListEvent) => any) | null = null;
 
   constructor() {
     this.initializeThemeDetection();
@@ -334,7 +335,8 @@ class ThemeService {
   private initializeThemeDetection(): void {
     if (typeof window !== 'undefined') {
       this.mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      this.mediaQuery.addEventListener('change', this.handleSystemThemeChange.bind(this));
+      this.boundMediaQueryHandler = this.handleSystemThemeChange.bind(this) as any;
+      this.mediaQuery.addEventListener('change', this.boundMediaQueryHandler);
     }
   }
 
@@ -345,6 +347,17 @@ class ThemeService {
     if (this.userPreference?.autoSwitch) {
       this.applyAutoTheme();
     }
+  }
+
+  destroy(): void {
+    if (this.mediaQuery && this.boundMediaQueryHandler) {
+      this.mediaQuery.removeEventListener('change', this.boundMediaQueryHandler);
+    }
+    this.boundMediaQueryHandler = null;
+    this.mediaQuery = null;
+    this.themeChangeCallbacks = [];
+    this.currentTheme = null;
+    this.userPreference = null;
   }
 
   /**
@@ -703,6 +716,7 @@ class ThemeService {
    * Applique le thème au DOM
    */
   private applyThemeToDOM(theme: Theme): void {
+    if (typeof document === 'undefined') return;
     const root = document.documentElement;
     
     // Appliquer les variables CSS

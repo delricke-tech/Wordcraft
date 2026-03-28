@@ -606,10 +606,13 @@ class AuditService {
   private batchSize: number = 100;
   private flushInterval: number = 5000; // 5 secondes
   private pendingLogs: AuditLog[] = [];
-  private flushTimer: NodeJS.Timeout | null = null;
+  private flushTimer: ReturnType<typeof setInterval> | null = null;
+  private monitoringTimers: Array<ReturnType<typeof setInterval>> = [];
 
   constructor() {
-    this.initializeService();
+    if (typeof window !== 'undefined' && typeof navigator !== 'undefined') {
+      this.initializeService();
+    }
   }
 
   /**
@@ -688,9 +691,9 @@ class AuditService {
         metadata: {
           version: '1.0',
           source: 'wordcraft',
-          environment: process.env.NODE_ENV || 'development',
+          environment: import.meta.env.MODE || 'development',
           platform: 'web',
-          language: navigator.language || 'en',
+          language: typeof navigator !== 'undefined' ? (navigator.language || 'en') : 'en',
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           device: await this.getDeviceInfo(),
           browser: await this.getBrowserInfo(),
@@ -701,7 +704,7 @@ class AuditService {
         },
         timestamp,
         ipAddress: options.ipAddress || 'unknown',
-        userAgent: options.userAgent || navigator.userAgent,
+        userAgent: options.userAgent || (typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown'),
         location: options.location || await this.detectLocation(),
         severity: options.severity || 'info',
         category: options.category || this.inferCategory(action),
@@ -1131,6 +1134,23 @@ class AuditService {
 
   private async getDeviceInfo(): Promise<DeviceInfo> {
     // Simuler la récupération des informations de l'appareil
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+      return {
+        deviceId: 'unknown',
+        deviceType: 'unknown',
+        os: 'unknown',
+        osVersion: 'unknown',
+        manufacturer: 'unknown',
+        model: 'unknown',
+        screenResolution: '0x0',
+        colorDepth: 0,
+        pixelRatio: 1,
+        hardwareConcurrency: 0,
+        memory: 0,
+        storage: 0,
+        sensors: []
+      };
+    }
     return {
       deviceId: 'device_' + Math.random().toString(36).substr(2, 9),
       deviceType: 'desktop',
@@ -1167,6 +1187,30 @@ class AuditService {
   }
 
   private async getBrowserInfo(): Promise<BrowserInfo> {
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+      return {
+        name: 'unknown',
+        version: 'unknown',
+        engine: 'unknown',
+        engineVersion: 'unknown',
+        language: 'unknown',
+        languages: [],
+        cookieEnabled: false,
+        doNotTrack: false,
+        plugins: [],
+        mimeTypes: [],
+        javaEnabled: false,
+        pdfViewerEnabled: false,
+        webGL: false,
+        webRTC: false,
+        localStorage: false,
+        sessionStorage: false,
+        indexedDB: false,
+        webSQL: false,
+        serviceWorker: false,
+        pushManager: false
+      };
+    }
     const ua = navigator.userAgent;
     const browserMatch = ua.match(/(chrome|firefox|safari|edge|opera)\/?(\d+)/i);
     
@@ -1190,11 +1234,21 @@ class AuditService {
       indexedDB: !!window.indexedDB,
       webSQL: !!(window as any).openDatabase,
       serviceWorker: !!navigator.serviceWorker,
-      pushManager: !!(navigator.serviceWorker?.ready).then(sw => sw.pushManager).catch(() => false)
+      pushManager: false
     };
   }
 
   private async getNetworkInfo(): Promise<NetworkInfo> {
+    if (typeof navigator === 'undefined') {
+      return {
+        connectionType: 'unknown',
+        effectiveType: 'unknown',
+        downlink: 0,
+        rtt: 0,
+        saveData: false,
+        online: true
+      };
+    }
     const connection = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
     
     return {
@@ -1215,7 +1269,7 @@ class AuditService {
       name: 'WordCraft',
       version: '1.0.0',
       build: '20260311',
-      environment: process.env.NODE_ENV || 'development',
+      environment: import.meta.env.MODE || 'development',
       commit: 'abc123',
       branch: 'main',
       deployedAt: new Date().toISOString(),
@@ -1227,6 +1281,23 @@ class AuditService {
   }
 
   private async getSessionInfo(): Promise<SessionInfo> {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      return {
+        id: this.generateId(),
+        startTime: new Date().toISOString(),
+        duration: 0,
+        pageViews: 0,
+        events: 0,
+        errors: 0,
+        bounceRate: 0,
+        entryPage: '/',
+        utmSource: '',
+        utmMedium: '',
+        utmCampaign: '',
+        utmTerm: '',
+        utmContent: ''
+      };
+    }
     return {
       id: this.generateId(),
       startTime: new Date().toISOString(),
@@ -1340,22 +1411,23 @@ class AuditService {
 
   private startMonitoring(): void {
     // Monitorer les performances
-    setInterval(() => {
+    this.monitoringTimers.push(setInterval(() => {
       this.checkPerformance();
-    }, 60000); // Toutes les minutes
+    }, 60000)); // Toutes les minutes
 
     // Monitorer la sécurité
-    setInterval(() => {
+    this.monitoringTimers.push(setInterval(() => {
       this.checkSecurity();
-    }, 300000); // Toutes les 5 minutes
+    }, 300000)); // Toutes les 5 minutes
 
     // Monitorer la conformité
-    setInterval(() => {
+    this.monitoringTimers.push(setInterval(() => {
       this.checkCompliance();
-    }, 3600000); // Toutes les heures
+    }, 3600000)); // Toutes les heures
   }
 
   private setupEventListeners(): void {
+    if (typeof window === 'undefined') return;
     // Écouter les erreurs globales
     window.addEventListener('error', (event) => {
       this.createLog('error_occurred', 'system', {
@@ -1636,6 +1708,8 @@ class AuditService {
       clearInterval(this.flushTimer);
       this.flushTimer = null;
     }
+    this.monitoringTimers.forEach(t => clearInterval(t));
+    this.monitoringTimers = [];
 
     // Vider les caches
     this.logs.clear();
@@ -1647,8 +1721,9 @@ class AuditService {
   }
 }
 
-// Instance singleton
-export const auditService = new AuditService();
+// Instance singleton (browser-only)
+export const auditService: AuditService | null =
+  typeof window !== 'undefined' && typeof navigator !== 'undefined' ? new AuditService() : null;
 
 // Export des fonctions utilitaires
 export const createAuditLog = (
@@ -1674,8 +1749,14 @@ export const createAuditLog = (
   }
 ) => auditService.createLog(action, resourceType, details, options);
 
-export const searchAuditLogs = (query: AuditQuery) => auditService.searchLogs(query);
-export const getAuditStats = (timeRange?: TimeRange) => auditService.getStats(timeRange);
+export const searchAuditLogs = (query: AuditQuery) => {
+  if (!auditService) return Promise.reject(new Error('Audit service indisponible (hors navigateur).'));
+  return auditService.searchLogs(query);
+};
+export const getAuditStats = (timeRange?: TimeRange) => {
+  if (!auditService) return Promise.reject(new Error('Audit service indisponible (hors navigateur).'));
+  return auditService.getStats(timeRange);
+};
 export const createAuditReport = (
   name: string,
   description: string,
@@ -1692,9 +1773,15 @@ export const createAuditReport = (
     isPublic?: boolean;
     permissions?: string[];
   }
-) => auditService.createReport(name, description, query, options);
+) => {
+  if (!auditService) return Promise.reject(new Error('Audit service indisponible (hors navigateur).'));
+  return auditService.createReport(name, description, query, options);
+};
 
-export const executeAuditReport = (reportId: string) => auditService.executeReport(reportId);
+export const executeAuditReport = (reportId: string) => {
+  if (!auditService) return Promise.reject(new Error('Audit service indisponible (hors navigateur).'));
+  return auditService.executeReport(reportId);
+};
 
 // NOUVELLES FONCTIONNALITÉS AVANCÉES
 

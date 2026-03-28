@@ -237,7 +237,7 @@ class RealtimeCollaborationService {
         .eq('status', 'online');
 
       if (session.settings.maxParticipants && 
-          participants && participants.length >= session.settings.max_permissions) {
+          participants && participants.length >= session.settings.maxParticipants) {
         throw new Error('Nombre maximum de participants atteint');
       }
 
@@ -332,7 +332,15 @@ class RealtimeCollaborationService {
       this.closeConnection(sessionId);
 
       // Créer une nouvelle connexion WebSocket
-      const wsUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/realtime/v1`;
+      const baseUrl =
+        (import.meta as any).env?.VITE_SUPABASE_URL ||
+        (import.meta as any).env?.VITE_PUBLIC_SUPABASE_URL ||
+        supabase.supabaseUrl;
+      if (!baseUrl) {
+        throw new Error('URL Supabase introuvable pour initialiser le WebSocket');
+      }
+
+      const wsUrl = String(baseUrl).replace(/^http/i, 'ws') + '/realtime/v1';
       const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
@@ -683,7 +691,7 @@ class RealtimeCollaborationService {
       await this.emitEvent(sessionId, {
         userId,
         type: 'conflict',
-        data: { conflict },
+        data: { conflict: conflictData },
         timestamp: new Date().toISOString(),
         processed: false
       });
@@ -722,6 +730,9 @@ class RealtimeCollaborationService {
    * Traite les événements en temps réel
    */
   private handleRealtimeEvent(sessionId: string, event: any): void {
+    if (!event || typeof event !== 'object') return;
+    if (!event.id || !event.session_id || !event.user_id || !event.event_type) return;
+
     const collaborationEvent: CollaborationEvent = {
       id: event.id,
       sessionId: event.session_id,

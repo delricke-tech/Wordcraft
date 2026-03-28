@@ -51,7 +51,7 @@ export const useDebounce = <T extends (...args: any[]) => any>(
   callback: T,
   delay: number
 ): T => {
-  const timeoutRef = useRef<NodeJS.Timeout>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   const debouncedCallback = useCallback(
     (...args: Parameters<T>) => {
@@ -145,6 +145,8 @@ export const usePerformanceMonitor = () => {
   });
 
   useEffect(() => {
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') return;
+
     // Mesurer le temps de chargement
     const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
     const loadTime = navigation.loadEventEnd - navigation.fetchStart;
@@ -179,6 +181,7 @@ export const usePerformanceMonitor = () => {
 // Hook pour le prefetching de ressources
 export const usePrefetch = () => {
   const prefetchResource = useCallback((url: string, type: 'script' | 'style' | 'image' = 'script') => {
+    if (typeof document === 'undefined') return;
     const link = document.createElement('link');
     link.rel = 'prefetch';
     link.href = url;
@@ -195,6 +198,7 @@ export const usePrefetch = () => {
   }, []);
 
   const prefetchPage = useCallback((url: string) => {
+    if (typeof document === 'undefined') return;
     const link = document.createElement('link');
     link.rel = 'prefetch';
     link.href = url;
@@ -231,6 +235,7 @@ export const useOptimizedAnimation = () => {
   const [reducedMotion, setReducedMotion] = useState(false);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
     setReducedMotion(mediaQuery.matches);
 
@@ -252,14 +257,26 @@ export const useCache = <T>(key: string, ttl: number = 5 * 60 * 1000) => {
   const [data, setData] = useState<T | null>(null);
 
   useEffect(() => {
-    const cached = localStorage.getItem(key);
-    if (cached) {
-      const { value, timestamp } = JSON.parse(cached);
+    try {
+      if (typeof localStorage === 'undefined') return;
+      const cached = localStorage.getItem(key);
+      if (!cached) return;
+
+      const parsed = JSON.parse(cached);
+      const value = parsed?.value as T | undefined;
+      const timestamp = Number(parsed?.timestamp);
+      if (!Number.isFinite(timestamp)) {
+        localStorage.removeItem(key);
+        return;
+      }
+
       if (Date.now() - timestamp < ttl) {
-        setData(value);
+        setData(value ?? null);
       } else {
         localStorage.removeItem(key);
       }
+    } catch {
+      // cache corrompu / storage indisponible
     }
   }, [key, ttl]);
 
@@ -268,12 +285,22 @@ export const useCache = <T>(key: string, ttl: number = 5 * 60 * 1000) => {
       value,
       timestamp: Date.now()
     };
-    localStorage.setItem(key, JSON.stringify(cacheData));
+    try {
+      if (typeof localStorage === 'undefined') return;
+      localStorage.setItem(key, JSON.stringify(cacheData));
+    } catch {
+      // ignore
+    }
     setData(value);
   }, [key]);
 
   const clearCache = useCallback(() => {
-    localStorage.removeItem(key);
+    try {
+      if (typeof localStorage === 'undefined') return;
+      localStorage.removeItem(key);
+    } catch {
+      // ignore
+    }
     setData(null);
   }, [key]);
 

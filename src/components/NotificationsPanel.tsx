@@ -60,6 +60,13 @@ export function NotificationsPanel({ isOpen, onClose }: NotificationsPanelProps)
         .order('created_at', { ascending: false })
         .limit(50);
 
+      // Si la table n'existe pas, afficher un message informatif
+      if (error && error.code === 'PGRST116') {
+        console.warn('⚠️ Table notifications non trouvée - fonctionnalité désactivée');
+        setLoading(false);
+        return;
+      }
+
       if (error) throw error;
 
       const mappedNotifications: Notification[] = (data || []).map((n: any) => ({
@@ -77,6 +84,7 @@ export function NotificationsPanel({ isOpen, onClose }: NotificationsPanelProps)
       setNotifications(mappedNotifications);
     } catch (error) {
       console.error('Erreur chargement notifications:', error);
+      // Ne pas afficher d'erreur toast pour éviter de perturber l'utilisateur
     } finally {
       setLoading(false);
     }
@@ -133,16 +141,24 @@ export function NotificationsPanel({ isOpen, onClose }: NotificationsPanelProps)
 
   const markAsRead = async (notificationId: string) => {
     try {
-      await supabase
+      const { error } = await supabase
         .from('notifications')
         .update({ read: true })
         .eq('id', notificationId);
 
-      setNotifications(prev => 
+      // Si la table n'existe pas, ignorer silencieusement
+      if (error && error.code === 'PGRST116') {
+        console.warn('⚠️ Table notifications non trouvée - impossible de marquer comme lu');
+        return;
+      }
+
+      if (error) throw error;
+
+      setNotifications(prev =>
         prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
       );
     } catch (error) {
-      console.error('Erreur mark as read:', error);
+      console.error('Erreur marquage notification comme lue:', error);
     }
   };
 
@@ -151,16 +167,24 @@ export function NotificationsPanel({ isOpen, onClose }: NotificationsPanelProps)
     
     setMarkingRead(true);
     try {
-      await supabase
+      const { error } = await supabase
         .from('notifications')
         .update({ read: true })
         .eq('user_id', user.id)
         .eq('read', false);
 
+      // Si la table n'existe pas, ignorer silencieusement
+      if (error && error.code === 'PGRST116') {
+        console.warn('⚠️ Table notifications non trouvée - impossible de tout marquer comme lu');
+        setMarkingRead(false);
+        return;
+      }
+
+      if (error) throw error;
+
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-      toast.success('Toutes les notifications marquées comme lues');
     } catch (error) {
-      toast.error('Erreur lors du marquage');
+      console.error('Erreur marquage toutes notifications comme lues:', error);
     } finally {
       setMarkingRead(false);
     }
@@ -168,13 +192,23 @@ export function NotificationsPanel({ isOpen, onClose }: NotificationsPanelProps)
 
   const deleteNotification = async (notificationId: string) => {
     try {
-      await supabase
+      const { error } = await supabase
         .from('notifications')
         .delete()
         .eq('id', notificationId);
 
+      // Si la table n'existe pas, ignorer silencieusement
+      if (error && error.code === 'PGRST116') {
+        console.warn('⚠️ Table notifications non trouvée - impossible de supprimer');
+        return;
+      }
+
+      if (error) throw error;
+
       setNotifications(prev => prev.filter(n => n.id !== notificationId));
+      toast.success('Notification supprimée');
     } catch (error) {
+      console.error('Erreur suppression notification:', error);
       toast.error('Erreur lors de la suppression');
     }
   };
@@ -370,13 +404,26 @@ export function useNotifications() {
     if (!user) return;
 
     const fetchUnreadCount = async () => {
-      const { count } = await supabase
-        .from('notifications')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('read', false);
+      try {
+        const { count, error } = await supabase
+          .from('notifications')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('read', false);
 
-      setUnreadCount(count || 0);
+        // Si la table n'existe pas, neutraliser silencieusement la feature
+        if (error && error.code === 'PGRST116') {
+          setUnreadCount(0);
+          return;
+        }
+
+        if (error) throw error;
+
+        setUnreadCount(count || 0);
+      } catch (error) {
+        console.error('Erreur chargement compteur notifications:', error);
+        setUnreadCount(0);
+      }
     };
 
     fetchUnreadCount();
